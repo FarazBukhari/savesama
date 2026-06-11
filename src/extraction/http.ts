@@ -29,6 +29,42 @@ export async function fetchHtml(url: string): Promise<string | null> {
   return response.text();
 }
 
+// Matches the anonymous CSRF token Instagram embeds in its page body, whether the
+// surrounding quotes are escaped (inside data-sjs JSON) or not: csrf_token":"VALUE.
+const CSRF_TOKEN_PATTERN = /csrf_token\\?"\s*:\s*\\?"([^"\\]+)/;
+
+let cachedCsrfToken: string | null = null;
+
+/**
+ * Obtains an anonymous Instagram CSRF token by reading it from the homepage body.
+ *
+ * We deliberately parse the token out of the HTML rather than the `Set-Cookie`
+ * header: React Native's networking layer (especially on iOS) consumes Set-Cookie
+ * into the native cookie store and does not expose it reliably to `fetch`. The
+ * token is the same value Instagram also sets as the `csrftoken` cookie, so callers
+ * send it back as both the `X-CSRFToken` header and a manual `Cookie` header.
+ */
+export async function getInstagramCsrfToken(forceRefresh = false): Promise<string | null> {
+  if (cachedCsrfToken && !forceRefresh) return cachedCsrfToken;
+  const response = await fetchWithTimeout('https://www.instagram.com/', {
+    headers: {
+      'User-Agent': DESKTOP_USER_AGENT,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+  });
+  if (!response.ok) return null;
+  const body = await response.text();
+  const match = body.match(CSRF_TOKEN_PATTERN);
+  cachedCsrfToken = match ? match[1] : null;
+  return cachedCsrfToken;
+}
+
+/** Test-only: clears the cached CSRF token between cases. */
+export function resetCsrfTokenCache(): void {
+  cachedCsrfToken = null;
+}
+
 /** Follows redirects and returns the final URL (used for /share/ and /t/ short links). */
 export async function resolveFinalUrl(url: string): Promise<string> {
   const response = await fetchWithTimeout(url, {

@@ -1,5 +1,10 @@
 import { decodeHtmlEntities, decodeJsonString, metaTagContent } from './html';
-import { DESKTOP_USER_AGENT, fetchHtml, fetchWithTimeout } from './http';
+import {
+  DESKTOP_USER_AGENT,
+  fetchHtml,
+  fetchWithTimeout,
+  getInstagramCsrfToken,
+} from './http';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
 import { ExtractionError, ExtractionResult, MediaItem } from './types';
 
@@ -31,29 +36,40 @@ export async function extractInstagram(shortcode: string): Promise<ExtractionRes
 }
 
 async function fetchViaGraphQl(shortcode: string): Promise<ExtractionResult | null> {
-  const variables = JSON.stringify({
-    shortcode,
-    fetch_tagged_user_count: null,
-    hoisted_comment_id: null,
-    hoisted_reply_id: null,
-  });
-  const body = `variables=${encodeURIComponent(variables)}&doc_id=${GRAPHQL_DOC_ID}&server_timestamps=true`;
+  // Instagram walls the unauthenticated /api/graphql endpoint (it serves the logged-out
+  // HTML shell). The /graphql/query endpoint works for public posts when accompanied by
+  // an anonymous CSRF token, sent as both the X-CSRFToken header and a csrftoken cookie.
+  const token = await getInstagramCsrfToken();
+  if (!token) return null;
 
-  const response = await fetchWithTimeout('https://www.instagram.com/api/graphql', {
+  const variables = JSON.stringify({ shortcode });
+  const body = `variables=${encodeURIComponent(variables)}&doc_id=${GRAPHQL_DOC_ID}`;
+
+  const response = await fetchWithTimeout('https://www.instagram.com/graphql/query', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': DESKTOP_USER_AGENT,
       'X-IG-App-ID': IG_APP_ID,
+      'X-CSRFToken': token,
+      Cookie: `csrftoken=${token}`,
       'X-FB-Friendly-Name': 'PolarisPostActionLoadPostQueryQuery',
-      'X-Requested-With': 'XMLHttpRequest',
+      Referer: `https://www.instagram.com/p/${shortcode}/`,
       Accept: '*/*',
     },
     body,
   });
   if (!response.ok) return null;
 
-  const json: unknown = await response.json();
+  // If Instagram serves the HTML shell instead of JSON (e.g. blocked), parsing fails
+  // and we fall through to the next strategy rather than throwing.
+  const raw = await response.text();
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return null;
+  }
   const media = getIn(json, ['data', 'xdt_shortcode_media']);
   if (!isRecord(media)) return null;
   return mapGraphqlMedia(media, shortcode);
