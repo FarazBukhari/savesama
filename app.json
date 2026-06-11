@@ -1,19 +1,21 @@
 {
   "expo": {
-    "name": "foxy-video-downloader",
-    "slug": "foxy-video-downloader",
+    "name": "Foxy Downloader",
+    "slug": "foxy-downloader",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "foxydownloader",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.farazbukhari.foxydownloader"
     },
     "android": {
+      "package": "com.farazbukhari.foxydownloader",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FF6A3D",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
@@ -22,7 +24,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-share-intent"
+      "expo-share-intent",
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Allow Foxy Downloader to save photos and videos to your gallery.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
     ]
   }
 }
