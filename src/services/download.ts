@@ -75,7 +75,9 @@ export async function downloadToGallery(
   }
 
   try {
-    await MediaLibrary.saveToLibraryAsync(result.uri);
+    // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
+    // (it now throws at runtime). Use the new class-based API instead.
+    await MediaLibrary.Asset.create(result.uri);
   } catch (error) {
     throw new DownloadError(
       `save to gallery failed: ${String(error)}`,
