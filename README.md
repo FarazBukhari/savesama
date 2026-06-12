@@ -59,6 +59,10 @@ npm test            # jest (URL parser + extraction parser tests)
 > Note: `expo-share-intent` requires a native build — the app does **not** run in Expo Go.
 > Use a development build (`eas build --profile development`) or the preview APK.
 
+> 🔧 **Maintaining this app?** See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) — what to
+> check if Instagram extraction breaks, how to test extraction fast, the Threads plan,
+> EAS build steps, and environment gotchas.
+
 ## Build the preview APK (EAS)
 
 The project is already linked to EAS (`@farazbukhari/foxy-downloader`).
