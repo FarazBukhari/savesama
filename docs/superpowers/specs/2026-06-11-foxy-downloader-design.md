@@ -63,3 +63,30 @@ a future AdMob adaptive banner).
 ## Out of scope (YAGNI)
 
 Stories/private posts (need login), download history, iOS build, ad SDK integration.
+
+---
+
+## Update (2026-06-12): Instagram-only, Threads deferred
+
+After testing the built app on a device, both platforms initially failed. Root-cause
+investigation against live endpoints (logged in node) established:
+
+- **Instagram — fixed.** The old code POSTed to `/api/graphql`, which Meta now walls for
+  anonymous clients (it serves a ~594KB logged-out HTML shell, so `response.json()` threw
+  and every strategy fell through). Logged-out IG pages also no longer carry `og:` tags or
+  embed JSON, so those fallbacks are dead. **Fix:** fetch an anonymous `csrf_token` from the
+  homepage *body* (RN-safe — iOS doesn't expose `Set-Cookie` to `fetch`), then POST to
+  `/graphql/query` with it as both `X-CSRFToken` and a `csrftoken` cookie. Verified
+  end-to-end against live photos, reels (video), and carousels.
+
+- **Threads — deferred.** Its media isn't in the logged-out HTML, its GraphQL `doc_id`
+  rotates and isn't reachable from the logged-out page (loads only after JS hydration), and
+  the mobile media-info endpoint needs auth. Reverse-engineering **fastdl.app** and
+  **threadsdownloader.com** showed both extract Threads **server-side behind a
+  CAPTCHA-protected backend** (fastdl uses Cloudflare Workers; threadsdownloader uses
+  Cloudflare Turnstile). The on-device equivalent is a hidden `react-native-webview` that
+  lets Threads' own page make the request while we intercept it.
+
+**Decision:** ship Instagram-only now. Threads links surface a clear "not supported yet"
+message in `extract.ts`. The pure Threads mapping helpers in `threads.ts` (same JSON shape
+a WebView/backend would return) are retained for that future work.
