@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
 
 const STEPS = [
-  'Tap Share on any Instagram or Threads post and pick Foxy Downloader',
+  'Tap Share on any Instagram post and pick Foxy Downloader',
   'Or copy a post link and hit Paste above',
   'Preview the media, then save it straight to your gallery',
 ] as const;
