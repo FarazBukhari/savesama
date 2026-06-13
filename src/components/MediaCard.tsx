@@ -50,7 +50,7 @@ export function MediaCard({ item, state, onDownload }: MediaCardProps) {
         ) : null}
       </View>
 
-      <DownloadAction state={state} onPress={() => onDownload(item)} />
+      <DownloadAction state={state} onPress={() => onDownload(item)} reopenable={isVideo} />
     </View>
   );
 }
@@ -58,9 +58,11 @@ export function MediaCard({ item, state, onDownload }: MediaCardProps) {
 function DownloadAction({
   state,
   onPress,
+  reopenable = false,
 }: {
   state: ItemDownloadState;
   onPress: () => void;
+  reopenable?: boolean;
 }) {
   if (state.status === 'downloading') {
     return (
@@ -70,6 +72,21 @@ function DownloadAction({
     );
   }
   if (state.status === 'done') {
+    // Video cards: badge stays pressable so the format modal can be re-opened.
+    if (reopenable) {
+      return (
+        <Pressable
+          style={({ pressed }) => [
+            styles.actionArea,
+            styles.doneBadge,
+            pressed && styles.saveButtonPressed,
+          ]}
+          onPress={onPress}
+        >
+          <Text style={styles.doneLabel}>✓ Saved</Text>
+        </Pressable>
+      );
+    }
     return (
       <View style={[styles.actionArea, styles.doneBadge]}>
         <Text style={styles.doneLabel}>✓ Saved</Text>
