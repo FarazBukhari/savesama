@@ -16,13 +16,18 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { AdBanner } from './src/components/AdBanner';
 import { EmptyState } from './src/components/EmptyState';
 import { ErrorNotice } from './src/components/ErrorNotice';
+import { FormatChoiceModal } from './src/components/FormatChoiceModal';
 import { Header } from './src/components/Header';
 import { LinkInput } from './src/components/LinkInput';
 import { ItemDownloadState, MediaCard } from './src/components/MediaCard';
 import { extractMedia } from './src/extraction/extract';
 import { ExtractionError, ExtractionResult, MediaItem } from './src/extraction/types';
-import { DownloadError, downloadToGallery } from './src/services/download';
+import { DownloadError, downloadAudioToGallery, downloadToGallery } from './src/services/download';
 import { colors, radius, spacing, typography } from './src/theme';
+
+function stateKey(item: MediaItem, format: 'video' | 'audio' = 'video'): string {
+  return item.type === 'video' ? `${item.id}:${format}` : item.id;
+}
 
 const IDLE_STATE: ItemDownloadState = { status: 'idle', progress: 0 };
 
@@ -42,6 +47,7 @@ function Main() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [downloads, setDownloads] = useState<Record<string, ItemDownloadState>>({});
+  const [modalItem, setModalItem] = useState<MediaItem | null>(null);
 
   const runExtraction = useCallback(async (text: string) => {
     Keyboard.dismiss();
@@ -83,37 +89,56 @@ function Main() {
     }
   }, [linkText, runExtraction]);
 
-  const handleDownload = useCallback(async (item: MediaItem) => {
-    setDownloads((previous) => ({
-      ...previous,
-      [item.id]: { status: 'downloading', progress: 0 },
-    }));
-    try {
-      await downloadToGallery(item, (fraction) => {
-        setDownloads((previous) => ({
-          ...previous,
-          [item.id]: { status: 'downloading', progress: fraction },
-        }));
-      });
-      setDownloads((previous) => ({ ...previous, [item.id]: { status: 'done', progress: 1 } }));
-    } catch (downloadError) {
-      setDownloads((previous) => ({ ...previous, [item.id]: { status: 'error', progress: 0 } }));
-      setError(friendlyMessage(downloadError));
-    }
-  }, []);
+  const handleDownload = useCallback(
+    async (item: MediaItem, format: 'video' | 'audio' = 'video') => {
+      const key = stateKey(item, format);
+      setDownloads((previous) => ({
+        ...previous,
+        [key]: { status: 'downloading', progress: 0 },
+      }));
+      try {
+        const downloader = format === 'audio' ? downloadAudioToGallery : downloadToGallery;
+        await downloader(item, (fraction) => {
+          setDownloads((previous) => ({
+            ...previous,
+            [key]: { status: 'downloading', progress: fraction },
+          }));
+        });
+        setDownloads((previous) => ({ ...previous, [key]: { status: 'done', progress: 1 } }));
+      } catch (downloadError) {
+        setDownloads((previous) => ({ ...previous, [key]: { status: 'error', progress: 0 } }));
+        setError(friendlyMessage(downloadError));
+      }
+    },
+    []
+  );
+
+  const handleSavePress = useCallback(
+    (item: MediaItem) => {
+      if (item.type === 'video') {
+        setModalItem(item);
+      } else {
+        void handleDownload(item);
+      }
+    },
+    [handleDownload]
+  );
 
   const handleDownloadAll = useCallback(async () => {
     if (!result) return;
     setError(null);
     for (const item of result.items) {
-      const state = downloads[item.id] ?? IDLE_STATE;
+      const key = stateKey(item, 'video');
+      const state = downloads[key] ?? IDLE_STATE;
       if (state.status === 'done' || state.status === 'downloading') continue;
-      await handleDownload(item);
+      await handleDownload(item, 'video');
     }
   }, [result, downloads, handleDownload]);
 
   const pendingCount = result
-    ? result.items.filter((item) => (downloads[item.id] ?? IDLE_STATE).status !== 'done').length
+    ? result.items.filter(
+        (item) => (downloads[stateKey(item, 'video')] ?? IDLE_STATE).status !== 'done'
+      ).length
     : 0;
 
   return (
@@ -165,8 +190,8 @@ function Main() {
               <MediaCard
                 key={item.id}
                 item={item}
-                state={downloads[item.id] ?? IDLE_STATE}
-                onDownload={(mediaItem) => void handleDownload(mediaItem)}
+                state={downloads[stateKey(item, 'video')] ?? IDLE_STATE}
+                onDownload={handleSavePress}
               />
             ))}
           </View>
@@ -175,6 +200,17 @@ function Main() {
         {!busy && !result && !error ? <EmptyState /> : null}
       </ScrollView>
       <AdBanner bottomInset={insets.bottom} />
+
+      {modalItem ? (
+        <FormatChoiceModal
+          visible
+          videoState={downloads[stateKey(modalItem, 'video')] ?? IDLE_STATE}
+          audioState={downloads[stateKey(modalItem, 'audio')] ?? IDLE_STATE}
+          onSaveVideo={() => void handleDownload(modalItem, 'video')}
+          onSaveAudio={() => void handleDownload(modalItem, 'audio')}
+          onClose={() => setModalItem(null)}
+        />
+      ) : null}
     </View>
   );
 }
