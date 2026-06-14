@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import { FFmpegKit, ReturnCode } from 'ffmpeg-kit-react-native';
 
+import { extractAudio } from '../../modules/foxy-audio-extractor';
 import { MediaItem } from '../extraction/types';
 
 export class DownloadError extends Error {
@@ -92,7 +92,7 @@ export async function downloadToGallery(
 }
 
 /**
- * Downloads a video item, extracts the audio track with FFmpeg (no re-encode),
+ * Downloads a video item, extracts the audio track on-device (no re-encode),
  * saves the resulting M4A to the device library, then removes all cache files.
  */
 export async function downloadAudioToGallery(
@@ -132,22 +132,12 @@ export async function downloadAudioToGallery(
 
   onProgress(0.7);
 
-  // Phase 2: strip video track with FFmpeg, copy audio codec (70 → 90%)
+  // Phase 2: remux the audio track into an .m4a (no re-encode) (70 → 90%)
   try {
-    const session = await FFmpegKit.execute(
-      `-i "${videoResult.uri}" -vn -acodec copy -y "${audioUri}"`
-    );
-    const returnCode = await session.getReturnCode();
-    if (!ReturnCode.isSuccess(returnCode)) {
-      throw new DownloadError(
-        `ffmpeg exited with code ${String(returnCode)}`,
-        'Could not extract audio from the video.'
-      );
-    }
+    await extractAudio(videoResult.uri, audioUri);
   } catch (error) {
-    if (error instanceof DownloadError) throw error;
     throw new DownloadError(
-      `ffmpeg error: ${String(error)}`,
+      `audio extraction failed: ${String(error)}`,
       'Could not extract audio from the video.'
     );
   } finally {
