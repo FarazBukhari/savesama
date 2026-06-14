@@ -11,7 +11,6 @@
     "expo-media-library": "~56.0.7",
     "expo-share-intent": "^7.0.0",
     "expo-status-bar": "~56.0.4",
-    "ffmpeg-kit-react-native": "^6.0.2",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0"
