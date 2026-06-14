@@ -166,3 +166,41 @@ up AdMob:
 2. Replace the placeholder `<View>` inside `AdBanner` with
    `<BannerAd size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} ... />`.
 3. Keep the outer container so spacing stays identical.
+
+---
+
+## 7. "Save as Audio" (M4A) extraction
+
+The format picker's **Audio · M4A** option strips the video track from a downloaded
+clip and saves the audio only. It does **not** use FFmpeg.
+
+**Why not FFmpeg:** `ffmpeg-kit` (and the `ffmpeg-kit-react-native` wrapper) was retired
+by Arthenica on Jan 6 2025, and **all binaries were pulled from Maven Central / CocoaPods /
+npm on Apr 1 2025**. EAS builds then failed with
+`Could not find com.arthenica:ffmpeg-kit-https:6.0-2` because the artifact no longer
+resolves anywhere. There is no maintained, reachable binary to point Gradle at.
+
+**What we do instead:** a tiny **local Expo module** at
+[`modules/foxy-audio-extractor`](../modules/foxy-audio-extractor) that remuxes the audio
+track using only OS-native muxers — no third-party binary, no APK bloat, no re-encode:
+
+- **Android** ([`FoxyAudioExtractorModule.kt`](../modules/foxy-audio-extractor/android/src/main/java/expo/modules/foxyaudioextractor/FoxyAudioExtractorModule.kt)):
+  `MediaExtractor` selects the first `audio/*` track and copies its samples into a new
+  MP4/M4A container via `MediaMuxer`.
+- **iOS** ([`FoxyAudioExtractorModule.swift`](../modules/foxy-audio-extractor/ios/FoxyAudioExtractorModule.swift)):
+  `AVAssetExportSession` with `AVAssetExportPresetPassthrough` and `outputFileType = .m4a`
+  over an audio-only `AVMutableComposition`.
+
+JS calls `extractAudio(srcUri, destUri)` from
+[`modules/foxy-audio-extractor`](../modules/foxy-audio-extractor/index.ts); it's invoked in
+Phase 2 of `downloadAudioToGallery` ([`src/services/download.ts`](../src/services/download.ts)).
+
+**Gotchas:**
+
+- The module is **autolinked** because it lives in `modules/`. Any change to its native
+  code (or `expo-module.config.json`) needs a **new native build** — Metro/`expo export`
+  alone won't pick it up. It also won't run in Expo Go or jest (native module absent), but
+  no test imports `download.ts`, so that's fine.
+- If extraction ever needs real transcoding (e.g. non-AAC audio → MP3), the passthrough
+  approach won't cover it; you'd need an on-device encoder, not a remux. Today Instagram
+  serves AAC-in-MP4, which remuxes cleanly into M4A.
