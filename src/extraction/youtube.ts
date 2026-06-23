@@ -11,6 +11,12 @@ import { ExtractionError, ExtractionResult, MediaItem } from './types';
  * JS, so we can extract entirely on-device (same no-backend philosophy as
  * Instagram).
  *
+ * IMPORTANT: the request must carry a `visitorData` session token (fetched from
+ * the InnerTube `visitor_id` endpoint, then sent in `context.client.visitorData`
+ * + the `X-Goog-Visitor-Id` header). Without it, YouTube bot-checks many videos
+ * with `LOGIN_REQUIRED` / "confirm you're not a bot" even on residential IPs.
+ * This mirrors how Instagram requires an anonymous CSRF token first.
+ *
  * We deliberately pick a *progressive* format (muxed audio + video, e.g. itag
  * 18 = 360p, itag 22 = 720p). That single URL works for both "Save video" and
  * "Save audio" — the on-device M4A remux in download.ts reads the AAC track
@@ -27,58 +33,118 @@ const CLIENT_NAME_ID = '28';
 const CLIENT_USER_AGENT =
   'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; GB) gzip';
 
-export async function extractYouTube(videoId: string): Promise<ExtractionResult> {
-  let player: unknown;
+let cachedVisitorData: string | null = null;
+
+function clientContext(visitorData: string | null): Record<string, unknown> {
+  const client: Record<string, unknown> = {
+    clientName: CLIENT_NAME,
+    clientVersion: CLIENT_VERSION,
+    deviceMake: 'Oculus',
+    deviceModel: 'Quest 3',
+    androidSdkVersion: 32,
+    osName: 'Android',
+    osVersion: '12L',
+    hl: 'en',
+    gl: 'US',
+  };
+  if (visitorData) client['visitorData'] = visitorData;
+  return client;
+}
+
+/**
+ * Fetches (and caches) an anonymous `visitorData` session token from the
+ * InnerTube `visitor_id` endpoint. Returns null on failure — the player call
+ * can still be attempted without it, just with a higher bot-check rate.
+ */
+async function getVisitorData(forceRefresh = false): Promise<string | null> {
+  if (cachedVisitorData && !forceRefresh) return cachedVisitorData;
   try {
-    player = await fetchPlayerResponse(videoId);
+    const response = await fetchWithTimeout(
+      'https://www.youtube.com/youtubei/v1/visitor_id',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': CLIENT_USER_AGENT,
+          'X-YouTube-Client-Name': CLIENT_NAME_ID,
+          'X-YouTube-Client-Version': CLIENT_VERSION,
+          Accept: '*/*',
+        },
+        body: JSON.stringify({ context: { client: clientContext(null) } }),
+      }
+    );
+    if (!response.ok) return null;
+    const json = JSON.parse(await response.text());
+    cachedVisitorData = asString(getIn(json, ['responseContext', 'visitorData']));
+  } catch {
+    cachedVisitorData = null;
+  }
+  return cachedVisitorData;
+}
+
+/** Test-only: clears the cached visitorData between cases. */
+export function resetYouTubeVisitorDataCache(): void {
+  cachedVisitorData = null;
+}
+
+export async function extractYouTube(videoId: string): Promise<ExtractionResult> {
+  let player = await requestPlayer(videoId, false);
+
+  let result = mapPlayerResponse(player, videoId);
+  if (result) return result;
+
+  // A bot-check usually means a missing/stale session token — refresh the
+  // visitorData once and retry before giving up.
+  if (isBotCheck(player)) {
+    player = await requestPlayer(videoId, true);
+    result = mapPlayerResponse(player, videoId);
+    if (result) return result;
+  }
+
+  // No progressive stream: distinguish "can't be played" from "no usable format".
+  throw playabilityError(player, videoId);
+}
+
+async function requestPlayer(videoId: string, refreshVisitorData: boolean): Promise<unknown> {
+  try {
+    const visitorData = await getVisitorData(refreshVisitorData);
+    return await fetchPlayerResponse(videoId, visitorData);
   } catch (error) {
     throw new ExtractionError(
       `youtube player request failed for ${videoId}: ${String(error)}`,
       'Could not reach YouTube. Check your connection and try again in a minute.'
     );
   }
-
-  const result = mapPlayerResponse(player, videoId);
-  if (result) return result;
-
-  // No progressive stream: distinguish "can't be played" from "no usable format".
-  throw playabilityError(player, videoId);
 }
 
-async function fetchPlayerResponse(videoId: string): Promise<unknown> {
+function isBotCheck(player: unknown): boolean {
+  const status = asString(getIn(player, ['playabilityStatus', 'status']));
+  const reason = asString(getIn(player, ['playabilityStatus', 'reason']));
+  return status === 'LOGIN_REQUIRED' && !!reason && /not a bot/i.test(reason);
+}
+
+async function fetchPlayerResponse(videoId: string, visitorData: string | null): Promise<unknown> {
   const body = JSON.stringify({
-    context: {
-      client: {
-        clientName: CLIENT_NAME,
-        clientVersion: CLIENT_VERSION,
-        deviceMake: 'Oculus',
-        deviceModel: 'Quest 3',
-        androidSdkVersion: 32,
-        osName: 'Android',
-        osVersion: '12L',
-        hl: 'en',
-        gl: 'US',
-      },
-    },
+    context: { client: clientContext(visitorData) },
     videoId,
     contentCheckOk: true,
     racyCheckOk: true,
   });
 
-  const response = await fetchWithTimeout(
-    'https://www.youtube.com/youtubei/v1/player',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': CLIENT_USER_AGENT,
-        'X-YouTube-Client-Name': CLIENT_NAME_ID,
-        'X-YouTube-Client-Version': CLIENT_VERSION,
-        Accept: '*/*',
-      },
-      body,
-    }
-  );
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': CLIENT_USER_AGENT,
+    'X-YouTube-Client-Name': CLIENT_NAME_ID,
+    'X-YouTube-Client-Version': CLIENT_VERSION,
+    Accept: '*/*',
+  };
+  if (visitorData) headers['X-Goog-Visitor-Id'] = visitorData;
+
+  const response = await fetchWithTimeout('https://www.youtube.com/youtubei/v1/player', {
+    method: 'POST',
+    headers,
+    body,
+  });
   if (!response.ok) throw new Error(`player endpoint returned ${response.status}`);
 
   const raw = await response.text();

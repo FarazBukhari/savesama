@@ -1,9 +1,11 @@
-import { extractYouTube } from '../youtube';
+import { extractYouTube, resetYouTubeVisitorDataCache } from '../youtube';
 
 interface MockCall {
   url: string;
   init: RequestInit | undefined;
 }
+
+const VISITOR_FIXTURE = { responseContext: { visitorData: 'VISITOR123' } };
 
 const PLAYER_FIXTURE = {
   playabilityStatus: { status: 'OK' },
@@ -44,16 +46,25 @@ function makeResponse(bodyText: string, url: string): Response {
 describe('extractYouTube fetch path', () => {
   let calls: MockCall[];
 
-  function mockFetch(bodyFor: (url: string) => string) {
+  beforeEach(() => {
+    resetYouTubeVisitorDataCache();
+  });
+
+  // `playerBody` may vary per call to simulate a retry after a bot-check.
+  function mockFetch(playerBody: (callIndex: number) => string) {
     calls = [];
+    let playerCalls = 0;
     globalThis.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push({ url, init });
-      return Promise.resolve(makeResponse(bodyFor(url), url));
+      if (url.includes('/youtubei/v1/visitor_id')) {
+        return Promise.resolve(makeResponse(JSON.stringify(VISITOR_FIXTURE), url));
+      }
+      return Promise.resolve(makeResponse(playerBody(playerCalls++), url));
     }) as unknown as typeof fetch;
   }
 
-  it('POSTs to youtubei/v1/player with the ANDROID_VR client and maps the stream', async () => {
+  it('fetches visitorData, then POSTs to youtubei/v1/player and maps the stream', async () => {
     mockFetch(() => JSON.stringify(PLAYER_FIXTURE));
 
     const result = await extractYouTube('dQw4w9WgXcQ');
@@ -72,13 +83,30 @@ describe('extractYouTube fetch path', () => {
     expect(result.username).toBe('Channel');
     expect(result.caption).toBe('Sample');
 
-    const call = calls.find((c) => c.url.includes('/youtubei/v1/player'));
-    expect(call).toBeDefined();
-    expect(call!.init?.method).toBe('POST');
-    const headers = call!.init?.headers as Record<string, string>;
+    // visitorData is requested before the player call and threaded into it.
+    const visitorIndex = calls.findIndex((c) => c.url.includes('/youtubei/v1/visitor_id'));
+    const playerIndex = calls.findIndex((c) => c.url.includes('/youtubei/v1/player'));
+    expect(visitorIndex).toBeGreaterThanOrEqual(0);
+    expect(playerIndex).toBeGreaterThan(visitorIndex);
+
+    const playerCall = calls[playerIndex];
+    const headers = playerCall.init?.headers as Record<string, string>;
     expect(headers['X-YouTube-Client-Name']).toBe('28');
-    expect(String(call!.init?.body)).toContain('"clientName":"ANDROID_VR"');
-    expect(String(call!.init?.body)).toContain('"videoId":"dQw4w9WgXcQ"');
+    expect(headers['X-Goog-Visitor-Id']).toBe('VISITOR123');
+    expect(String(playerCall.init?.body)).toContain('"clientName":"ANDROID_VR"');
+    expect(String(playerCall.init?.body)).toContain('"visitorData":"VISITOR123"');
+    expect(String(playerCall.init?.body)).toContain('"videoId":"dQw4w9WgXcQ"');
+  });
+
+  it('retries with fresh visitorData after a bot-check, then succeeds', async () => {
+    // First player call is bot-checked; second (after refresh) succeeds.
+    mockFetch((i) => JSON.stringify(i === 0 ? BOT_CHECK_FIXTURE : PLAYER_FIXTURE));
+
+    const result = await extractYouTube('dQw4w9WgXcQ');
+    expect(result.items[0].url).toBe('https://r3.example/videoplayback?itag=18');
+
+    const playerCalls = calls.filter((c) => c.url.includes('/youtubei/v1/player'));
+    expect(playerCalls).toHaveLength(2);
   });
 
   it('surfaces a sign-in message for age-restricted/private videos', async () => {
@@ -89,7 +117,7 @@ describe('extractYouTube fetch path', () => {
     });
   });
 
-  it('treats a "not a bot" check as a transient, retryable block', async () => {
+  it('reports a persistent "not a bot" check as a transient, retryable block', async () => {
     mockFetch(() => JSON.stringify(BOT_CHECK_FIXTURE));
 
     await expect(extractYouTube('dQw4w9WgXcQ')).rejects.toMatchObject({
