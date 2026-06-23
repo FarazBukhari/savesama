@@ -21,11 +21,10 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
 
 ## Limitations
 
-- **Instagram only for now.** Threads links show a "not supported yet" message. Threads
-  no longer exposes its media in the logged-out page and its private GraphQL `doc_id`
-  rotates, so it would require a small backend or an in-app WebView (see
-  [the design doc](docs/superpowers/specs/2026-06-11-foxy-downloader-design.md)). Both
-  leading downloaders (fastdl.app, threadsdownloader.com) extract Threads server-side.
+- **Instagram only.** Posts, reels, photos, and carousels.
+- **Songs/audio pages aren't supported.** A `/reels/audio/<id>` link shows a clear
+  "not supported" message — Instagram walls the audio asset for anonymous clients and
+  never serves full licensed tracks (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §2b).
 - Public posts only. Private accounts and Stories require login and are not supported.
 - Instagram occasionally changes its internals; if the GraphQL endpoint changes, the
   CSRF/endpoint constants in [src/extraction/instagram.ts](src/extraction/instagram.ts)
@@ -41,7 +40,6 @@ src/
     urlParser.ts            # Link detection/normalization (pure, tested)
     http.ts                 # fetch helpers + anonymous Instagram CSRF token
     instagram.ts            # Instagram extraction (graphql/query + CSRF)
-    threads.ts              # Threads media mapping (kept for future Threads support)
     extract.ts              # Dispatcher + share-link redirect resolution
   services/
     download.ts             # Download with progress + save to gallery
@@ -60,8 +58,8 @@ npm test            # jest (URL parser + extraction parser tests)
 > Use a development build (`eas build --profile development`) or the preview APK.
 
 > 🔧 **Maintaining this app?** See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) — what to
-> check if Instagram extraction breaks, how to test extraction fast, the Threads plan,
-> EAS build steps, and environment gotchas.
+> check if Instagram extraction breaks, how to test extraction fast, why song/audio
+> pages aren't supported, EAS build steps, and environment gotchas.
 
 ## Build the preview APK (EAS)
 
