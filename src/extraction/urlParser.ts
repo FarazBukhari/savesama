@@ -18,9 +18,10 @@ function splitUrl(raw: string): { host: string; path: string } | null {
   return { host, path };
 }
 
+// Audio/song pages: /reels/audio/<numeric-id> (must be tested before IG_POST_PATH,
+// which would otherwise capture the literal "audio" as a shortcode).
+const IG_AUDIO_PATH = /\/reels?\/audio\/(\d+)/;
 const IG_POST_PATH = /\/(?:[A-Za-z0-9_.]+\/)?(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
-const THREADS_POST_PATH = /\/@[^/]+\/post\/([A-Za-z0-9_-]+)/;
-const THREADS_SHORT_PATH = /^\/t\/([A-Za-z0-9_-]+)/;
 
 export function parseLink(text: string): ParsedLink | null {
   const raw = extractUrl(text.trim());
@@ -32,6 +33,16 @@ export function parseLink(text: string): ParsedLink | null {
   const isInstagram =
     host === 'instagram.com' || host === 'instagr.am' || host.endsWith('.instagram.com');
   if (isInstagram) {
+    const audioMatch = path.match(IG_AUDIO_PATH);
+    if (audioMatch) {
+      return {
+        platform: 'instagram',
+        shortcode: null,
+        canonicalUrl: `https://www.instagram.com/reels/audio/${audioMatch[1]}/`,
+        needsResolution: false,
+        unsupported: 'audio',
+      };
+    }
     // Share links carry an opaque token, not the post shortcode — resolve the redirect first.
     if (path.startsWith('/share/')) {
       return { platform: 'instagram', shortcode: null, canonicalUrl: raw, needsResolution: true };
@@ -45,27 +56,6 @@ export function parseLink(text: string): ParsedLink | null {
         canonicalUrl: `https://www.instagram.com/p/${shortcode}/`,
         needsResolution: false,
       };
-    }
-    return null;
-  }
-
-  const isThreads =
-    host === 'threads.net' ||
-    host === 'threads.com' ||
-    host.endsWith('.threads.net') ||
-    host.endsWith('.threads.com');
-  if (isThreads) {
-    const postMatch = path.match(THREADS_POST_PATH);
-    if (postMatch) {
-      return {
-        platform: 'threads',
-        shortcode: postMatch[1],
-        canonicalUrl: `https://www.threads.com${path}`,
-        needsResolution: false,
-      };
-    }
-    if (THREADS_SHORT_PATH.test(path)) {
-      return { platform: 'threads', shortcode: null, canonicalUrl: raw, needsResolution: true };
     }
     return null;
   }

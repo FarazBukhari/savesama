@@ -12,13 +12,14 @@ export async function extractMedia(rawText: string): Promise<ExtractionResult> {
     );
   }
 
-  // Threads is intentionally not supported yet: its media isn't in the logged-out page
-  // and its GraphQL doc_id rotates, so it needs a backend or an in-app WebView (the
-  // mapping helpers in threads.ts are kept for that future work). Instagram-only for now.
-  if (parsed.platform === 'threads') {
+  // Instagram song/audio pages (/reels/audio/<id>) aren't downloadable: Instagram serves
+  // only a JS shell for them anonymously, its audio APIs require auth, and it never serves
+  // full licensed tracks even when logged in. Fail with a clear message rather than a
+  // generic "couldn't read this post" error.
+  if (parsed.platform === 'instagram' && parsed.unsupported === 'audio') {
     throw new ExtractionError(
-      'threads not supported yet',
-      'Threads links aren’t supported yet — Instagram only for now. Paste an Instagram post, reel, or photo link.'
+      'instagram audio pages not supported',
+      'Downloading songs isn’t supported — Instagram doesn’t allow audio from song pages to be saved. Paste a reel, post, or photo link instead.'
     );
   }
 
