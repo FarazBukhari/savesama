@@ -65,34 +65,34 @@ accidental revert to `/api/graphql` or a dropped CSRF header fails CI.
 
 ---
 
-## 2. Threads status (deferred)
+## 2. Song / audio pages (`/reels/audio/<id>`) — intentionally unsupported
 
-Threads is **intentionally not supported yet**. Threads links show a "not supported yet"
-message (see the `platform === 'threads'` branch in
-[`src/extraction/extract.ts`](../src/extraction/extract.ts)).
+Links to a song page (e.g. `https://www.instagram.com/reels/audio/1273422726399305`)
+are recognized by `parseLink` (`unsupported: 'audio'`) and rejected in
+[`extract.ts`](../src/extraction/extract.ts) with a clear "Downloading songs isn’t
+supported" message — **not** a generic failure.
 
-**Why it's hard:** Threads media isn't in the logged-out HTML, its GraphQL `doc_id`
-rotates and isn't reachable without running the page's JS, and the mobile media-info
-endpoint needs auth. Reverse-engineering the two leading downloaders confirmed there is
-no pure on-device path:
+**Why it can't be done on-device (probed June 2026):**
 
-- **fastdl.app** → posts to a Cloudflare Workers "worker hub" `/api/convert`, gated by a
-  Cloudflare CAPTCHA (`wh-cf-token`).
-- **threadsdownloader.com** → posts to `api-tp.threadsdownloader.com/threads/post/media`,
-  gated by Cloudflare Turnstile.
+- The audio page is a JS shell — no media/audio data in the logged-out HTML.
+- `api/v1/clips/music/` → returns an **empty** body for anonymous clients.
+- `api/v1/music/audio_reels_media/?audio_cluster_id=<id>` → `500`/`404` (auth-gated).
+- The audio-page GraphQL `doc_id` lives in lazy JS bundles and rotates (fragile).
+- Even **with** a logged-in `sessionid`, Instagram serves the **full** asset only for
+  *original sounds* (`original_sound_info.progressive_download_url`); licensed/label
+  music returns only a short **preview snippet** (`web_30s_preview…`) — a rights wall,
+  not a tech wall.
 
-**To add Threads later, two options:**
+⚠️ Note: `parseLink` must test `IG_AUDIO_PATH` **before** `IG_POST_PATH`, otherwise the
+post regex captures the literal `"audio"` as a shortcode. There's a regression test for
+this in [`urlParser.test.ts`](../src/extraction/__tests__/urlParser.test.ts).
 
-1. **Small backend** (what the big sites do) — a free Cloudflare Worker that extracts
-   Threads server-side; the app calls it.
-2. **In-app hidden `react-native-webview`** — load the post so Threads' own page makes the
-   authenticated request, and intercept the media response with an injected
-   `fetch`/`XHR` patch.
+**If you ever wire up song pages:** a small backend or an in-app WebView using the
+user's own session.
 
-Either way, the intercepted/returned JSON has the same `image_versions2` /
-`video_versions` / `carousel_media` shape that `mapThreadsPost` in
-[`src/extraction/threads.ts`](../src/extraction/threads.ts) already parses — that module
-is kept unwired for exactly this reason.
+Note this is **separate** from "Save as Audio" (§7): that feature extracts the audio
+track from a **reel** the user already downloaded — it doesn't touch song-page links.
+Saving audio from a reel works today and needs no auth.
 
 ---
 

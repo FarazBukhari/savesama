@@ -28,7 +28,7 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
           value={value}
           onChangeText={onChangeText}
           onSubmitEditing={onSubmit}
-          placeholder="Paste an Instagram or Threads link"
+          placeholder="Paste an Instagram link"
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}

@@ -14,8 +14,8 @@ describe('extractUrl', () => {
   });
 
   it('strips trailing punctuation', () => {
-    expect(extractUrl('look (https://www.threads.com/@user/post/Cxyz789).')).toBe(
-      'https://www.threads.com/@user/post/Cxyz789'
+    expect(extractUrl('look (https://www.instagram.com/p/Cxyz789/).')).toBe(
+      'https://www.instagram.com/p/Cxyz789/'
     );
   });
 
@@ -56,35 +56,18 @@ describe('parseLink — Instagram', () => {
   it('rejects profile pages', () => {
     expect(parseLink('https://www.instagram.com/someuser/')).toBeNull();
   });
-});
 
-describe('parseLink — Threads', () => {
   it.each([
-    ['https://www.threads.net/@someone/post/Cxyz789', 'Cxyz789'],
-    ['https://www.threads.com/@someone/post/Cxyz789?xmt=token', 'Cxyz789'],
-    ['https://threads.net/@some.one/post/C_under-score', 'C_under-score'],
-  ])('parses %s', (url, shortcode) => {
-    const link = parseLink(url);
-    expect(link).toMatchObject({
-      platform: 'threads',
-      shortcode,
-      needsResolution: false,
-    });
-    expect(link?.canonicalUrl).toContain('https://www.threads.com/');
-    expect(link?.canonicalUrl).toContain(`/post/${shortcode}`);
-  });
-
-  it('flags /t/ short links for redirect resolution', () => {
-    const link = parseLink('https://www.threads.com/t/Cxyz789/');
-    expect(link).toMatchObject({
-      platform: 'threads',
+    'https://www.instagram.com/reels/audio/1273422726399305?igsh=MW80OTVwZWhwbDUzdw==',
+    'https://www.instagram.com/reels/audio/1273422726399305/',
+    'https://instagram.com/reel/audio/987654321/',
+  ])('flags song/audio page %s as unsupported', (url) => {
+    expect(parseLink(url)).toMatchObject({
+      platform: 'instagram',
       shortcode: null,
-      needsResolution: true,
+      needsResolution: false,
+      unsupported: 'audio',
     });
-  });
-
-  it('rejects profile pages', () => {
-    expect(parseLink('https://www.threads.com/@someone')).toBeNull();
   });
 });
 
@@ -93,6 +76,7 @@ describe('parseLink — other domains', () => {
     'https://www.youtube.com/watch?v=abc',
     'https://example.com/p/Cabc123/',
     'https://notinstagram.com/p/Cabc123/',
+    'https://www.threads.com/@someone/post/Cxyz789',
   ])('rejects %s', (url) => {
     expect(parseLink(url)).toBeNull();
   });

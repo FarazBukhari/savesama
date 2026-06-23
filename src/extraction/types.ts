@@ -1,4 +1,4 @@
-export type SourcePlatform = 'instagram' | 'threads';
+export type SourcePlatform = 'instagram';
 
 export type MediaType = 'image' | 'video';
 
@@ -8,6 +8,13 @@ export interface ParsedLink {
   shortcode: string | null;
   canonicalUrl: string;
   needsResolution: boolean;
+  /**
+   * Set when the link is recognized but intentionally not downloadable.
+   * 'audio' = an Instagram song/audio page (/reels/audio/<id>): Instagram walls the
+   * audio asset for anonymous clients and never serves full licensed tracks, so we
+   * surface a clear "not supported" message instead of a generic failure.
+   */
+  unsupported?: 'audio';
 }
 
 export interface MediaItem {
