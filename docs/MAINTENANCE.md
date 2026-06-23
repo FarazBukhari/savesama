@@ -217,10 +217,22 @@ were needed — the audio remux (§7) reads the AAC track straight out of the Yo
 
 **The working recipe (verified June 2026):**
 
-POST `https://www.youtube.com/youtubei/v1/player` (no API key) with the **ANDROID_VR**
-client context and `videoId`. Mobile/VR clients return progressive stream URLs **directly**
-in `streamingData.formats[].url` — not signature-ciphered — so no player-JS deciphering is
+1. POST `https://www.youtube.com/youtubei/v1/visitor_id` with the ANDROID_VR client context
+   and read `responseContext.visitorData` — an anonymous session token (cached per process).
+2. POST `https://www.youtube.com/youtubei/v1/player` (no API key) with the **ANDROID_VR**
+   client context, the `videoId`, **and that `visitorData`** (sent both in
+   `context.client.visitorData` and the `X-Goog-Visitor-Id` header).
+
+Mobile/VR clients return progressive stream URLs **directly** in
+`streamingData.formats[].url` — not signature-ciphered — so no player-JS deciphering is
 needed and extraction stays fully on-device.
+
+⚠️ **The `visitorData` token is not optional.** Without it, YouTube bot-checks *many* videos
+(`LOGIN_REQUIRED` / "confirm you're not a bot") **even on residential IPs** — this is what
+made real-device downloads fail before the token was added. It's the YouTube analogue of
+Instagram's anonymous CSRF token (§1): fetch a session token first, send it with every call.
+If the player response still comes back as a bot-check, `extractYouTube` refreshes the
+`visitorData` once and retries before surfacing an error.
 
 We pick a **progressive** format (muxed audio + video) from `streamingData.formats`,
 highest resolution first. Progressive caps at **itag 22 (720p)**, usually only
@@ -237,17 +249,19 @@ intentionally ignored — see "HD" below.
 
 **Known dead ends — don't waste time re-trying these:**
 
+- Calling `player` **without `visitorData`** → `LOGIN_REQUIRED` "confirm you're not a bot"
+  on many videos, regardless of IP. (Fetch the token first — see step 1.)
 - `clientName: "ANDROID"` (key `AIzaSy…39w`) → **400 "Precondition check failed"** for
   anonymous callers (now needs a PoToken/attestation).
 - `clientName: "IOS"` → returns **no progressive** formats (everything in `adaptiveFormats`).
 - The web client → progressive URLs are **signature-ciphered** (need player-JS `s`/`n`
   deciphering) — not feasible on-device without a JS engine.
 
-**`LOGIN_REQUIRED` with "confirm you're not a bot"** is **IP-based rate limiting**, not an
-age/privacy wall. It shows up from datacenter IPs (CI, cloud) and is rare on a real phone's
-residential IP. `playabilityError` detects the "not a bot" reason and reports it as a
-**retryable** block ("try again in a minute"), distinct from genuine age-restricted/private
-videos ("needs sign-in").
+**If a bot-check persists** even after the token refresh, `playabilityError` reports it as a
+**retryable** block ("YouTube is temporarily blocking… try again"), distinct from genuine
+age-restricted/private videos ("needs sign-in"). A persistent bot-check on a residential IP
+likely means YouTube now demands a real **PoToken** for that video — which needs BotGuard JS
+(a WebView or a backend), the point at which the no-backend approach reaches its limit.
 
 ### How to test fast (no device needed)
 
