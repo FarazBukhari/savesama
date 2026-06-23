@@ -1,10 +1,14 @@
-export type SourcePlatform = 'instagram';
+export type SourcePlatform = 'instagram' | 'youtube';
 
 export type MediaType = 'image' | 'video';
 
 export interface ParsedLink {
   platform: SourcePlatform;
-  /** Post shortcode (e.g. "DA1b2C3dEfG"). Null when the link is a redirect that must be resolved first. */
+  /**
+   * Content id for the link. For Instagram this is the post shortcode
+   * (e.g. "DA1b2C3dEfG"); for YouTube it is the 11-char video id.
+   * Null when the link is a redirect that must be resolved first.
+   */
   shortcode: string | null;
   canonicalUrl: string;
   needsResolution: boolean;
