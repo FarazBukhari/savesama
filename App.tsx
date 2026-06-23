@@ -163,7 +163,7 @@ function Main() {
         {busy ? (
           <View style={styles.fetchingCard}>
             <ActivityIndicator color={colors.accent} />
-            <Text style={styles.fetchingLabel}>Fetching post…</Text>
+            <Text style={styles.fetchingLabel}>Fetching media…</Text>
           </View>
         ) : null}
 
