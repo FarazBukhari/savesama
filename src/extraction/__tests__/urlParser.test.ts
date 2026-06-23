@@ -71,9 +71,37 @@ describe('parseLink — Instagram', () => {
   });
 });
 
+describe('parseLink — YouTube', () => {
+  it.each([
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://youtu.be/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://youtu.be/dQw4w9WgXcQ?si=AbCd1234', 'dQw4w9WgXcQ'],
+    ['https://www.youtube.com/shorts/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://www.youtube.com/embed/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://www.youtube.com/live/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://m.youtube.com/watch?v=dQw4w9WgXcQ&feature=share', 'dQw4w9WgXcQ'],
+    ['https://music.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://www.youtube.com/watch?list=PL123&v=dQw4w9WgXcQ&t=10s', 'dQw4w9WgXcQ'],
+  ])('parses %s', (url, videoId) => {
+    expect(parseLink(url)).toEqual({
+      platform: 'youtube',
+      shortcode: videoId,
+      canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      needsResolution: false,
+    });
+  });
+
+  it.each([
+    'https://www.youtube.com/watch?v=abc', // id too short
+    'https://www.youtube.com/', // no video
+    'https://www.youtube.com/@somechannel', // channel page
+  ])('rejects %s', (url) => {
+    expect(parseLink(url)).toBeNull();
+  });
+});
+
 describe('parseLink — other domains', () => {
   it.each([
-    'https://www.youtube.com/watch?v=abc',
     'https://example.com/p/Cabc123/',
     'https://notinstagram.com/p/Cabc123/',
     'https://www.threads.com/@someone/post/Cxyz789',

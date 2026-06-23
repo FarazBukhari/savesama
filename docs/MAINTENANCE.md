@@ -148,7 +148,7 @@ restricted `types` scope.)
 
 ```bash
 npm run typecheck          # tsc --noEmit
-npm test                   # jest (38 tests)
+npm test                   # jest (51 tests)
 npx expo-doctor            # 21/21 checks
 npx expo export --platform android --output-dir /tmp/foxy-check && rm -rf /tmp/foxy-check
 ```
@@ -204,3 +204,74 @@ Phase 2 of `downloadAudioToGallery` ([`src/services/download.ts`](../src/service
 - If extraction ever needs real transcoding (e.g. non-AAC audio → MP3), the passthrough
   approach won't cover it; you'd need an on-device encoder, not a remux. Today Instagram
   serves AAC-in-MP4, which remuxes cleanly into M4A.
+
+---
+
+## 8. YouTube extraction
+
+YouTube support lives in [`src/extraction/youtube.ts`](../src/extraction/youtube.ts) and is
+wired into the same flow as Instagram: `parseLink` detects the link, `extractMedia`
+dispatches to `extractYouTube`, and the result is a single video `MediaItem` that flows
+through the normal download / "Save as video|audio" path. No native or download changes
+were needed — the audio remux (§7) reads the AAC track straight out of the YouTube MP4.
+
+**The working recipe (verified June 2026):**
+
+POST `https://www.youtube.com/youtubei/v1/player` (no API key) with the **ANDROID_VR**
+client context and `videoId`. Mobile/VR clients return progressive stream URLs **directly**
+in `streamingData.formats[].url` — not signature-ciphered — so no player-JS deciphering is
+needed and extraction stays fully on-device.
+
+We pick a **progressive** format (muxed audio + video) from `streamingData.formats`,
+highest resolution first. Progressive caps at **itag 22 (720p)**, usually only
+**itag 18 (360p)** is served. `adaptiveFormats` (1080p+ video-only / audio-only) are
+intentionally ignored — see "HD" below.
+
+**Constants to check first if it breaks** (top of `youtube.ts`):
+
+| Constant | Current value | What it is |
+| --- | --- | --- |
+| `CLIENT_NAME` | `ANDROID_VR` | InnerTube client. The plain web/`ANDROID`/`IOS` clients now fail an attestation/PoToken "precondition check" or omit progressive formats for anonymous callers. |
+| `CLIENT_VERSION` | `1.60.19` | ANDROID_VR app version. Bump if requests start failing. |
+| `CLIENT_NAME_ID` | `28` | `X-YouTube-Client-Name` for ANDROID_VR. |
+
+**Known dead ends — don't waste time re-trying these:**
+
+- `clientName: "ANDROID"` (key `AIzaSy…39w`) → **400 "Precondition check failed"** for
+  anonymous callers (now needs a PoToken/attestation).
+- `clientName: "IOS"` → returns **no progressive** formats (everything in `adaptiveFormats`).
+- The web client → progressive URLs are **signature-ciphered** (need player-JS `s`/`n`
+  deciphering) — not feasible on-device without a JS engine.
+
+**`LOGIN_REQUIRED` with "confirm you're not a bot"** is **IP-based rate limiting**, not an
+age/privacy wall. It shows up from datacenter IPs (CI, cloud) and is rare on a real phone's
+residential IP. `playabilityError` detects the "not a bot" reason and reports it as a
+**retryable** block ("try again in a minute"), distinct from genuine age-restricted/private
+videos ("needs sign-in").
+
+### How to test fast (no device needed)
+
+```bash
+npx tsx scripts/e2e-extract.ts "https://www.youtube.com/watch?v=<id>"
+npx tsx scripts/e2e-extract.ts "https://youtu.be/<id>"
+```
+
+Prints the channel, item count, and the resolved `googlevideo.com` URL — or the friendly
+error. The progressive URL is a plain MP4 served with 302→206; `FileSystem`'s downloader
+follows the redirect automatically, so no special headers are needed on the download.
+
+The mocked regression tests are
+[`youtube.test.ts`](../src/extraction/__tests__/youtube.test.ts) (pure format-picking:
+prefers 720p, ignores adaptive/ciphered) and
+[`youtube.fetch.test.ts`](../src/extraction/__tests__/youtube.fetch.test.ts) (asserts the
+ANDROID_VR POST and the bot/login error branches).
+
+### HD (1080p+) is a planned follow-up — not yet supported
+
+1080p and above are only offered as **separate** video-only + audio-only adaptive streams.
+Combining them needs an on-device **muxer** (video + audio → MP4). The local
+`foxy-audio-extractor` module (§7) only *strips* audio out; it can't mux two tracks
+together. Adding HD means extending that native module (Android `MediaMuxer` with both an
+`audio/*` and a `video/*` track; iOS `AVMutableComposition` with both tracks) and teaching
+`youtube.ts` to emit a paired video+audio item plus a new download path that muxes before
+saving. Until then, progressive (≤720p) is the intentional ceiling.
