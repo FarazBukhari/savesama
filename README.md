@@ -1,18 +1,22 @@
 # 🦊 Foxy Downloader
 
 An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels from
-**Instagram** posts straight to your gallery.
+**Instagram** posts and videos from **YouTube** straight to your gallery.
 
 ## Features
 
-- **Share-sheet integration** — tap *Share* on any Instagram post and pick
-  *Foxy Downloader*; the app opens and fetches the media automatically.
-- **Paste a link** — or copy a post link and hit *Paste* in the app.
-- **Photos, videos, reels, and carousels** — multi-item posts show one card per item
-  with individual *Save* buttons plus a *Save all* action.
-- **On-device extraction** — no backend, no API keys. The app fetches an anonymous CSRF
-  token from Instagram's homepage, then queries its public `graphql/query` endpoint and
-  parses the post media directly on the device.
+- **Share-sheet integration** — tap *Share* on any Instagram post or YouTube video and
+  pick *Foxy Downloader*; the app opens and fetches the media automatically.
+- **Paste a link** — or copy a post/video link and hit *Paste* in the app.
+- **Auto-detects the platform** — paste an Instagram or YouTube link and the app figures
+  out which one it is.
+- **Photos, videos, reels, and carousels** — multi-item Instagram posts show one card per
+  item with individual *Save* buttons plus a *Save all* action.
+- **Save as video or audio** — for any video (Instagram reel or YouTube), pick *Video*
+  (MP4) or *Audio* (M4A); the audio track is extracted on-device.
+- **On-device extraction** — no backend, no API keys. Instagram media comes from an
+  anonymous `graphql/query` call; YouTube comes from the InnerTube `player` endpoint
+  (ANDROID_VR client), both parsed directly on the device.
 - **Seamless downloads** — progress bars, then saved directly to the device gallery
   via the media library.
 - **Reserved ad slot** — the bottom banner space ([src/components/AdBanner.tsx](src/components/AdBanner.tsx))
@@ -21,14 +25,21 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
 
 ## Limitations
 
-- **Instagram only.** Posts, reels, photos, and carousels.
+- **Instagram & YouTube.** Instagram posts, reels, photos, and carousels; YouTube
+  watch/`youtu.be`/Shorts video links.
+- **YouTube quality is capped at ~720p.** Extraction uses *progressive* streams (one file
+  with audio + video, usually 360p, sometimes 720p). 1080p+ is only served as separate
+  video/audio streams that would need on-device muxing — a planned follow-up
+  (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §8).
 - **Songs/audio pages aren't supported.** A `/reels/audio/<id>` link shows a clear
   "not supported" message — Instagram walls the audio asset for anonymous clients and
   never serves full licensed tracks (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §2b).
-- Public posts only. Private accounts and Stories require login and are not supported.
-- Instagram occasionally changes its internals; if the GraphQL endpoint changes, the
-  CSRF/endpoint constants in [src/extraction/instagram.ts](src/extraction/instagram.ts)
-  may need updating.
+- Public content only. Private/age-restricted Instagram or YouTube items require login
+  and are not supported. YouTube may also rate-limit anonymous requests from some
+  networks ("confirm you're not a bot") — the app reports this as a retryable block.
+- Both sites change their internals periodically; if extraction breaks, the constants in
+  [src/extraction/instagram.ts](src/extraction/instagram.ts) /
+  [src/extraction/youtube.ts](src/extraction/youtube.ts) may need updating.
 
 ## Project structure
 
@@ -37,10 +48,11 @@ App.tsx                     # Single screen: share-intent wiring, state, layout
 src/
   components/               # Header, LinkInput, MediaCard, ErrorNotice, EmptyState, AdBanner
   extraction/
-    urlParser.ts            # Link detection/normalization (pure, tested)
+    urlParser.ts            # Link detection/normalization (Instagram + YouTube, pure, tested)
     http.ts                 # fetch helpers + anonymous Instagram CSRF token
     instagram.ts            # Instagram extraction (graphql/query + CSRF)
-    extract.ts              # Dispatcher + share-link redirect resolution
+    youtube.ts              # YouTube extraction (InnerTube player, ANDROID_VR client)
+    extract.ts              # Platform dispatcher + share-link redirect resolution
   services/
     download.ts             # Download with progress + save to gallery
   theme.ts                  # Colors, spacing, ad banner height

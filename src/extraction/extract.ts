@@ -2,13 +2,14 @@ import { resolveFinalUrl } from './http';
 import { extractInstagram } from './instagram';
 import { ExtractionError, ExtractionResult, ParsedLink } from './types';
 import { parseLink } from './urlParser';
+import { extractYouTube } from './youtube';
 
 export async function extractMedia(rawText: string): Promise<ExtractionResult> {
   const parsed = parseLink(rawText);
   if (!parsed) {
     throw new ExtractionError(
       'unrecognized link',
-      "That doesn't look like an Instagram link. Paste a link to a post, reel, or photo."
+      "That doesn't look like a supported link. Paste an Instagram post/reel or a YouTube video link."
     );
   }
 
@@ -31,6 +32,9 @@ export async function extractMedia(rawText: string): Promise<ExtractionResult> {
     );
   }
 
+  if (link.platform === 'youtube') {
+    return extractYouTube(link.shortcode);
+  }
   return extractInstagram(link.shortcode);
 }
 

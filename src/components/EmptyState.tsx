@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../theme';
 
 const STEPS = [
-  'Tap Share on any Instagram post and pick Foxy Downloader',
-  'Or copy a post link and hit Paste above',
+  'Tap Share on any Instagram post or YouTube video and pick Foxy Downloader',
+  'Or copy a link and hit Paste above',
   'Preview the media, then save it straight to your gallery',
 ] as const;
 
@@ -20,7 +20,9 @@ export function EmptyState() {
           <Text style={styles.step}>{step}</Text>
         </View>
       ))}
-      <Text style={styles.note}>Works with public posts, reels, and carousels.</Text>
+      <Text style={styles.note}>
+        Works with public Instagram posts, reels & carousels and YouTube videos.
+      </Text>
     </View>
   );
 }

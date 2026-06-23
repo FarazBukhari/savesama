@@ -9,7 +9,7 @@ export function Header() {
         <Text>🦊 </Text>
         Foxy Downloader
       </Text>
-      <Text style={styles.subtitle}>Save photos, videos & reels from Instagram</Text>
+      <Text style={styles.subtitle}>Save videos, photos & reels from Instagram and YouTube</Text>
     </View>
   );
 }
