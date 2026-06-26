@@ -127,15 +127,6 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
   }
 
   infos.sort((a, b) => savedAt(b) - savedAt(a));
-  if (__DEV__) {
-    // Temporary: confirm the sort reflects download order across media types.
-    console.log(
-      '[library] order',
-      infos
-        .slice(0, 8)
-        .map((a) => ({ type: a.mediaType, created: a.creationTime, modified: a.modificationTime }))
-    );
-  }
   return infos;
 }
 
