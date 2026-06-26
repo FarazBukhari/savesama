@@ -17,6 +17,23 @@ export class DownloadError extends Error {
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] as const;
 
+/** Dedicated gallery album for everything Foxy saves, so downloads don't land in Camera. */
+const ALBUM_NAME = 'Foxy Downloader';
+
+/**
+ * Saves a local file into the app's dedicated album instead of the default
+ * Camera folder. Creates the album on first use, then reuses it afterwards.
+ */
+async function saveToFoxyAlbum(uri: string): Promise<void> {
+  const album = await MediaLibrary.Album.get(ALBUM_NAME);
+  if (album) {
+    await MediaLibrary.Asset.create(uri, album);
+  } else {
+    const asset = await MediaLibrary.Asset.create(uri);
+    await MediaLibrary.Album.create(ALBUM_NAME, [asset]);
+  }
+}
+
 function guessExtension(item: MediaItem): string {
   if (item.type === 'video') return 'mp4';
   const path = item.url.split('?')[0].toLowerCase();
@@ -77,8 +94,9 @@ export async function downloadToGallery(
 
   try {
     // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
-    // (it now throws at runtime). Use the new class-based API instead.
-    await MediaLibrary.Asset.create(result.uri);
+    // (it now throws at runtime). Use the new class-based API instead, routing
+    // the asset into Foxy's own album rather than the default Camera folder.
+    await saveToFoxyAlbum(result.uri);
   } catch (error) {
     throw new DownloadError(
       `save to gallery failed: ${String(error)}`,
@@ -148,7 +166,7 @@ export async function downloadAudioToGallery(
 
   // Phase 3: save M4A to media library (90 → 100%)
   try {
-    await MediaLibrary.Asset.create(audioUri);
+    await saveToFoxyAlbum(audioUri);
   } catch (error) {
     throw new DownloadError(
       `gallery save failed: ${String(error)}`,
