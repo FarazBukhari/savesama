@@ -23,14 +23,23 @@ const ALBUM_NAME = 'Foxy Downloader';
 /**
  * Saves a local file into the app's dedicated album instead of the default
  * Camera folder. Creates the album on first use, then reuses it afterwards.
+ *
+ * The asset is always written to the media library first, so a download is
+ * never lost. Grouping it into the Foxy album is best-effort: some platforms
+ * reject certain media in a photo album (e.g. iOS won't add audio), and a
+ * grouping failure must not fail an already-saved download.
  */
 async function saveToFoxyAlbum(uri: string): Promise<void> {
-  const album = await MediaLibrary.Album.get(ALBUM_NAME);
-  if (album) {
-    await MediaLibrary.Asset.create(uri, album);
-  } else {
-    const asset = await MediaLibrary.Asset.create(uri);
-    await MediaLibrary.Album.create(ALBUM_NAME, [asset]);
+  const asset = await MediaLibrary.Asset.create(uri);
+  try {
+    const album = await MediaLibrary.Album.get(ALBUM_NAME);
+    if (album) {
+      await album.add(asset);
+    } else {
+      await MediaLibrary.Album.create(ALBUM_NAME, [asset]);
+    }
+  } catch {
+    // Saved to the library but couldn't be grouped into the album — acceptable.
   }
 }
 
