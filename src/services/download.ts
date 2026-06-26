@@ -17,27 +17,42 @@ export class DownloadError extends Error {
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] as const;
 
-/** Dedicated gallery album for everything Foxy saves, so downloads don't land in Camera. */
+/** Dedicated album for everything Foxy saves, so downloads don't land in Camera. */
 const ALBUM_NAME = 'Foxy Downloader';
 
 /**
  * Saves a local file into the app's dedicated album instead of the default
- * Camera folder. Creates the album on first use, then reuses it afterwards.
+ * Camera folder.
  *
- * The asset is always written to the media library first, so a download is
- * never lost. Grouping it into the Foxy album is best-effort: some platforms
- * reject certain media in a photo album (e.g. iOS won't add audio), and a
- * grouping failure must not fail an already-saved download.
+ * On Android the album lives under a media-type-specific root (photos and
+ * videos under `Pictures/`, audio under `Music/`), and MediaStore refuses to
+ * place a file outside the root allowed for its type. A single shared album
+ * therefore can't hold every media type: adding audio to the photo/video
+ * album throws. To handle that, we add to the existing album when the type
+ * fits, and otherwise spin up the correctly-rooted Foxy folder for that type
+ * (`Album.create` derives the root from the asset's own media type).
  */
 async function saveToFoxyAlbum(uri: string): Promise<void> {
+  const existing = await MediaLibrary.Album.get(ALBUM_NAME);
+  if (existing) {
+    try {
+      // Reuse the album when this media type is allowed in its root. Reusing
+      // also avoids creating duplicate same-named albums on iOS.
+      await MediaLibrary.Asset.create(uri, existing);
+      return;
+    } catch {
+      // The existing album can't hold this media type (e.g. audio can't live
+      // in a Pictures-rooted album on Android) — fall through and give it its
+      // own correctly-rooted Foxy folder below.
+    }
+  }
+
+  // Save the asset first so the download is never lost, then group it into a
+  // Foxy folder rooted for its media type. Grouping is best-effort: if it
+  // fails the asset still remains saved in the library.
   const asset = await MediaLibrary.Asset.create(uri);
   try {
-    const album = await MediaLibrary.Album.get(ALBUM_NAME);
-    if (album) {
-      await album.add(asset);
-    } else {
-      await MediaLibrary.Album.create(ALBUM_NAME, [asset]);
-    }
+    await MediaLibrary.Album.create(ALBUM_NAME, [asset]);
   } catch {
     // Saved to the library but couldn't be grouped into the album — acceptable.
   }
