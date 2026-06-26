@@ -1,4 +1,4 @@
-import { Album, Asset, AssetInfo, getPermissionsAsync, requestPermissionsAsync } from 'expo-media-library';
+import { Album, Asset, MediaType, getPermissionsAsync, requestPermissionsAsync } from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 
 import { ALBUM_NAME } from './download';
@@ -15,11 +15,33 @@ export class LibraryError extends Error {
 }
 
 /**
- * A media file Foxy has saved, with its metadata resolved up front. The SDK 56
- * `Asset` class exposes everything through async getters; we resolve them once
- * via `getInfo()` so the UI can render synchronously.
+ * A media file Foxy has saved, with the fields the UI needs resolved up front.
+ *
+ * We deliberately do NOT use the SDK 56 `Asset.getInfo()` helper: it requires a
+ * width/height and throws "Height not found" for audio assets, which would drop
+ * every audio track. Instead we resolve only the fields we render via the
+ * per-field getters, none of which require dimensions.
  */
-export type SavedAsset = AssetInfo;
+export interface SavedAsset {
+  id: string;
+  uri: string;
+  mediaType: MediaType;
+  /** Milliseconds; null for photos. */
+  duration: number | null;
+  /** UNIX ms; null if unavailable. */
+  creationTime: number | null;
+}
+
+/** Resolves the fields we render from a media-library `Asset`. */
+async function toSavedAsset(asset: Asset): Promise<SavedAsset> {
+  const [uri, mediaType, duration, creationTime] = await Promise.all([
+    asset.getUri(),
+    asset.getMediaType(),
+    asset.getDuration(),
+    asset.getCreationTime(),
+  ]);
+  return { id: asset.id, uri, mediaType, duration, creationTime };
+}
 
 /**
  * Requests full read access to the media library so the Saved tab can
@@ -66,7 +88,7 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
     .filter((r): r is PromiseFulfilledResult<Asset[]> => r.status === 'fulfilled')
     .flatMap((r) => r.value);
 
-  const settledInfos = await Promise.allSettled(assets.map((asset) => asset.getInfo()));
+  const settledInfos = await Promise.allSettled(assets.map((asset) => toSavedAsset(asset)));
   const infos = settledInfos
     .filter((r): r is PromiseFulfilledResult<SavedAsset> => r.status === 'fulfilled')
     .map((r) => r.value);
