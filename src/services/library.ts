@@ -71,12 +71,24 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
     .filter((r): r is PromiseFulfilledResult<SavedAsset> => r.status === 'fulfilled')
     .map((r) => r.value);
 
-  const skipped =
-    titled.filter((r) => r.status === 'rejected').length +
-    assetGroups.filter((r) => r.status === 'rejected').length +
-    settledInfos.filter((r) => r.status === 'rejected').length;
+  const reasons = (results: PromiseSettledResult<unknown>[]): string[] =>
+    results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map((r) => String(r.reason));
+  const titleErrors = reasons(titled);
+  const assetsErrors = reasons(assetGroups);
+  const infoErrors = reasons(settledInfos);
+  const skipped = titleErrors.length + assetsErrors.length + infoErrors.length;
   if (skipped > 0) {
-    console.warn(`[library] skipped ${skipped} album(s)/asset(s) that could not be read`);
+    // Break the skips down by stage and include the native error text so we can
+    // see exactly what's failing (e.g. audio asset metadata reads).
+    console.warn(`[library] skipped ${skipped} entr(ies)`, {
+      foxyAlbumsFound: foxyAlbums.length,
+      assetsFound: assets.length,
+      albumTitleErrors: titleErrors,
+      albumGetAssetsErrors: assetsErrors,
+      assetGetInfoErrors: infoErrors,
+    });
   }
 
   infos.sort((a, b) => (b.creationTime ?? 0) - (a.creationTime ?? 0));
