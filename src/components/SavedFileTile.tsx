@@ -35,7 +35,15 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
           <Text style={styles.audioGlyph}>♪</Text>
         </View>
       ) : (
-        <Image source={{ uri: asset.uri }} style={styles.thumb} resizeMode="cover" />
+        <Image
+          source={{ uri: asset.uri }}
+          style={styles.thumb}
+          resizeMode="cover"
+          // The source is the full-resolution original but the tile is tiny.
+          // `resize` decodes a downsampled bitmap (Android/Fresco) instead of the
+          // full image, cutting thumbnail memory and decode cost substantially.
+          resizeMethod="resize"
+        />
       )}
 
       {isVideo ? (
