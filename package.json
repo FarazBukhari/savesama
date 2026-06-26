@@ -10,6 +10,7 @@
     "expo-linking": "~56.0.14",
     "expo-media-library": "~56.0.7",
     "expo-share-intent": "^7.0.0",
+    "expo-sharing": "~56.0.18",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-native": "0.85.3",
