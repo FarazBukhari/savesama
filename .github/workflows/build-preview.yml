@@ -2,6 +2,15 @@ name: Build Preview APK
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        type: choice
+        default: preview
+        options:
+          - development
+          - preview
+          - production
 
 jobs:
   build:
@@ -35,10 +44,10 @@ jobs:
         run: npm ci
 
       - name: Compute APK name
-        run: echo "APK_BASENAME=foxy-downloader-preview-${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+        run: echo "APK_BASENAME=foxy-downloader-${{ inputs.profile }}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - name: Build preview APK
-        run: eas build --platform android --profile preview --local --non-interactive --output "${{ github.workspace }}/${APK_BASENAME}.apk"
+        run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output "${{ github.workspace }}/${APK_BASENAME}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
