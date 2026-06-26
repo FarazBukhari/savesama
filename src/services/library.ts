@@ -30,17 +30,30 @@ export interface SavedAsset {
   duration: number | null;
   /** UNIX ms; null if unavailable. */
   creationTime: number | null;
+  /** UNIX ms; null if unavailable. */
+  modificationTime: number | null;
 }
 
 /** Resolves the fields we render from a media-library `Asset`. */
 async function toSavedAsset(asset: Asset): Promise<SavedAsset> {
-  const [uri, mediaType, duration, creationTime] = await Promise.all([
+  const [uri, mediaType, duration, creationTime, modificationTime] = await Promise.all([
     asset.getUri(),
     asset.getMediaType(),
     asset.getDuration(),
     asset.getCreationTime(),
+    asset.getModificationTime(),
   ]);
-  return { id: asset.id, uri, mediaType, duration, creationTime };
+  return { id: asset.id, uri, mediaType, duration, creationTime, modificationTime };
+}
+
+/**
+ * Sort key approximating when Foxy saved the file. `creationTime` is unreliable
+ * across media types — extracted audio is "created" now, while a downloaded
+ * photo/video can carry its original capture date — so prefer `modificationTime`
+ * (when the file was written to the device) and fall back to `creationTime`.
+ */
+function savedAt(asset: SavedAsset): number {
+  return asset.modificationTime ?? asset.creationTime ?? 0;
 }
 
 /**
@@ -113,7 +126,16 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
     });
   }
 
-  infos.sort((a, b) => (b.creationTime ?? 0) - (a.creationTime ?? 0));
+  infos.sort((a, b) => savedAt(b) - savedAt(a));
+  if (__DEV__) {
+    // Temporary: confirm the sort reflects download order across media types.
+    console.log(
+      '[library] order',
+      infos
+        .slice(0, 8)
+        .map((a) => ({ type: a.mediaType, created: a.creationTime, modified: a.modificationTime }))
+    );
+  }
   return infos;
 }
 
