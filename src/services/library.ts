@@ -48,14 +48,37 @@ export async function ensureReadPermission(): Promise<void> {
 export async function listSavedAssets(): Promise<SavedAsset[]> {
   await ensureReadPermission();
 
+  // Every fan-out below uses `allSettled`, not `Promise.all`: `Album.getAll()`
+  // returns every bucket on the device, and a single foreign album/asset whose
+  // metadata can't be read would otherwise reject the whole load. We drop the
+  // rejects and keep going so Foxy's own files always surface.
   const albums = await Album.getAll();
-  const titled = await Promise.all(
+
+  const titled = await Promise.allSettled(
     albums.map(async (album) => ({ album, title: await album.getTitle() }))
   );
-  const foxyAlbums = titled.filter((entry) => entry.title === ALBUM_NAME).map((entry) => entry.album);
+  const foxyAlbums = titled
+    .filter((r) => r.status === 'fulfilled' && r.value.title === ALBUM_NAME)
+    .map((r) => (r as PromiseFulfilledResult<{ album: Album; title: string }>).value.album);
 
-  const assetsPerAlbum = await Promise.all(foxyAlbums.map((album) => album.getAssets()));
-  const infos = await Promise.all(assetsPerAlbum.flat().map((asset) => asset.getInfo()));
+  const assetGroups = await Promise.allSettled(foxyAlbums.map((album) => album.getAssets()));
+  const assets = assetGroups
+    .filter((r): r is PromiseFulfilledResult<Asset[]> => r.status === 'fulfilled')
+    .flatMap((r) => r.value);
+
+  const settledInfos = await Promise.allSettled(assets.map((asset) => asset.getInfo()));
+  const infos = settledInfos
+    .filter((r): r is PromiseFulfilledResult<SavedAsset> => r.status === 'fulfilled')
+    .map((r) => r.value);
+
+  const skipped =
+    titled.filter((r) => r.status === 'rejected').length +
+    assetGroups.filter((r) => r.status === 'rejected').length +
+    settledInfos.filter((r) => r.status === 'rejected').length;
+  if (skipped > 0) {
+    console.warn(`[library] skipped ${skipped} album(s)/asset(s) that could not be read`);
+  }
+
   infos.sort((a, b) => (b.creationTime ?? 0) - (a.creationTime ?? 0));
   return infos;
 }
