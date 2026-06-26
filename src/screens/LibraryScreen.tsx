@@ -29,7 +29,12 @@ const TILE_SIZE =
   (Dimensions.get('window').width - 2 * H_PADDING - (COLUMNS - 1) * GAP) / COLUMNS;
 
 function friendlyMessage(error: unknown): string {
+  // Always log so the real cause is visible in Metro / a development build.
+  console.warn('[library]', error);
   if (error instanceof LibraryError) return error.userMessage;
+  // In a dev build surface the actual error so it's debuggable on-screen; ship a
+  // generic message in production.
+  if (__DEV__) return `Could not load your saved files:\n${String(error)}`;
   return 'Could not load your saved files. Please try again.';
 }
 
