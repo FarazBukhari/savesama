@@ -18,7 +18,7 @@ export class DownloadError extends Error {
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] as const;
 
 /** Dedicated album for everything Foxy saves, so downloads don't land in Camera. */
-const ALBUM_NAME = 'Foxy Downloader';
+export const ALBUM_NAME = 'Foxy Downloader';
 
 /**
  * Saves a local file into the app's dedicated album instead of the default
