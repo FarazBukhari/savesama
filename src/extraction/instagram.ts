@@ -1,5 +1,6 @@
 import { decodeHtmlEntities, decodeJsonString, metaTagContent } from './html';
 import {
+  CRAWLER_USER_AGENT,
   DESKTOP_USER_AGENT,
   fetchHtml,
   fetchWithTimeout,
@@ -9,8 +10,13 @@ import { asArray, asNumber, asString, getIn, isRecord } from './json';
 import { ExtractionError, ExtractionResult, MediaItem } from './types';
 
 const IG_APP_ID = '936619743392459';
-/** Public doc_id for Instagram's PolarisPostActionLoadPostQueryQuery. */
-const GRAPHQL_DOC_ID = '8845758582119845';
+/**
+ * Public doc_id for Instagram's PolarisPostActionLoadPostQueryQuery. Meta rotates
+ * this; a retired id makes /graphql/query return `{"errors":[{"message":"execution
+ * error","severity":"CRITICAL"}],"data":null}` (HTTP 200) for every post. When that
+ * happens, grab the current id from the web client and bump this. (Verified June 2026.)
+ */
+const GRAPHQL_DOC_ID = '10015901848480474';
 
 export async function extractInstagram(shortcode: string): Promise<ExtractionResult> {
   const strategies: ReadonlyArray<(code: string) => Promise<ExtractionResult | null>> = [
@@ -42,7 +48,12 @@ async function fetchViaGraphQl(shortcode: string): Promise<ExtractionResult | nu
   const token = await getInstagramCsrfToken();
   if (!token) return null;
 
-  const variables = JSON.stringify({ shortcode });
+  const variables = JSON.stringify({
+    shortcode,
+    fetch_tagged_user_count: null,
+    hoisted_comment_id: null,
+    hoisted_reply_id: null,
+  });
   const body = `variables=${encodeURIComponent(variables)}&doc_id=${GRAPHQL_DOC_ID}`;
 
   const response = await fetchWithTimeout('https://www.instagram.com/graphql/query', {
@@ -122,7 +133,12 @@ function graphqlNodeToItem(node: Record<string, unknown>, id: string): MediaItem
 }
 
 async function fetchViaEmbed(shortcode: string): Promise<ExtractionResult | null> {
-  const html = await fetchHtml(`https://www.instagram.com/p/${shortcode}/embed/captioned/`);
+  // The embed page only server-renders media data for crawler user-agents
+  // (facebookexternalhit/Googlebot). A normal desktop UA gets the empty JS app shell.
+  const html = await fetchHtml(
+    `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
+    CRAWLER_USER_AGENT
+  );
   if (!html) return null;
   return parseEmbedHtml(html, shortcode);
 }
