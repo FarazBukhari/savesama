@@ -21,7 +21,7 @@ need to adjust lives in two files:
    - ⚠️ Do **not** read it from the `Set-Cookie` header — React Native (especially iOS)
      consumes Set-Cookie into the native cookie store and doesn't expose it to `fetch`.
 2. POST `https://www.instagram.com/graphql/query` with:
-   - body: `variables={"shortcode":"<code>"}&doc_id=8845758582119845`
+   - body: `variables={"shortcode":"<code>",...}&doc_id=10015901848480474`
    - headers: `X-IG-App-ID: 936619743392459`, `X-CSRFToken: <token>`,
      `Cookie: csrftoken=<token>`
 
@@ -29,20 +29,32 @@ need to adjust lives in two files:
 
 | Constant | Current value | What it is |
 | --- | --- | --- |
-| `GRAPHQL_DOC_ID` | `8845758582119845` | Persisted ID for `PolarisPostActionLoadPostQueryQuery`. Stable for a long time, but Meta *can* rotate it. |
+| `GRAPHQL_DOC_ID` | `10015901848480474` | Persisted ID for `PolarisPostActionLoadPostQueryQuery`. Meta rotates it; a retired id makes **every** post fail. (Was `8845758582119845` until June 2026.) |
 | `IG_APP_ID` | `936619743392459` | Public web app id. Rarely changes. |
+
+⚠️ **The #1 breakage symptom: a rotated `doc_id`.** When the id is retired,
+`/graphql/query` still returns **HTTP 200** but the body is
+`{"errors":[{"message":"execution error","severity":"CRITICAL"}],"data":null}` for
+*every* post — which surfaces in the app as the generic "Could not read this Instagram
+post…" error. Fix = find the current id and bump `GRAPHQL_DOC_ID`. To grab a fresh id:
+load a public post in a logged-out desktop browser with devtools open, filter Network for
+`graphql/query`, and read the `doc_id` form field off the
+`PolarisPostActionLoadPostQueryQuery` request.
 
 **Known dead ends — don't waste time re-trying these:**
 
 - `https://www.instagram.com/api/graphql` — **walled** for anonymous clients (serves a
   ~594 KB logged-out HTML shell, not JSON).
 - `og:image` / `og:video` meta tags on logged-out post pages — **removed** by Instagram.
-- The `/embed/captioned/` page server-rendered JSON — **gone** (now a JS shell).
-- The mobile `i.instagram.com/api/v1/media/<id>/info/` endpoint — **requires auth**.
+- The mobile `i.instagram.com/api/v1/media/<id>/info/` endpoint — **requires auth** (serves
+  the logged-out app shell otherwise).
 
-The `fetchViaEmbed` / `fetchViaOgTags` fallbacks in `instagram.ts` are kept only as a
-last-ditch backstop; they essentially never succeed now. The GraphQL path is the one
-that matters.
+The `fetchViaEmbed` fallback **works again** as of June 2026, but only with a **crawler
+user-agent** (`CRAWLER_USER_AGENT` = `facebookexternalhit/...` in `http.ts`): the embed
+page server-renders media for link-preview bots but ships an empty JS shell to a normal
+desktop UA. It's still just a backstop (it can't get a reel's `video_url`, only the poster
+image) — the GraphQL path is the one that matters. `fetchViaOgTags` essentially never
+succeeds now.
 
 ### How to test extraction fast (no device needed)
 

@@ -1,6 +1,11 @@
 export const DESKTOP_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
+// Instagram's /embed/ page only server-renders media data for link-preview crawlers;
+// a browser UA gets the empty JS app shell instead.
+export const CRAWLER_USER_AGENT =
+  'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
 const DEFAULT_TIMEOUT_MS = 15000;
 
 export async function fetchWithTimeout(
@@ -17,10 +22,13 @@ export async function fetchWithTimeout(
   }
 }
 
-export async function fetchHtml(url: string): Promise<string | null> {
+export async function fetchHtml(
+  url: string,
+  userAgent: string = DESKTOP_USER_AGENT
+): Promise<string | null> {
   const response = await fetchWithTimeout(url, {
     headers: {
-      'User-Agent': DESKTOP_USER_AGENT,
+      'User-Agent': userAgent,
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
