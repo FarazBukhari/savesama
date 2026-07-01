@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdBanner } from './src/components/AdBanner';
+import { InstagramResolver } from './src/components/InstagramResolver';
 import { Tab, TabBar } from './src/components/TabBar';
 import { DownloadScreen } from './src/screens/DownloadScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
@@ -57,6 +58,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <Main />
+      <InstagramResolver />
     </SafeAreaProvider>
   );
 }
