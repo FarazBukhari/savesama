@@ -1,3 +1,4 @@
+import { getIgFetcher } from '../services/instagramSession';
 import { decodeHtmlEntities, decodeJsonString, metaTagContent } from './html';
 import {
   CRAWLER_USER_AGENT,
@@ -6,10 +7,11 @@ import {
   fetchWithTimeout,
   getInstagramCsrfToken,
 } from './http';
+import { IG_APP_ID, mapMediaInfo } from './instagramApi';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
+import { shortcodeToMediaId } from './shortcode';
 import { ExtractionError, ExtractionResult, MediaItem } from './types';
 
-const IG_APP_ID = '936619743392459';
 /**
  * Public doc_id for Instagram's PolarisPostActionLoadPostQueryQuery. Meta rotates
  * this; a retired id makes /graphql/query return `{"errors":[{"message":"execution
@@ -19,6 +21,12 @@ const IG_APP_ID = '936619743392459';
 const GRAPHQL_DOC_ID = '10015901848480474';
 
 export async function extractInstagram(shortcode: string): Promise<ExtractionResult> {
+  // Instagram login-walled every anonymous endpoint, so the authenticated WebView
+  // fetch is the primary path. The legacy anonymous strategies remain as a fallback
+  // for environments without a mounted resolver (web build, tests).
+  const authed = await extractViaAuthenticatedFetch(shortcode);
+  if (authed) return authed;
+
   const strategies: ReadonlyArray<(code: string) => Promise<ExtractionResult | null>> = [
     fetchViaGraphQl,
     fetchViaEmbed,
@@ -39,6 +47,31 @@ export async function extractInstagram(shortcode: string): Promise<ExtractionRes
     `instagram extraction failed for ${shortcode}: ${String(lastError)}`,
     'Could not read this Instagram post. It may be private, deleted, or Instagram may be temporarily blocking requests — try again in a minute.'
   );
+}
+
+async function extractViaAuthenticatedFetch(shortcode: string): Promise<ExtractionResult | null> {
+  const fetcher = getIgFetcher();
+  if (!fetcher) return null;
+
+  const mediaId = shortcodeToMediaId(shortcode);
+  if (!mediaId) return null;
+
+  const result = await fetcher(mediaId);
+  if (result.cancelled) {
+    throw new ExtractionError(
+      'instagram login cancelled',
+      'Instagram requires a login to download. Sign in to save this post.'
+    );
+  }
+  if (!result.ok) return null;
+
+  let json: unknown;
+  try {
+    json = JSON.parse(result.body);
+  } catch {
+    return null;
+  }
+  return mapMediaInfo(json, shortcode);
 }
 
 async function fetchViaGraphQl(shortcode: string): Promise<ExtractionResult | null> {
