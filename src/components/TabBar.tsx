@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../theme';
+import { colors, radius, spacing, typography } from '../theme';
 
 export type Tab = 'download' | 'saved' | 'settings';
 
@@ -23,13 +23,17 @@ export function TabBar({ active, onChange }: TabBarProps) {
         return (
           <Pressable
             key={tab.key}
-            style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+            style={styles.item}
             onPress={() => onChange(tab.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
           >
-            <Text style={[styles.glyph, isActive && styles.activeText]}>{tab.glyph}</Text>
-            <Text style={[styles.label, isActive && styles.activeText]}>{tab.label}</Text>
+            {({ pressed }) => (
+              <View style={[styles.pill, isActive && styles.pillActive, pressed && styles.pressed]}>
+                <Text style={[styles.glyph, isActive && styles.activeGlyph]}>{tab.glyph}</Text>
+                <Text style={[styles.label, isActive && styles.activeText]}>{tab.label}</Text>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -43,19 +47,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm - 2,
+    paddingBottom: spacing.sm - 2,
   },
   item: {
     flex: 1,
     alignItems: 'center',
+  },
+  pill: {
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
+    minWidth: 84,
+  },
+  pillActive: {
+    backgroundColor: colors.accentSoft,
   },
   pressed: {
     opacity: 0.6,
   },
   glyph: {
-    fontSize: 20,
+    fontSize: 19,
     color: colors.textSecondary,
+  },
+  activeGlyph: {
+    color: colors.accent,
   },
   label: {
     marginTop: 2,
@@ -65,5 +84,6 @@ const styles = StyleSheet.create({
   },
   activeText: {
     color: colors.accent,
+    fontWeight: '700',
   },
 });

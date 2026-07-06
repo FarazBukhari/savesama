@@ -1,7 +1,8 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { MediaItem } from '../extraction/types';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, shadows, spacing, typography } from '../theme';
+import { PressableScale } from './PressableScale';
 
 export type DownloadStatus = 'idle' | 'downloading' | 'done' | 'error';
 
@@ -28,8 +29,10 @@ export function MediaCard({ item, state, onDownload }: MediaCardProps) {
           <View style={[styles.thumb, styles.thumbFallback]} />
         )}
         {isVideo ? (
-          <View style={styles.playBadge}>
-            <Text style={styles.playGlyph}>▶</Text>
+          <View style={styles.playOverlay}>
+            <View style={styles.playChip}>
+              <Text style={styles.playGlyph}>▶</Text>
+            </View>
           </View>
         ) : null}
       </View>
@@ -37,9 +40,11 @@ export function MediaCard({ item, state, onDownload }: MediaCardProps) {
       <View style={styles.info}>
         <Text style={styles.typeLabel}>{isVideo ? 'Video' : 'Photo'}</Text>
         {item.width && item.height ? (
-          <Text style={styles.dimensions}>
-            {item.width} × {item.height}
-          </Text>
+          <View style={styles.dimensionChip}>
+            <Text style={styles.dimensionLabel}>
+              {item.width} × {item.height}
+            </Text>
+          </View>
         ) : null}
         {state.status === 'downloading' ? (
           <View style={styles.progressTrack}>
@@ -75,16 +80,9 @@ function DownloadAction({
     // Video cards: badge stays pressable so the format modal can be re-opened.
     if (reopenable) {
       return (
-        <Pressable
-          style={({ pressed }) => [
-            styles.actionArea,
-            styles.doneBadge,
-            pressed && styles.saveButtonPressed,
-          ]}
-          onPress={onPress}
-        >
+        <PressableScale style={[styles.actionArea, styles.doneBadge]} onPress={onPress}>
           <Text style={styles.doneLabel}>✓ Saved</Text>
-        </Pressable>
+        </PressableScale>
       );
     }
     return (
@@ -94,12 +92,9 @@ function DownloadAction({
     );
   }
   return (
-    <Pressable
-      style={({ pressed }) => [styles.saveButton, pressed && styles.saveButtonPressed]}
-      onPress={onPress}
-    >
+    <PressableScale style={styles.saveButton} onPress={onPress} accessibilityRole="button">
       <Text style={styles.saveLabel}>{state.status === 'error' ? 'Retry' : 'Save'}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -109,24 +104,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.md,
     marginTop: spacing.md,
+    ...shadows.card,
   },
   thumbWrapper: {
     position: 'relative',
   },
   thumb: {
-    width: 84,
-    height: 84,
+    width: 92,
+    height: 92,
     borderRadius: radius.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.sunken,
   },
   thumbFallback: {
     backgroundColor: colors.videoBadge,
   },
-  playBadge: {
+  playOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -135,11 +129,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  playChip: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.pill,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   playGlyph: {
     color: colors.textOnAccent,
-    fontSize: 22,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowRadius: 6,
+    fontSize: 14,
+    marginLeft: 2,
   },
   info: {
     flex: 1,
@@ -147,20 +148,28 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   typeLabel: {
-    fontSize: typography.body,
-    fontWeight: '600',
+    fontSize: typography.headline,
+    fontWeight: '700',
     color: colors.text,
   },
-  dimensions: {
-    marginTop: spacing.xs,
+  dimensionChip: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs + 2,
+    backgroundColor: colors.sunken,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  dimensionLabel: {
     fontSize: typography.small,
+    fontWeight: '600',
     color: colors.textSecondary,
   },
   progressTrack: {
     marginTop: spacing.sm,
-    height: 4,
+    height: 6,
     borderRadius: radius.pill,
-    backgroundColor: colors.background,
+    backgroundColor: colors.sunken,
     overflow: 'hidden',
   },
   progressFill: {
@@ -169,14 +178,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   actionArea: {
-    minWidth: 72,
+    minWidth: 76,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.sm,
   },
   progressLabel: {
     color: colors.accent,
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: typography.body,
   },
   doneBadge: {
@@ -186,22 +195,20 @@ const styles = StyleSheet.create({
   },
   doneLabel: {
     color: colors.success,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: typography.small,
   },
   saveButton: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.accent,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    minWidth: 72,
+    paddingVertical: spacing.sm + 2,
+    minWidth: 76,
     alignItems: 'center',
-  },
-  saveButtonPressed: {
-    opacity: 0.7,
+    ...shadows.glow,
   },
   saveLabel: {
-    color: colors.accent,
+    color: colors.textOnAccent,
     fontWeight: '700',
     fontSize: typography.body,
   },

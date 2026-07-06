@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorNotice } from '../components/ErrorNotice';
+import { Header } from '../components/Header';
 import { SavedFileTile } from '../components/SavedFileTile';
 import {
   LibraryError,
@@ -20,7 +21,7 @@ import {
   listSavedAssets,
   openAsset,
 } from '../services/library';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, shadows, spacing, typography } from '../theme';
 
 const COLUMNS = 3;
 const GAP = spacing.sm;
@@ -132,14 +133,20 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
       }
       ListHeaderComponent={
         <View style={styles.header}>
-          <Text style={styles.title}>Saved files</Text>
-          <Text style={styles.subtitle}>Everything you've saved with Foxy</Text>
+          <Header
+            title="Saved files"
+            subtitle="Everything you've saved with Foxy"
+            glyph="🗂"
+          />
           {error ? <ErrorNotice message={error} /> : null}
         </View>
       }
       ListEmptyComponent={
         error ? null : (
           <View style={styles.emptyCard}>
+            <View style={styles.emptyHero}>
+              <Text style={styles.emptyHeroGlyph}>🗂</Text>
+            </View>
             <Text style={styles.emptyTitle}>No saved files yet</Text>
             <Text style={styles.emptyBody}>
               Files you download will show up here. Long-press a file to delete it.
@@ -180,28 +187,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    marginTop: spacing.xs,
-    fontSize: typography.subtitle,
-    color: colors.textSecondary,
+    marginBottom: spacing.sm,
   },
   emptyCard: {
     padding: spacing.xl,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
+    ...shadows.card,
+  },
+  emptyHero: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.xl,
+    backgroundColor: colors.sunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyHeroGlyph: {
+    fontSize: 30,
   },
   emptyTitle: {
-    fontSize: typography.body,
+    fontSize: typography.headline,
     fontWeight: '700',
     color: colors.text,
   },

@@ -13,7 +13,7 @@ import { ItemDownloadState, MediaCard } from '../components/MediaCard';
 import { extractMedia } from '../extraction/extract';
 import { ExtractionError, ExtractionResult, MediaItem } from '../extraction/types';
 import { DownloadError, downloadAudioToGallery, downloadToGallery } from '../services/download';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, shadows, spacing, typography } from '../theme';
 
 function stateKey(item: MediaItem, format: 'video' | 'audio' = 'video'): string {
   return item.type === 'video' ? `${item.id}:${format}` : item.id;
@@ -223,10 +223,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.xl,
     marginTop: spacing.md,
+    ...shadows.card,
   },
   fetchingLabel: {
     marginLeft: spacing.md,
@@ -240,14 +239,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   resultsTitle: {
-    fontSize: typography.body,
+    fontSize: typography.headline,
     fontWeight: '700',
     color: colors.text,
   },
   resultsCount: {
-    fontWeight: '400',
+    fontWeight: '500',
+    fontSize: typography.subtitle,
     color: colors.textSecondary,
   },
   downloadAll: {
@@ -255,6 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    ...shadows.glow,
   },
   downloadAllLabel: {
     color: colors.textOnAccent,
