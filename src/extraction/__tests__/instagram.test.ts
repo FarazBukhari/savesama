@@ -23,6 +23,7 @@ describe('mapGraphqlMedia', () => {
           thumbnailUrl: 'https://cdn.example/image.jpg',
           width: 1080,
           height: 1350,
+          platform: 'instagram',
         },
       ],
       username: 'someuser',
@@ -47,6 +48,7 @@ describe('mapGraphqlMedia', () => {
         thumbnailUrl: 'https://cdn.example/poster.jpg',
         width: 720,
         height: 1280,
+        platform: 'instagram',
       },
     ]);
   });

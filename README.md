@@ -27,10 +27,13 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
 
 - **Instagram & YouTube.** Instagram posts, reels, photos, and carousels; YouTube
   watch/`youtu.be`/Shorts video links.
-- **YouTube quality is capped at ~720p.** Extraction uses *progressive* streams (one file
-  with audio + video, usually 360p, sometimes 720p). 1080p+ is only served as separate
-  video/audio streams that would need on-device muxing — a planned follow-up
-  (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §8).
+- **Selectable resolution (per platform).** Choose a default download quality for
+  Instagram and YouTube on the **Settings** tab (360p up to 1080p, or "Max"). YouTube
+  1080p is assembled on-device by muxing the separate video/audio streams; lower rungs are
+  picked from the quality ladder each source exposes. When a source has nothing at or
+  below the chosen size, Foxy downscales on-device (iOS supported; Android falls back to
+  the smallest available rendition for now). See
+  [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §8–§9.
 - **Songs/audio pages aren't supported.** A `/reels/audio/<id>` link shows a clear
   "not supported" message — Instagram walls the audio asset for anonymous clients and
   never serves full licensed tracks (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §2b).

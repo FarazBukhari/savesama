@@ -162,6 +162,7 @@ function graphqlNodeToItem(node: Record<string, unknown>, id: string): MediaItem
     thumbnailUrl: displayUrl,
     width: asNumber(getIn(node, ['dimensions', 'width'])),
     height: asNumber(getIn(node, ['dimensions', 'height'])),
+    platform: 'instagram',
   };
 }
 
@@ -193,6 +194,7 @@ export function parseEmbedHtml(html: string, shortcode: string): ExtractionResul
           thumbnailUrl: displayUrl,
           width: null,
           height: null,
+          platform: 'instagram',
         },
       ],
       username,
@@ -217,6 +219,7 @@ export function parseEmbedHtml(html: string, shortcode: string): ExtractionResul
         thumbnailUrl: imageUrl,
         width: null,
         height: null,
+        platform: 'instagram',
       },
     ],
     username,
@@ -249,6 +252,7 @@ async function fetchViaOgTags(shortcode: string): Promise<ExtractionResult | nul
         thumbnailUrl: imageUrl,
         width: null,
         height: null,
+        platform: 'instagram',
       },
     ],
     username: null,

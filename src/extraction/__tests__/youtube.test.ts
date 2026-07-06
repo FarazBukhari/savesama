@@ -30,6 +30,18 @@ const PLAYER_RESPONSE = {
         height: 1080,
         bitrate: 4000000,
       },
+      {
+        itag: 140,
+        mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+        url: 'https://r1.example/videoplayback?itag=140',
+        bitrate: 128000,
+      },
+      {
+        itag: 251,
+        mimeType: 'audio/webm; codecs="opus"',
+        url: 'https://r1.example/videoplayback?itag=251',
+        bitrate: 130000,
+      },
     ],
   },
   videoDetails: {
@@ -45,30 +57,36 @@ const PLAYER_RESPONSE = {
 };
 
 describe('mapPlayerResponse', () => {
-  it('picks the highest-resolution progressive MP4 (720p over 360p)', () => {
+  it('sets the default url to the highest-resolution progressive MP4 (720p over 360p)', () => {
     const result = mapPlayerResponse(PLAYER_RESPONSE, 'dQw4w9WgXcQ');
-    expect(result).toEqual({
-      platform: 'youtube',
-      shortcode: 'dQw4w9WgXcQ',
-      items: [
-        {
-          id: 'dQw4w9WgXcQ',
-          type: 'video',
-          url: 'https://r1.example/videoplayback?itag=22',
-          thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
-          width: 1280,
-          height: 720,
-        },
-      ],
-      username: 'Rick Astley',
-      caption: 'Never Gonna Give You Up',
-    });
+    const item = result?.items[0];
+    expect(item?.url).toBe('https://r1.example/videoplayback?itag=22');
+    expect(item?.width).toBe(1280);
+    expect(item?.height).toBe(720);
+    expect(item?.platform).toBe('youtube');
+    expect(result?.username).toBe('Rick Astley');
+    expect(result?.caption).toBe('Never Gonna Give You Up');
+    expect(item?.thumbnailUrl).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg');
   });
 
-  it('ignores adaptive (video-only) formats even when higher resolution', () => {
+  it('keeps the default single url progressive (≤720p), not the 1080p adaptive stream', () => {
     const result = mapPlayerResponse(PLAYER_RESPONSE, 'dQw4w9WgXcQ');
-    // 1080p itag 137 is adaptive/video-only — must not be selected.
+    // 1080p itag 137 is adaptive/video-only — must not be the default url.
     expect(result?.items[0].height).toBe(720);
+  });
+
+  it('exposes progressive + adaptive-H.264 formats, pairing HD with the AAC (m4a) audio', () => {
+    const result = mapPlayerResponse(PLAYER_RESPONSE, 'dQw4w9WgXcQ');
+    const formats = result?.items[0].formats ?? [];
+
+    const progressive = formats.filter((f) => f.hasAudio);
+    expect(progressive.map((f) => f.height).sort()).toEqual([360, 720]);
+
+    const hd = formats.find((f) => f.height === 1080);
+    expect(hd?.hasAudio).toBe(false);
+    // Paired with the AAC/m4a adaptive audio (itag 140), NOT the Opus/webm (itag 251).
+    expect(hd?.audioUrl).toBe('https://r1.example/videoplayback?itag=140');
+    expect(hd?.url).toBe('https://r1.example/videoplayback?itag=137');
   });
 
   it('returns null when only ciphered formats are available (no direct url)', () => {

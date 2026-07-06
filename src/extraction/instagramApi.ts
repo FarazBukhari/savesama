@@ -1,5 +1,5 @@
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
-import { ExtractionResult, MediaItem } from './types';
+import { ExtractionResult, MediaFormat, MediaItem } from './types';
 
 /** Instagram's public web app id, required on api/v1 requests. */
 export const IG_APP_ID = '936619743392459';
@@ -46,15 +46,21 @@ function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null
   const thumbnail = asString(getIn(node, ['image_versions2', 'candidates', 0, 'url']));
 
   if (isVideo) {
-    const videoUrl = asString(getIn(node, ['video_versions', 0, 'url']));
-    if (!videoUrl) return null;
+    // `video_versions` is an array of the same clip at multiple resolutions
+    // (Instagram serves them muxed, highest-first). Expose the whole ladder so
+    // the resolution planner can honour a lower-quality preference without any
+    // on-device transcoding in the common case.
+    const formats = buildVideoFormats(node);
+    if (formats.length === 0) return null;
     return {
       id,
       type: 'video',
-      url: videoUrl,
+      url: formats[0].url,
       thumbnailUrl: thumbnail,
-      width: asNumber(getIn(node, ['video_versions', 0, 'width'])),
-      height: asNumber(getIn(node, ['video_versions', 0, 'height'])),
+      width: formats[0].width,
+      height: formats[0].height,
+      platform: 'instagram',
+      formats,
     };
   }
 
@@ -66,5 +72,25 @@ function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null
     thumbnailUrl: thumbnail,
     width: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'width'])),
     height: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'height'])),
+    platform: 'instagram',
   };
+}
+
+/** Maps Instagram's `video_versions` array (highest-first) into muxed formats. */
+function buildVideoFormats(node: Record<string, unknown>): MediaFormat[] {
+  const versions = asArray(node['video_versions']) ?? [];
+  const formats: MediaFormat[] = [];
+  for (const version of versions) {
+    if (!isRecord(version)) continue;
+    const url = asString(version['url']);
+    if (!url) continue;
+    formats.push({
+      url,
+      width: asNumber(version['width']),
+      height: asNumber(version['height']),
+      bitrate: null,
+      hasAudio: true,
+    });
+  }
+  return formats;
 }
