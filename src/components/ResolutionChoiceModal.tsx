@@ -8,7 +8,23 @@ import {
   resolutionLabel,
   resolutionSublabel,
 } from '../services/preferences';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, shadows, spacing, typography } from '../theme';
+
+/** Short badge shown in each row's leading tile. */
+function resolutionBadge(pref: ResolutionPref): string {
+  switch (pref) {
+    case 'max':
+      return 'MAX';
+    case '1080':
+      return 'FHD';
+    case '720':
+      return 'HD';
+    case '480':
+      return 'SD';
+    case '360':
+      return '360';
+  }
+}
 
 interface ResolutionChoiceModalProps {
   visible: boolean;
@@ -40,6 +56,7 @@ export function ResolutionChoiceModal({
           {RESOLUTION_OPTIONS.map((option) => (
             <ResolutionRow
               key={option}
+              badge={resolutionBadge(option)}
               label={resolutionLabel(option)}
               sublabel={resolutionSublabel(option, canTranscode)}
               selected={option === value}
@@ -56,11 +73,13 @@ export function ResolutionChoiceModal({
 }
 
 function ResolutionRow({
+  badge,
   label,
   sublabel,
   selected,
   onPress,
 }: {
+  badge: string;
   label: string;
   sublabel: string;
   selected: boolean;
@@ -73,15 +92,16 @@ function ResolutionRow({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
     >
+      <View style={[styles.badgeTile, selected && styles.badgeTileSelected]}>
+        <Text style={[styles.badgeLabel, selected && styles.badgeLabelSelected]}>{badge}</Text>
+      </View>
       <View style={styles.rowInfo}>
         <Text style={[styles.rowLabel, selected && styles.rowLabelSelected]}>{label}</Text>
         <Text style={styles.rowSublabel}>{sublabel}</Text>
       </View>
-      {selected ? (
-        <View style={styles.chip}>
-          <Text style={styles.chipLabel}>✓</Text>
-        </View>
-      ) : null}
+      <View style={[styles.radio, selected && styles.radioSelected]}>
+        {selected ? <Text style={styles.radioCheck}>✓</Text> : null}
+      </View>
     </Pressable>
   );
 }
@@ -89,18 +109,19 @@ function ResolutionRow({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.card,
-    borderTopLeftRadius: radius.lg + 4,
-    borderTopRightRadius: radius.lg + 4,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+    ...shadows.raised,
   },
   handle: {
-    width: 36,
+    width: 40,
     height: 4,
     borderRadius: radius.pill,
     backgroundColor: colors.border,
@@ -108,7 +129,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: {
-    fontSize: typography.body,
+    fontSize: typography.headline,
     fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.sm,
@@ -123,6 +144,27 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.65,
   },
+  badgeTile: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.sunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  badgeTileSelected: {
+    backgroundColor: colors.accentSoft,
+  },
+  badgeLabel: {
+    fontSize: typography.caption,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: colors.textSecondary,
+  },
+  badgeLabelSelected: {
+    color: colors.accent,
+  },
   rowInfo: {
     flex: 1,
     marginRight: spacing.md,
@@ -133,22 +175,30 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   rowLabelSelected: {
+    fontWeight: '700',
     color: colors.accent,
   },
   rowSublabel: {
-    marginTop: spacing.xs,
+    marginTop: 2,
     fontSize: typography.small,
     color: colors.textSecondary,
   },
-  chip: {
+  radio: {
+    width: 24,
+    height: 24,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    backgroundColor: colors.accentSoft,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  chipLabel: {
-    color: colors.accent,
-    fontWeight: '700',
-    fontSize: typography.small,
+  radioSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  radioCheck: {
+    color: colors.textOnAccent,
+    fontSize: typography.caption,
+    fontWeight: '800',
   },
 });

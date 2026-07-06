@@ -1,25 +1,30 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, shadows, spacing, typography } from '../theme';
 
 const STEPS = [
-  'Tap Share on any Instagram post or YouTube video and pick Foxy Downloader',
-  'Or copy a link and hit Paste above',
-  'Preview the media, then save it straight to your gallery',
+  { glyph: '📤', text: 'Tap Share on any Instagram post or YouTube video and pick Foxy Downloader' },
+  { glyph: '📋', text: 'Or copy a link and hit Paste above' },
+  { glyph: '💾', text: 'Preview the media, then save it straight to your gallery' },
 ] as const;
 
 export function EmptyState() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>How it works</Text>
+      <View style={styles.hero}>
+        <Text style={styles.heroGlyph}>🦊</Text>
+      </View>
+      <Text style={styles.title}>Save anything in two taps</Text>
+
       {STEPS.map((step, index) => (
-        <View key={step} style={styles.row}>
-          <View style={styles.bullet}>
-            <Text style={styles.bulletLabel}>{index + 1}</Text>
+        <View key={step.text} style={[styles.row, index === 0 && styles.firstRow]}>
+          <View style={styles.stepTile}>
+            <Text style={styles.stepGlyph}>{step.glyph}</Text>
           </View>
-          <Text style={styles.step}>{step}</Text>
+          <Text style={styles.step}>{step.text}</Text>
         </View>
       ))}
+
       <Text style={styles.note}>
         Works with public Instagram posts, reels & carousels and YouTube videos.
       </Text>
@@ -30,37 +35,52 @@ export function EmptyState() {
 const styles = StyleSheet.create({
   container: {
     marginTop: spacing.xl,
-    padding: spacing.lg,
+    padding: spacing.xl,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadows.card,
   },
-  title: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
-  },
-  bullet: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
+  hero: {
+    alignSelf: 'center',
+    width: 72,
+    height: 72,
+    borderRadius: radius.xl,
     backgroundColor: colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
-    marginTop: 1,
+    marginBottom: spacing.md,
   },
-  bulletLabel: {
-    color: colors.accent,
-    fontSize: typography.small,
+  heroGlyph: {
+    fontSize: 36,
+  },
+  title: {
+    fontSize: typography.headline,
     fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  firstRow: {
+    borderTopWidth: 0,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  stepTile: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.sunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  stepGlyph: {
+    fontSize: 18,
   },
   step: {
     flex: 1,
@@ -69,8 +89,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   note: {
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
     color: colors.placeholder,
     fontSize: typography.small,
+    textAlign: 'center',
   },
 });

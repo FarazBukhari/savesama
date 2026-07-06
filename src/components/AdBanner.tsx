@@ -32,9 +32,7 @@ const styles = StyleSheet.create({
   placeholder: {
     height: AD_BANNER_HEIGHT - spacing.lg,
     borderRadius: radius.sm,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
+    backgroundColor: colors.sunken,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
@@ -42,7 +40,8 @@ const styles = StyleSheet.create({
   label: {
     color: colors.placeholder,
     fontSize: 11,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
+    fontWeight: '600',
   },
 });
