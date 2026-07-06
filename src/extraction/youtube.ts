@@ -1,6 +1,6 @@
 import { fetchWithTimeout } from './http';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
-import { ExtractionError, ExtractionResult, MediaItem } from './types';
+import { ExtractionError, ExtractionResult, MediaFormat, MediaItem } from './types';
 
 /**
  * YouTube extraction uses the InnerTube `player` endpoint with the ANDROID_VR
@@ -178,11 +178,84 @@ export function mapPlayerResponse(
         thumbnailUrl: pickThumbnail(player, videoId),
         width: asNumber(best['width']),
         height: asNumber(best['height']),
+        platform: 'youtube',
+        formats: buildFormats(player),
       } satisfies MediaItem,
     ],
     username: asString(getIn(player, ['videoDetails', 'author'])),
     caption: asString(getIn(player, ['videoDetails', 'title'])),
   };
+}
+
+/**
+ * Builds the full quality ladder offered to the resolution planner:
+ *  - progressive MP4 streams (muxed audio+video, ≤720p) → `hasAudio: true`
+ *  - adaptive **H.264/MP4** video-only streams (1080p+) → `hasAudio: false`,
+ *    each paired with the best adaptive **AAC (M4A)** audio-only stream.
+ *
+ * We deliberately restrict adaptive picks to H.264 video + AAC audio so the
+ * on-device muxer can passthrough-remux them into MP4. YouTube's VP9/Opus/WebM
+ * variants cannot be muxed into an MP4 container, so they are excluded here.
+ */
+export function buildFormats(player: Record<string, unknown>): MediaFormat[] {
+  const formats: MediaFormat[] = progressiveFormats(player).map((format) => ({
+    url: asString(format['url']) as string,
+    width: asNumber(format['width']),
+    height: asNumber(format['height']),
+    bitrate: asNumber(format['bitrate']),
+    hasAudio: true,
+  }));
+
+  const audioUrl = pickBestAdaptiveAudio(player);
+  if (audioUrl) {
+    for (const format of adaptiveVideoFormats(player)) {
+      const videoUrl = asString(format['url']);
+      if (!videoUrl) continue;
+      formats.push({
+        url: videoUrl,
+        width: asNumber(format['width']),
+        height: asNumber(format['height']),
+        bitrate: asNumber(format['bitrate']),
+        hasAudio: false,
+        audioUrl,
+      });
+    }
+  }
+
+  return formats;
+}
+
+/** Adaptive H.264/MP4 video-only streams with a direct url (mux-compatible). */
+function adaptiveVideoFormats(player: Record<string, unknown>): Record<string, unknown>[] {
+  const formats = asArray(getIn(player, ['streamingData', 'adaptiveFormats'])) ?? [];
+  return formats.filter(isRecord).filter((format) => {
+    const mime = asString(format['mimeType']) ?? '';
+    return (
+      mime.startsWith('video/mp4') &&
+      /avc1|h264/i.test(mime) &&
+      asString(format['url']) !== null
+    );
+  });
+}
+
+/** Highest-bitrate adaptive AAC (M4A) audio-only stream url, or null. */
+function pickBestAdaptiveAudio(player: Record<string, unknown>): string | null {
+  const formats = asArray(getIn(player, ['streamingData', 'adaptiveFormats'])) ?? [];
+  let bestUrl: string | null = null;
+  let bestBitrate = -1;
+  for (const format of formats) {
+    if (!isRecord(format)) continue;
+    const mime = asString(format['mimeType']) ?? '';
+    if (!mime.startsWith('audio/mp4') || !/mp4a/i.test(mime)) continue;
+    const url = asString(format['url']);
+    if (!url) continue;
+    const bitrate = asNumber(format['bitrate']) ?? 0;
+    if (bitrate > bestBitrate) {
+      bestBitrate = bitrate;
+      bestUrl = url;
+    }
+  }
+  return bestUrl;
 }
 
 /**

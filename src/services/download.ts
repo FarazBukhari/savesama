@@ -1,8 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 
-import { extractAudio } from '../../modules/foxy-audio-extractor';
+import { extractAudio, muxVideoAudio, transcodeVideo } from '../../modules/foxy-audio-extractor';
 import { MediaItem } from '../extraction/types';
+import { getPreferences, resolutionForPlatform } from './preferences';
+import { DownloadPlan, planVideoDownload } from './resolutionPlan';
 
 export class DownloadError extends Error {
   /** Friendly message safe to show in the UI. */
@@ -79,21 +81,21 @@ async function ensureMediaPermission(): Promise<void> {
   }
 }
 
-/**
- * Downloads a media item to the app cache, saves it into the device gallery,
- * then removes the cached copy.
- */
-export async function downloadToGallery(
-  item: MediaItem,
-  onProgress: (fraction: number) => void
-): Promise<void> {
-  await ensureMediaPermission();
-
-  const extension = guessExtension(item);
+function cacheUri(item: MediaItem, suffix: string): string {
   const safeId = item.id.replace(/[^A-Za-z0-9_-]/g, '');
-  const fileUri = `${FileSystem.cacheDirectory}foxy_${safeId}_${Date.now()}.${extension}`;
+  return `${FileSystem.cacheDirectory}foxy_${safeId}_${Date.now()}_${suffix}`;
+}
 
-  const download = FileSystem.createDownloadResumable(item.url, fileUri, {}, (progress) => {
+/**
+ * Downloads `url` to `fileUri`, reporting fraction 0→1 through `onProgress`.
+ * Throws a friendly DownloadError on network failure or a non-2xx status.
+ */
+async function downloadFile(
+  url: string,
+  fileUri: string,
+  onProgress: (fraction: number) => void
+): Promise<FileSystem.FileSystemDownloadResult> {
+  const download = FileSystem.createDownloadResumable(url, fileUri, {}, (progress) => {
     if (progress.totalBytesExpectedToWrite > 0) {
       onProgress(progress.totalBytesWritten / progress.totalBytesExpectedToWrite);
     }
@@ -116,6 +118,54 @@ export async function downloadToGallery(
     );
   }
 
+  return result;
+}
+
+/**
+ * Downloads a media item to the app cache, saves it into the device gallery,
+ * then removes the cached copy.
+ *
+ * For videos the user's per-platform resolution preference decides *how*: the
+ * chosen rendition is downloaded directly, an HD (adaptive) rendition is muxed
+ * from separate video+audio streams, or — when the source has nothing at or
+ * below the target — the smallest rendition is downscaled on-device.
+ */
+export async function downloadToGallery(
+  item: MediaItem,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  await ensureMediaPermission();
+
+  if (item.type !== 'video') {
+    await downloadDirect(item, item.url, guessExtension(item), onProgress);
+    return;
+  }
+
+  const pref = resolutionForPlatform(getPreferences(), item.platform ?? 'instagram');
+  const plan = planVideoDownload(item, pref);
+
+  switch (plan.kind) {
+    case 'direct':
+      await downloadDirect(item, plan.videoUrl, 'mp4', onProgress);
+      return;
+    case 'mux':
+      await downloadMuxed(item, plan, onProgress);
+      return;
+    case 'transcode':
+      await downloadTranscoded(item, plan, onProgress);
+      return;
+  }
+}
+
+/** Single-URL path: download → save to album → clean up. */
+async function downloadDirect(
+  item: MediaItem,
+  url: string,
+  extension: string,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  const result = await downloadFile(url, cacheUri(item, `dl.${extension}`), onProgress);
+
   try {
     // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
     // (it now throws at runtime). Use the new class-based API instead, routing
@@ -131,6 +181,114 @@ export async function downloadToGallery(
   }
 
   onProgress(1);
+}
+
+/**
+ * HD path: download the video-only and audio-only streams, mux them into one MP4
+ * on-device (no re-encode), then save. Progress: video 0→0.55, audio 0.55→0.8,
+ * mux 0.8→0.9, save 0.9→1.0.
+ */
+async function downloadMuxed(
+  item: MediaItem,
+  plan: DownloadPlan,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  const videoUri = cacheUri(item, 'v.mp4');
+  const audioUri = cacheUri(item, 'a.m4a');
+  const outUri = cacheUri(item, 'hd.mp4');
+
+  try {
+    if (!plan.audioUrl) {
+      throw new DownloadError(
+        'mux plan missing audio url',
+        'Could not download this video in HD. Try a lower resolution in Settings.'
+      );
+    }
+
+    const videoResult = await downloadFile(plan.videoUrl, videoUri, (f) => onProgress(0.55 * f));
+    onProgress(0.55);
+    const audioResult = await downloadFile(plan.audioUrl, audioUri, (f) =>
+      onProgress(0.55 + 0.25 * f)
+    );
+    onProgress(0.8);
+
+    try {
+      await muxVideoAudio(videoResult.uri, audioResult.uri, outUri);
+    } catch (error) {
+      throw new DownloadError(
+        `mux failed: ${String(error)}`,
+        'Could not combine the HD video and audio streams. Try a lower resolution in Settings.'
+      );
+    }
+    onProgress(0.9);
+
+    try {
+      await saveToFoxyAlbum(outUri);
+    } catch (error) {
+      throw new DownloadError(
+        `save to gallery failed: ${String(error)}`,
+        'Downloaded, but saving to your gallery failed. Check storage permissions.'
+      );
+    }
+    onProgress(1);
+  } finally {
+    await Promise.all([
+      FileSystem.deleteAsync(videoUri, { idempotent: true }).catch(() => undefined),
+      FileSystem.deleteAsync(audioUri, { idempotent: true }).catch(() => undefined),
+      FileSystem.deleteAsync(outUri, { idempotent: true }).catch(() => undefined),
+    ]);
+  }
+}
+
+/**
+ * Compression path: download the smallest available rendition, downscale it to
+ * the target height on-device, then save. Progress: download 0→0.6, transcode
+ * 0.6→0.9, save 0.9→1.0.
+ *
+ * On-device transcoding isn't available on every platform yet; if it fails we
+ * fall back to saving the downloaded rendition as-is so the download still
+ * succeeds (just without the extra size reduction).
+ */
+async function downloadTranscoded(
+  item: MediaItem,
+  plan: DownloadPlan,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  const srcUri = cacheUri(item, 'src.mp4');
+  const outUri = cacheUri(item, 'small.mp4');
+
+  try {
+    const srcResult = await downloadFile(plan.videoUrl, srcUri, (f) => onProgress(0.6 * f));
+    onProgress(0.6);
+
+    let fileToSave = srcResult.uri;
+    if (plan.targetHeight) {
+      try {
+        await transcodeVideo(srcResult.uri, outUri, { targetHeight: plan.targetHeight });
+        fileToSave = outUri;
+      } catch {
+        // Transcoding unavailable/failed on this platform — save the source
+        // rendition rather than failing the whole download.
+        fileToSave = srcResult.uri;
+      }
+    }
+    onProgress(0.9);
+
+    try {
+      await saveToFoxyAlbum(fileToSave);
+    } catch (error) {
+      throw new DownloadError(
+        `save to gallery failed: ${String(error)}`,
+        'Downloaded, but saving to your gallery failed. Check storage permissions.'
+      );
+    }
+    onProgress(1);
+  } finally {
+    await Promise.all([
+      FileSystem.deleteAsync(srcUri, { idempotent: true }).catch(() => undefined),
+      FileSystem.deleteAsync(outUri, { idempotent: true }).catch(() => undefined),
+    ]);
+  }
 }
 
 /**

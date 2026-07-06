@@ -21,13 +21,39 @@ export interface ParsedLink {
   unsupported?: 'audio';
 }
 
+/**
+ * A single downloadable rendition of a video. Sources that expose a quality
+ * ladder (YouTube's progressive + adaptive streams, Instagram's `video_versions`)
+ * populate `MediaItem.formats` with these so the download layer can honour a
+ * user-selected resolution. `hasAudio` is true for muxed/progressive streams and
+ * false for YouTube's video-only adaptive streams, which must be paired with
+ * `audioUrl` and combined on-device before saving.
+ */
+export interface MediaFormat {
+  url: string;
+  width: number | null;
+  height: number | null;
+  bitrate: number | null;
+  hasAudio: boolean;
+  /** For adaptive (video-only) formats: the paired audio-only stream to mux in. */
+  audioUrl?: string | null;
+}
+
 export interface MediaItem {
   id: string;
   type: MediaType;
+  /**
+   * The default/best single URL. Kept for back-compat and for the common
+   * "Max quality" path; resolution-aware downloads consult `formats` instead.
+   */
   url: string;
   thumbnailUrl: string | null;
   width: number | null;
   height: number | null;
+  /** Which platform produced this item, so the download layer can pick the right preference. */
+  platform?: SourcePlatform;
+  /** Full quality ladder when the source exposes one. Absent for images and single-URL fallbacks. */
+  formats?: MediaFormat[];
 }
 
 export interface ExtractionResult {
