@@ -42,9 +42,40 @@ describe('mapMediaInfo', () => {
           thumbnailUrl: 'https://cdn/thumb.jpg',
           width: 720,
           height: 1280,
+          platform: 'instagram',
+          formats: [
+            {
+              url: 'https://cdn/v.mp4',
+              width: 720,
+              height: 1280,
+              bitrate: null,
+              hasAudio: true,
+            },
+          ],
         },
       ],
     });
+  });
+
+  it('exposes the full video_versions ladder as formats (highest-first)', () => {
+    const json = {
+      items: [
+        {
+          media_type: 2,
+          video_versions: [
+            { url: 'https://cdn/1080.mp4', width: 1080, height: 1920 },
+            { url: 'https://cdn/720.mp4', width: 720, height: 1280 },
+            { url: 'https://cdn/480.mp4', width: 480, height: 854 },
+          ],
+          image_versions2: { candidates: [{ url: 'https://cdn/thumb.jpg' }] },
+          user: { username: 'alice' },
+        },
+      ],
+    };
+    const item = mapMediaInfo(json, 'ABC')?.items[0];
+    expect(item?.url).toBe('https://cdn/1080.mp4');
+    expect(item?.formats?.map((f) => f.height)).toEqual([1920, 1280, 854]);
+    expect(item?.formats?.every((f) => f.hasAudio)).toBe(true);
   });
 
   it('maps a single image post', () => {
@@ -66,6 +97,7 @@ describe('mapMediaInfo', () => {
         thumbnailUrl: 'https://cdn/i.jpg',
         width: 1080,
         height: 1080,
+        platform: 'instagram',
       },
     ]);
     expect(result?.caption).toBeNull();

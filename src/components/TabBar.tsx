@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, typography } from '../theme';
 
-export type Tab = 'download' | 'saved';
+export type Tab = 'download' | 'saved' | 'settings';
 
 interface TabBarProps {
   active: Tab;
@@ -12,6 +12,7 @@ interface TabBarProps {
 const TABS: { key: Tab; label: string; glyph: string }[] = [
   { key: 'download', label: 'Download', glyph: '⬇' },
   { key: 'saved', label: 'Saved', glyph: '🗂' },
+  { key: 'settings', label: 'Settings', glyph: '⚙' },
 ];
 
 export function TabBar({ active, onChange }: TabBarProps) {

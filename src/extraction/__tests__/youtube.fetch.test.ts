@@ -78,6 +78,16 @@ describe('extractYouTube fetch path', () => {
         thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
         width: 640,
         height: 360,
+        platform: 'youtube',
+        formats: [
+          {
+            url: 'https://r3.example/videoplayback?itag=18',
+            width: 640,
+            height: 360,
+            bitrate: 568000,
+            hasAudio: true,
+          },
+        ],
       },
     ]);
     expect(result.username).toBe('Channel');

@@ -246,10 +246,15 @@ Instagram's anonymous CSRF token (§1): fetch a session token first, send it wit
 If the player response still comes back as a bot-check, `extractYouTube` refreshes the
 `visitorData` once and retries before surfacing an error.
 
-We pick a **progressive** format (muxed audio + video) from `streamingData.formats`,
-highest resolution first. Progressive caps at **itag 22 (720p)**, usually only
-**itag 18 (360p)** is served. `adaptiveFormats` (1080p+ video-only / audio-only) are
-intentionally ignored — see "HD" below.
+The default `MediaItem.url` is still a **progressive** format (muxed audio + video)
+from `streamingData.formats`, highest resolution first — progressive caps at **itag 22
+(720p)**, usually only **itag 18 (360p)** is served. As of the resolution-selection
+feature, `mapPlayerResponse` *also* attaches a full `formats` ladder via `buildFormats`:
+progressive streams (`hasAudio: true`) plus **adaptive H.264/MP4 video-only** streams
+(1080p+, `hasAudio: false`) each paired with the best **adaptive AAC/M4A audio** stream
+(`audioUrl`). The download layer selects a rung from this ladder per the user's
+per-platform preference and muxes the HD pairs on-device — see §9. VP9/Opus/WebM adaptive
+variants are excluded because they can't passthrough into an MP4 container.
 
 **Constants to check first if it breaks** (top of `youtube.ts`):
 
@@ -292,12 +297,41 @@ prefers 720p, ignores adaptive/ciphered) and
 [`youtube.fetch.test.ts`](../src/extraction/__tests__/youtube.fetch.test.ts) (asserts the
 ANDROID_VR POST and the bot/login error branches).
 
-### HD (1080p+) is a planned follow-up — not yet supported
+### HD (1080p+) — supported via on-device muxing
 
-1080p and above are only offered as **separate** video-only + audio-only adaptive streams.
-Combining them needs an on-device **muxer** (video + audio → MP4). The local
-`foxy-audio-extractor` module (§7) only *strips* audio out; it can't mux two tracks
-together. Adding HD means extending that native module (Android `MediaMuxer` with both an
-`audio/*` and a `video/*` track; iOS `AVMutableComposition` with both tracks) and teaching
-`youtube.ts` to emit a paired video+audio item plus a new download path that muxes before
-saving. Until then, progressive (≤720p) is the intentional ceiling.
+1080p and above are only offered as **separate** video-only + audio-only adaptive streams,
+so the app downloads both and combines them with an on-device **muxer** (video + audio →
+MP4, no re-encode). This lives in `foxy-audio-extractor` (§7) as `muxVideoAudio` (Android
+`MediaMuxer` with both a `video/*` and `audio/*` track; iOS `AVMutableComposition` + a
+passthrough export). `youtube.ts` `buildFormats` only ever pairs an **H.264/MP4 video-only**
+stream with the **AAC/M4A (itag 140) audio-only** stream so the passthrough mux is valid;
+VP9/Opus/WebM are excluded. See §9 for how the resolution preference drives it.
+
+---
+
+## 9. Resolution selection & the Settings screen
+
+Users pick a **default download resolution per platform** (Instagram / YouTube) on the
+**Settings** tab. Preferences persist to `${documentDirectory}foxy-preferences.json` via
+`src/services/preferences.ts` (a module singleton + `useSyncExternalStore` hook,
+`src/hooks/usePreferences.ts`); the cache is warmed at launch by `loadPreferences()` in
+`App.tsx`. Default is `'max'` (highest available), preserving pre-feature behaviour.
+
+At download time `src/services/resolutionPlan.ts` `planVideoDownload` turns the item's
+`formats` ladder + the preference into one of three strategies, executed in
+`src/services/download.ts`:
+
+- **`direct`** — chosen rung is muxed (progressive / Instagram `video_versions`): download it.
+- **`mux`** — chosen rung is a YouTube adaptive video-only stream: download video + its
+  paired audio and `muxVideoAudio` them (see §8).
+- **`transcode`** — the source has no rung at/below the target: download the smallest and
+  downscale it to the target height with `transcodeVideo`, so the saved file is smaller
+  than the source.
+
+`transcodeVideo` is a real decode+scale+re-encode (not a remux). It is implemented on
+**iOS** via `AVAssetExportSession` resolution presets. On **Android** it currently rejects
+with `ERR_TRANSCODE_UNSUPPORTED` — the `MediaCodec`→GL-scale→encoder pipeline is a
+device-sensitive follow-up — and the download layer falls back to saving the smallest
+available rendition rather than failing. Instagram's authenticated API already exposes a
+`video_versions` ladder, so it usually needs no transcode; only single-URL fallback paths
+(embed/og) with a resolution cap set do.

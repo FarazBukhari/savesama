@@ -65,6 +65,7 @@ describe('extractInstagram fetch path', () => {
         thumbnailUrl: 'https://cdn.example/photo.jpg',
         width: 1080,
         height: 1080,
+        platform: 'instagram',
       },
     ]);
     expect(result.username).toBe('tester');
