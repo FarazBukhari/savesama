@@ -1,6 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isTranscodeSupported } from '../../modules/foxy-audio-extractor';
 import {
   RESOLUTION_OPTIONS,
   ResolutionPref,
@@ -25,6 +26,9 @@ export function ResolutionChoiceModal({
   onClose,
 }: ResolutionChoiceModalProps) {
   const insets = useSafeAreaInsets();
+  // Capped presets can only promise on-device downscaling where the native
+  // transcoder exists (iOS today) — elsewhere they pick the closest rendition.
+  const canTranscode = isTranscodeSupported();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -37,7 +41,7 @@ export function ResolutionChoiceModal({
             <ResolutionRow
               key={option}
               label={resolutionLabel(option)}
-              sublabel={resolutionSublabel(option)}
+              sublabel={resolutionSublabel(option, canTranscode)}
               selected={option === value}
               onPress={() => {
                 onSelect(option);

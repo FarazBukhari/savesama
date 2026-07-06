@@ -31,6 +31,8 @@ type FoxyAudioExtractorModule = {
     outPath: string,
     options: TranscodeVideoOptions
   ): Promise<void>;
+  /** Whether `transcodeVideo` is implemented on this platform. */
+  isTranscodeSupported(): boolean;
 };
 
 const FoxyAudioExtractor = requireNativeModule<FoxyAudioExtractorModule>('FoxyAudioExtractor');
@@ -74,4 +76,17 @@ export async function transcodeVideo(
   options: TranscodeVideoOptions
 ): Promise<void> {
   await FoxyAudioExtractor.transcodeVideo(srcPath, destPath, options);
+}
+
+/**
+ * Whether on-device downscaling is available (iOS yes; Android not yet — its
+ * MediaCodec pipeline is a follow-up). Lets the download layer skip a doomed
+ * native call and the UI describe capped presets honestly.
+ */
+export function isTranscodeSupported(): boolean {
+  try {
+    return FoxyAudioExtractor.isTranscodeSupported();
+  } catch {
+    return false;
+  }
 }

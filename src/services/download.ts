@@ -1,9 +1,14 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 
-import { extractAudio, muxVideoAudio, transcodeVideo } from '../../modules/foxy-audio-extractor';
+import {
+  extractAudio,
+  isTranscodeSupported,
+  muxVideoAudio,
+  transcodeVideo,
+} from '../../modules/foxy-audio-extractor';
 import { MediaItem } from '../extraction/types';
-import { getPreferences, resolutionForPlatform } from './preferences';
+import { loadPreferences, resolutionForPlatform } from './preferences';
 import { DownloadPlan, planVideoDownload } from './resolutionPlan';
 
 export class DownloadError extends Error {
@@ -86,9 +91,14 @@ function cacheUri(item: MediaItem, suffix: string): string {
   return `${FileSystem.cacheDirectory}foxy_${safeId}_${Date.now()}_${suffix}`;
 }
 
+async function deleteQuietly(fileUri: string): Promise<void> {
+  await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => undefined);
+}
+
 /**
  * Downloads `url` to `fileUri`, reporting fraction 0→1 through `onProgress`.
- * Throws a friendly DownloadError on network failure or a non-2xx status.
+ * Throws a friendly DownloadError on network failure or a non-2xx status,
+ * deleting any partial file first so failed downloads never leak cache space.
  */
 async function downloadFile(
   url: string,
@@ -105,6 +115,7 @@ async function downloadFile(
   try {
     result = await download.downloadAsync();
   } catch (error) {
+    await deleteQuietly(fileUri);
     throw new DownloadError(
       `download failed: ${String(error)}`,
       'Download failed. Check your connection and try again.'
@@ -112,6 +123,7 @@ async function downloadFile(
   }
 
   if (!result || result.status < 200 || result.status >= 300) {
+    await deleteQuietly(fileUri);
     throw new DownloadError(
       `download returned status ${result ? result.status : 'unknown'}`,
       'The media link has expired. Fetch the post again and retry.'
@@ -141,7 +153,9 @@ export async function downloadToGallery(
     return;
   }
 
-  const pref = resolutionForPlatform(getPreferences(), item.platform ?? 'instagram');
+  // Await the (idempotent) load so a cold-launch download can't race past the
+  // saved preference and silently use the defaults.
+  const pref = resolutionForPlatform(await loadPreferences(), item.platform ?? 'instagram');
   const plan = planVideoDownload(item, pref);
 
   switch (plan.kind) {
@@ -149,7 +163,16 @@ export async function downloadToGallery(
       await downloadDirect(item, plan.videoUrl, 'mp4', onProgress);
       return;
     case 'mux':
-      await downloadMuxed(item, plan, onProgress);
+      try {
+        await downloadMuxed(item, plan, onProgress);
+      } catch (error) {
+        // The HD path needs two live stream URLs plus an on-device mux — any of
+        // which can fail for reasons the progressive stream is immune to. Fall
+        // back to the muxed default URL so an HD hiccup never fails a download
+        // the pre-HD app would have completed. (Progress restarts from 0.)
+        if (plan.videoUrl === item.url) throw error;
+        await downloadDirect(item, item.url, 'mp4', onProgress);
+      }
       return;
     case 'transcode':
       await downloadTranscoded(item, plan, onProgress);
@@ -177,16 +200,17 @@ async function downloadDirect(
       'Downloaded, but saving to your gallery failed. Check storage permissions.'
     );
   } finally {
-    await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
+    await deleteQuietly(result.uri);
   }
 
   onProgress(1);
 }
 
 /**
- * HD path: download the video-only and audio-only streams, mux them into one MP4
- * on-device (no re-encode), then save. Progress: video 0→0.55, audio 0.55→0.8,
- * mux 0.8→0.9, save 0.9→1.0.
+ * HD path: download the video-only and audio-only streams in parallel, mux them
+ * into one MP4 on-device (no re-encode), then save. Progress: downloads 0→0.8
+ * (weighted ~video-heavy since it dominates the bytes), mux 0.8→0.9, save
+ * 0.9→1.0.
  */
 async function downloadMuxed(
   item: MediaItem,
@@ -205,11 +229,28 @@ async function downloadMuxed(
       );
     }
 
-    const videoResult = await downloadFile(plan.videoUrl, videoUri, (f) => onProgress(0.55 * f));
-    onProgress(0.55);
-    const audioResult = await downloadFile(plan.audioUrl, audioUri, (f) =>
-      onProgress(0.55 + 0.25 * f)
-    );
+    // Both fractions only ever grow, so the combined figure stays monotonic.
+    let videoFraction = 0;
+    let audioFraction = 0;
+    const reportCombined = () => onProgress(0.8 * (0.75 * videoFraction + 0.25 * audioFraction));
+
+    // allSettled (not all) so a failure still waits for the other stream to
+    // finish before the finally-cleanup deletes files a live download could
+    // otherwise recreate mid-write.
+    const [videoSettled, audioSettled] = await Promise.allSettled([
+      downloadFile(plan.videoUrl, videoUri, (f) => {
+        videoFraction = f;
+        reportCombined();
+      }),
+      downloadFile(plan.audioUrl, audioUri, (f) => {
+        audioFraction = f;
+        reportCombined();
+      }),
+    ]);
+    if (videoSettled.status === 'rejected') throw videoSettled.reason;
+    if (audioSettled.status === 'rejected') throw audioSettled.reason;
+    const videoResult = videoSettled.value;
+    const audioResult = audioSettled.value;
     onProgress(0.8);
 
     try {
@@ -232,22 +273,29 @@ async function downloadMuxed(
     }
     onProgress(1);
   } finally {
-    await Promise.all([
-      FileSystem.deleteAsync(videoUri, { idempotent: true }).catch(() => undefined),
-      FileSystem.deleteAsync(audioUri, { idempotent: true }).catch(() => undefined),
-      FileSystem.deleteAsync(outUri, { idempotent: true }).catch(() => undefined),
-    ]);
+    await Promise.all([deleteQuietly(videoUri), deleteQuietly(audioUri), deleteQuietly(outUri)]);
   }
 }
 
+/** True when a native rejection is the module's "not implemented here" code. */
+function isTranscodeUnsupportedError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'ERR_TRANSCODE_UNSUPPORTED'
+  );
+}
+
 /**
- * Compression path: download the smallest available rendition, downscale it to
- * the target height on-device, then save. Progress: download 0→0.6, transcode
+ * Compression path: download the smallest available muxed rendition, downscale
+ * it to the target on-device, then save. Progress: download 0→0.6, transcode
  * 0.6→0.9, save 0.9→1.0.
  *
- * On-device transcoding isn't available on every platform yet; if it fails we
- * fall back to saving the downloaded rendition as-is so the download still
- * succeeds (just without the extra size reduction).
+ * On platforms without a transcoder (Android, for now) the native call is
+ * skipped entirely and the closest available rendition is saved as-is. A *real*
+ * transcode failure on a supported platform surfaces as an error instead of
+ * being silently swallowed — otherwise transcoder regressions would be
+ * invisible and users would get files far bigger than the size they chose.
  */
 async function downloadTranscoded(
   item: MediaItem,
@@ -262,14 +310,18 @@ async function downloadTranscoded(
     onProgress(0.6);
 
     let fileToSave = srcResult.uri;
-    if (plan.targetHeight) {
+    if (plan.targetHeight && isTranscodeSupported()) {
       try {
         await transcodeVideo(srcResult.uri, outUri, { targetHeight: plan.targetHeight });
         fileToSave = outUri;
-      } catch {
-        // Transcoding unavailable/failed on this platform — save the source
-        // rendition rather than failing the whole download.
-        fileToSave = srcResult.uri;
+      } catch (error) {
+        if (!isTranscodeUnsupportedError(error)) {
+          throw new DownloadError(
+            `transcode failed: ${String(error)}`,
+            'Could not shrink the video to your selected quality. Set the resolution to Max in Settings to save the original.'
+          );
+        }
+        // Capability probe raced/lied — degrade to the closest rendition.
       }
     }
     onProgress(0.9);
@@ -284,10 +336,7 @@ async function downloadTranscoded(
     }
     onProgress(1);
   } finally {
-    await Promise.all([
-      FileSystem.deleteAsync(srcUri, { idempotent: true }).catch(() => undefined),
-      FileSystem.deleteAsync(outUri, { idempotent: true }).catch(() => undefined),
-    ]);
+    await Promise.all([deleteQuietly(srcUri), deleteQuietly(outUri)]);
   }
 }
 
@@ -301,35 +350,11 @@ export async function downloadAudioToGallery(
 ): Promise<void> {
   await ensureMediaPermission();
 
-  const safeId = item.id.replace(/[^A-Za-z0-9_-]/g, '');
-  const ts = Date.now();
-  const videoUri = `${FileSystem.cacheDirectory}foxy_${safeId}_${ts}_src.mp4`;
-  const audioUri = `${FileSystem.cacheDirectory}foxy_${safeId}_${ts}.m4a`;
+  const videoUri = cacheUri(item, 'src.mp4');
+  const audioUri = cacheUri(item, 'audio.m4a');
 
   // Phase 1: download video to cache (0 → 70%)
-  const download = FileSystem.createDownloadResumable(item.url, videoUri, {}, (progress) => {
-    if (progress.totalBytesExpectedToWrite > 0) {
-      onProgress(0.7 * (progress.totalBytesWritten / progress.totalBytesExpectedToWrite));
-    }
-  });
-
-  let videoResult: FileSystem.FileSystemDownloadResult | undefined;
-  try {
-    videoResult = await download.downloadAsync();
-  } catch (error) {
-    throw new DownloadError(
-      `download failed: ${String(error)}`,
-      'Download failed. Check your connection and try again.'
-    );
-  }
-
-  if (!videoResult || videoResult.status < 200 || videoResult.status >= 300) {
-    throw new DownloadError(
-      `download returned status ${videoResult ? videoResult.status : 'unknown'}`,
-      'The media link has expired. Fetch the post again and retry.'
-    );
-  }
-
+  const videoResult = await downloadFile(item.url, videoUri, (f) => onProgress(0.7 * f));
   onProgress(0.7);
 
   // Phase 2: remux the audio track into an .m4a (no re-encode) (70 → 90%)
@@ -341,7 +366,7 @@ export async function downloadAudioToGallery(
       'Could not extract audio from the video.'
     );
   } finally {
-    await FileSystem.deleteAsync(videoUri, { idempotent: true }).catch(() => undefined);
+    await deleteQuietly(videoUri);
   }
 
   onProgress(0.9);
@@ -355,7 +380,7 @@ export async function downloadAudioToGallery(
       'Extracted audio, but saving to your library failed. Check storage permissions.'
     );
   } finally {
-    await FileSystem.deleteAsync(audioUri, { idempotent: true }).catch(() => undefined);
+    await deleteQuietly(audioUri);
   }
 
   onProgress(1);
