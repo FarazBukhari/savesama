@@ -1,11 +1,17 @@
-const store: { file: string | null } = { file: null };
+const store: { file: string | null; readGate: Promise<void> | null } = {
+  file: null,
+  readGate: null,
+};
 
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///docs/',
-  getInfoAsync: jest.fn(async () => ({ exists: store.file !== null })),
   readAsStringAsync: jest.fn(async () => {
-    if (store.file === null) throw new Error('no file');
-    return store.file;
+    // Snapshot at call time so a gated (slow) read resolves with the contents
+    // as they were when the read started — like a real disk read would.
+    const contents = store.file;
+    if (store.readGate) await store.readGate;
+    if (contents === null) throw new Error('no file');
+    return contents;
   }),
   writeAsStringAsync: jest.fn(async (_uri: string, contents: string) => {
     store.file = contents;
@@ -22,6 +28,7 @@ import {
 
 beforeEach(() => {
   store.file = null;
+  store.readGate = null;
   resetPreferencesForTests();
 });
 
@@ -58,5 +65,32 @@ describe('preferences', () => {
     store.file = '{ not valid json';
     const prefs = await loadPreferences();
     expect(prefs).toEqual(DEFAULT_PREFERENCES);
+  });
+
+  it('loads once: repeated calls return the cached result without re-reading disk', async () => {
+    store.file = JSON.stringify({ youtubeResolution: '480' });
+    await loadPreferences();
+    await savePreferences({ youtubeResolution: '1080' });
+
+    // A later loadPreferences (e.g. from the download path) must not re-read
+    // the stale file over the fresh in-memory value.
+    const again = await loadPreferences();
+    expect(again.youtubeResolution).toBe('1080');
+  });
+
+  it('does not clobber a save that lands while the initial disk read is in flight', async () => {
+    store.file = JSON.stringify({ instagramResolution: '360' });
+    let openGate!: () => void;
+    store.readGate = new Promise((resolve) => {
+      openGate = resolve;
+    });
+
+    const loading = loadPreferences(); // read is now blocked on the gate
+    await savePreferences({ instagramResolution: '1080' });
+    openGate();
+    const loaded = await loading;
+
+    expect(loaded.instagramResolution).toBe('1080');
+    expect(getPreferences().instagramResolution).toBe('1080');
   });
 });

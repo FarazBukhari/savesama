@@ -314,8 +314,21 @@ VP9/Opus/WebM are excluded. See §9 for how the resolution preference drives it.
 Users pick a **default download resolution per platform** (Instagram / YouTube) on the
 **Settings** tab. Preferences persist to `${documentDirectory}foxy-preferences.json` via
 `src/services/preferences.ts` (a module singleton + `useSyncExternalStore` hook,
-`src/hooks/usePreferences.ts`); the cache is warmed at launch by `loadPreferences()` in
-`App.tsx`. Default is `'max'` (highest available), preserving pre-feature behaviour.
+`src/hooks/usePreferences.ts`). `loadPreferences()` is **idempotent** (one disk read,
+cached promise) and is both warmed at launch in `App.tsx` and awaited by
+`downloadToGallery`, so a cold-launch download can't race past the saved value; a save
+made while the initial read is still in flight wins over the disk contents (`dirty` flag).
+Default is `'max'`. Note `'max'` on YouTube now prefers a 1080p adaptive pair (muxed
+on-device) over the 720p progressive stream — with an automatic **fallback to the
+progressive `item.url`** if the HD downloads or the mux fail, so no video that downloaded
+before the feature can fail because of it.
+
+**Resolution semantics: targets are the conventional short side.** Portrait videos
+(reels, Shorts) store the long side in `height` (a "1080p" reel is 1080x1920), so all
+comparisons use `min(width, height)` when both are known (`effectiveResolution` in
+`resolutionPlan.ts`), and `targetHeight` handed to the native transcoder means "short
+side". Formats with unknown dimensions sort first under `'max'`, trusting the source's
+highest-first ordering.
 
 At download time `src/services/resolutionPlan.ts` `planVideoDownload` turns the item's
 `formats` ladder + the preference into one of three strategies, executed in
@@ -323,15 +336,21 @@ At download time `src/services/resolutionPlan.ts` `planVideoDownload` turns the 
 
 - **`direct`** — chosen rung is muxed (progressive / Instagram `video_versions`): download it.
 - **`mux`** — chosen rung is a YouTube adaptive video-only stream: download video + its
-  paired audio and `muxVideoAudio` them (see §8).
-- **`transcode`** — the source has no rung at/below the target: download the smallest and
-  downscale it to the target height with `transcodeVideo`, so the saved file is smaller
-  than the source.
+  paired audio **in parallel** and `muxVideoAudio` them (see §8); falls back to the
+  progressive stream on any failure.
+- **`transcode`** — the source has no rung at/below the target: download the smallest
+  **muxed** rung (never a video-only stream — the transcode path does no muxing, so that
+  would save a silent video) and downscale it with `transcodeVideo`.
 
-`transcodeVideo` is a real decode+scale+re-encode (not a remux). It is implemented on
-**iOS** via `AVAssetExportSession` resolution presets. On **Android** it currently rejects
-with `ERR_TRANSCODE_UNSUPPORTED` — the `MediaCodec`→GL-scale→encoder pipeline is a
-device-sensitive follow-up — and the download layer falls back to saving the smallest
-available rendition rather than failing. Instagram's authenticated API already exposes a
-`video_versions` ladder, so it usually needs no transcode; only single-URL fallback paths
-(embed/og) with a resolution cap set do.
+`transcodeVideo` is a real decode+scale+re-encode (not a remux). On **iOS** it uses
+`AVAssetExportSession` presets chosen so the *fitted output's short side* covers the
+target for the source's actual orientation (up to `1920x1080`), and it **copies the file
+through unchanged** when the source is already at/below the target — no pointless lossy
+re-encode (this covers the Instagram embed/og fallback paths, whose dimensions are
+unknown at plan time). On **Android** the pipeline (`MediaCodec`→GL-scale→encoder) is a
+device-sensitive follow-up: the module exposes `isTranscodeSupported()` (`false` there),
+the download layer skips the native call and saves the closest available rendition, and
+the Settings chooser sublabel says "Picks the closest available quality" instead of
+promising a downscale. A *real* transcode failure on a supported platform surfaces as a
+`DownloadError` rather than being silently swallowed. Instagram's authenticated API
+already exposes a `video_versions` ladder, so it usually needs no transcode.
