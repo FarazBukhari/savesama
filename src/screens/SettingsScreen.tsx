@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Header } from '../components/Header';
 import { ResolutionChoiceModal } from '../components/ResolutionChoiceModal';
 import { usePreferences } from '../hooks/usePreferences';
 import {
@@ -10,13 +11,12 @@ import {
   resolutionLabel,
   savePreferences,
 } from '../services/preferences';
-import { colors, radius, spacing, typography } from '../theme';
-
-type EditingKey = keyof Preferences | null;
+import { colors, radius, shadows, spacing, typography } from '../theme';
 
 interface PlatformRow {
   key: keyof Preferences;
   platform: string;
+  glyph: string;
   hint: string;
 }
 
@@ -24,11 +24,13 @@ const PLATFORM_ROWS: PlatformRow[] = [
   {
     key: 'instagramResolution',
     platform: 'Instagram',
+    glyph: '📸',
     hint: 'Reels and video posts',
   },
   {
     key: 'youtubeResolution',
     platform: 'YouTube',
+    glyph: '▶️',
     hint: 'Videos and Shorts',
   },
 ];
@@ -36,13 +38,11 @@ const PLATFORM_ROWS: PlatformRow[] = [
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const prefs = usePreferences();
-  const [editing, setEditing] = useState<EditingKey>(null);
+  const [editing, setEditing] = useState<PlatformRow | null>(null);
 
   const handleSelect = (key: keyof Preferences, value: ResolutionPref) => {
     void savePreferences({ [key]: value });
   };
-
-  const editingRow = PLATFORM_ROWS.find((row) => row.key === editing) ?? null;
 
   return (
     <>
@@ -50,10 +50,11 @@ export function SettingsScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
-          <Text style={styles.subtitle}>Choose the default download quality for each source</Text>
-        </View>
+        <Header
+          title="Settings"
+          subtitle="Choose the default download quality for each source"
+          glyph="⚙️"
+        />
 
         <Text style={styles.sectionLabel}>Default resolution</Text>
         <View style={styles.card}>
@@ -65,14 +66,19 @@ export function SettingsScreen() {
                 index > 0 && styles.rowDivider,
                 pressed && styles.rowPressed,
               ]}
-              onPress={() => setEditing(row.key)}
+              onPress={() => setEditing(row)}
             >
+              <View style={styles.iconTile}>
+                <Text style={styles.iconGlyph}>{row.glyph}</Text>
+              </View>
               <View style={styles.rowInfo}>
                 <Text style={styles.rowLabel}>{row.platform}</Text>
                 <Text style={styles.rowHint}>{row.hint}</Text>
               </View>
               <View style={styles.rowValue}>
-                <Text style={styles.rowValueText}>{resolutionLabel(prefs[row.key])}</Text>
+                <View style={styles.valueChip}>
+                  <Text style={styles.valueChipLabel}>{resolutionLabel(prefs[row.key])}</Text>
+                </View>
                 <Text style={styles.chevron}>›</Text>
               </View>
             </Pressable>
@@ -85,12 +91,12 @@ export function SettingsScreen() {
         </Text>
       </ScrollView>
 
-      {editingRow ? (
+      {editing ? (
         <ResolutionChoiceModal
           visible
-          title={`${editingRow.platform} quality`}
-          value={prefs[editingRow.key]}
-          onSelect={(value) => handleSelect(editingRow.key, value)}
+          title={`${editing.platform} quality`}
+          value={prefs[editing.key]}
+          onSelect={(value) => handleSelect(editing.key, value)}
           onClose={() => setEditing(null)}
         />
       ) : null}
@@ -106,38 +112,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    marginTop: spacing.xs,
-    fontSize: typography.subtitle,
-    color: colors.textSecondary,
-  },
   sectionLabel: {
-    fontSize: typography.small,
-    fontWeight: '700',
+    fontSize: typography.caption,
+    fontWeight: '800',
     color: colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
     marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     overflow: 'hidden',
+    ...shadows.card,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: spacing.lg,
   },
   rowDivider: {
@@ -145,7 +137,19 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   rowPressed: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.sunken,
+  },
+  iconTile: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.sunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  iconGlyph: {
+    fontSize: 20,
   },
   rowInfo: {
     flex: 1,
@@ -153,11 +157,11 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: typography.body,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
   },
   rowHint: {
-    marginTop: spacing.xs,
+    marginTop: 2,
     fontSize: typography.small,
     color: colors.textSecondary,
   },
@@ -165,14 +169,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  rowValueText: {
-    fontSize: typography.body,
+  valueChip: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 1,
+  },
+  valueChipLabel: {
+    fontSize: typography.small,
     color: colors.accent,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   chevron: {
-    marginLeft: spacing.xs,
-    fontSize: typography.body,
+    marginLeft: spacing.sm,
+    fontSize: typography.headline,
     color: colors.placeholder,
   },
   footnote: {
@@ -180,5 +190,6 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.textSecondary,
     lineHeight: 18,
+    marginHorizontal: spacing.xs,
   },
 });

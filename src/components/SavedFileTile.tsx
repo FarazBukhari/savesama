@@ -48,7 +48,9 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
 
       {isVideo ? (
         <View style={styles.playBadge}>
-          <Text style={styles.playGlyph}>▶</Text>
+          <View style={styles.playChip}>
+            <Text style={styles.playGlyph}>▶</Text>
+          </View>
         </View>
       ) : null}
 
@@ -68,7 +70,7 @@ const styles = StyleSheet.create({
   thumb: {
     flex: 1,
     borderRadius: radius.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.sunken,
   },
   audioThumb: {
     backgroundColor: colors.videoBadge,
@@ -88,24 +90,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  playChip: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   playGlyph: {
     color: colors.textOnAccent,
-    fontSize: 26,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowRadius: 6,
+    fontSize: 13,
+    marginLeft: 2,
   },
   durationBadge: {
     position: 'absolute',
     right: spacing.xs,
     bottom: spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.overlay,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm - 2,
     paddingVertical: 1,
   },
   durationLabel: {
     color: colors.textOnAccent,
-    fontSize: typography.small,
-    fontWeight: '600',
+    fontSize: typography.caption,
+    fontWeight: '700',
   },
 });
