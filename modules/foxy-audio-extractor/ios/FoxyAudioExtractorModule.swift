@@ -14,6 +14,8 @@ public class FoxyAudioExtractorModule: Module {
       self.muxVideoAudio(videoPath: videoPath, audioPath: audioPath, outPath: outPath, promise: promise)
     }
 
+    Function("isTranscodeSupported") { true }
+
     AsyncFunction("transcodeVideo") {
       (srcPath: String, outPath: String, options: [String: Any], promise: Promise) in
       let targetHeight = (options["targetHeight"] as? NSNumber)?.intValue ?? 0
@@ -153,14 +155,48 @@ public class FoxyAudioExtractorModule: Module {
   }
 
   /// Downscales/compresses the source video into a smaller MP4 at `outPath`.
-  /// Uses an `AVAssetExportSession` with the smallest built-in H.264 preset whose
-  /// bounding box covers `targetHeight`, so the output fits within that box while
-  /// preserving aspect ratio.
+  /// `targetHeight` is the conventional short-side resolution (a "360p" target
+  /// means the shorter dimension should end up around 360, whatever the
+  /// orientation). If the source is already at or below the target, the file is
+  /// copied through untouched — no pointless lossy re-encode.
   private func transcodeVideo(srcPath: String, outPath: String, targetHeight: Int, promise: Promise) {
-    let asset = AVURLAsset(url: fileURL(srcPath))
+    let srcURL = fileURL(srcPath)
     let destURL = fileURL(outPath)
+    let asset = AVURLAsset(url: srcURL)
 
-    let preset = Self.presetForHeight(targetHeight)
+    guard targetHeight > 0 else {
+      promise.reject("ERR_TRANSCODE", "invalid targetHeight \(targetHeight)")
+      return
+    }
+    guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+      promise.reject("ERR_TRANSCODE", "no video track in source")
+      return
+    }
+
+    // Orientation-corrected display dimensions (portrait sources may encode
+    // landscape frames plus a rotation transform).
+    let transformed = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+    let sourceWidth = abs(transformed.width)
+    let sourceHeight = abs(transformed.height)
+    guard sourceWidth > 0, sourceHeight > 0 else {
+      promise.reject("ERR_TRANSCODE", "source has no usable dimensions")
+      return
+    }
+
+    // Already small enough: pass the file through unchanged.
+    if Int(min(sourceWidth, sourceHeight).rounded()) <= targetHeight {
+      do {
+        try? FileManager.default.removeItem(at: destURL)
+        try FileManager.default.copyItem(at: srcURL, to: destURL)
+        promise.resolve(nil)
+      } catch {
+        promise.reject("ERR_TRANSCODE", error.localizedDescription)
+      }
+      return
+    }
+
+    let preset = Self.preset(
+      targetShortSide: targetHeight, sourceWidth: sourceWidth, sourceHeight: sourceHeight)
     guard let export = AVAssetExportSession(asset: asset, presetName: preset) else {
       promise.reject("ERR_TRANSCODE", "could not create export session for preset \(preset)")
       return
@@ -183,17 +219,28 @@ public class FoxyAudioExtractorModule: Module {
     }
   }
 
-  /// Maps a target pixel height to the smallest built-in export preset whose
-  /// bounding box covers it. Presets fit the video into the box preserving aspect
-  /// ratio, so a 360p target maps to the 640x480 box, etc.
-  private static func presetForHeight(_ height: Int) -> String {
-    switch height {
-    case ..<540:
-      return AVAssetExportPreset640x480
-    case ..<720:
-      return AVAssetExportPreset960x540
-    default:
-      return AVAssetExportPreset1280x720
+  /// Picks the smallest built-in export preset whose fit-inside scaling leaves
+  /// the output's SHORT side at or above `targetShortSide`. Presets are
+  /// landscape bounding boxes that scale the source uniformly to fit, so the
+  /// resulting short side depends on the source's aspect ratio and orientation —
+  /// a portrait 1080x1920 source needs the 1280x720 box for its short side to
+  /// stay ≥ 360, where a landscape source only needs 640x480.
+  private static func preset(
+    targetShortSide: Int, sourceWidth: CGFloat, sourceHeight: CGFloat
+  ) -> String {
+    let boxes: [(name: String, width: CGFloat, height: CGFloat)] = [
+      (AVAssetExportPreset640x480, 640, 480),
+      (AVAssetExportPreset960x540, 960, 540),
+      (AVAssetExportPreset1280x720, 1280, 720),
+      (AVAssetExportPreset1920x1080, 1920, 1080),
+    ]
+    let sourceShortSide = min(sourceWidth, sourceHeight)
+    for box in boxes {
+      let scale = min(1, box.width / sourceWidth, box.height / sourceHeight)
+      if sourceShortSide * scale >= CGFloat(targetShortSide) {
+        return box.name
+      }
     }
+    return AVAssetExportPreset1920x1080
   }
 }

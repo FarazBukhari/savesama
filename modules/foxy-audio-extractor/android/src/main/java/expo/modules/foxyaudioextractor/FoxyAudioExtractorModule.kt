@@ -40,12 +40,14 @@ class FoxyAudioExtractorModule : Module() {
       }
     }
 
+    // Downscaling requires a full decode → GL scale → re-encode MediaCodec
+    // pipeline, which is device-sensitive and not yet implemented on Android.
+    // The JS layer consults isTranscodeSupported to skip the call entirely and
+    // fall back to the closest available rendition.
+    Function("isTranscodeSupported") { false }
+
     AsyncFunction("transcodeVideo") {
       srcPath: String, outPath: String, options: Map<String, Any?>, promise: Promise ->
-      // Downscaling requires a full decode → GL scale → re-encode MediaCodec
-      // pipeline, which is device-sensitive and not yet implemented on Android.
-      // Reject clearly; the JS download layer falls back to saving the source
-      // rendition so the download still succeeds.
       promise.reject(
         CodedException(
           "ERR_TRANSCODE_UNSUPPORTED",

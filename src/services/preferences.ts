@@ -4,8 +4,10 @@ import { SourcePlatform } from '../extraction/types';
 
 /**
  * User-selectable default download quality. `'max'` means "whatever the source
- * serves at its highest" — the app's original behaviour, kept as the default so
- * existing users see no change until they opt into a cap.
+ * serves at its highest". For YouTube that can now include 1080p assembled by
+ * muxing adaptive streams (with a fallback to the progressive stream if the mux
+ * fails); for everything else it matches the app's pre-feature behaviour. It is
+ * the default so users only opt into a cap deliberately.
  */
 export type ResolutionPref = 'max' | '1080' | '720' | '480' | '360';
 
@@ -37,13 +39,19 @@ export function resolutionLabel(pref: ResolutionPref): string {
   }
 }
 
-export function resolutionSublabel(pref: ResolutionPref): string {
-  return pref === 'max'
-    ? 'Always download the highest available quality'
-    : 'Larger videos are downscaled to fit';
+/**
+ * Row sublabel for the chooser. `transcodeSupported` reflects whether this
+ * platform can downscale on-device (iOS yes, Android not yet) — without it a
+ * capped preference can only promise the closest available rendition.
+ */
+export function resolutionSublabel(pref: ResolutionPref, transcodeSupported: boolean): string {
+  if (pref === 'max') return 'Always download the highest available quality';
+  return transcodeSupported
+    ? 'Larger videos are downscaled to fit'
+    : 'Picks the closest available quality';
 }
 
-/** Target pixel height for a preference, or null for "max" (no cap). */
+/** Target short-side resolution for a preference, or null for "max" (no cap). */
 export function resolutionTargetHeight(pref: ResolutionPref): number | null {
   return pref === 'max' ? null : Number(pref);
 }
@@ -59,7 +67,9 @@ export function resolutionForPlatform(
 const PREFERENCES_FILE = `${FileSystem.documentDirectory}foxy-preferences.json`;
 
 let cache: Preferences = DEFAULT_PREFERENCES;
-let loaded = false;
+/** Set once the user changes a value; a slower in-flight disk load must not clobber it. */
+let dirty = false;
+let loadPromise: Promise<void> | null = null;
 const listeners = new Set<(prefs: Preferences) => void>();
 
 function isResolutionPref(value: unknown): value is ResolutionPref {
@@ -84,41 +94,44 @@ function normalize(raw: unknown): Preferences {
 }
 
 /**
- * Reads preferences from disk into the in-memory cache. Called once at startup.
- * Any failure (missing/corrupt file) silently falls back to defaults — settings
- * must never block the app.
+ * Reads preferences from disk into the in-memory cache, once — subsequent calls
+ * return the same promise, so callers can `await loadPreferences()` to be sure
+ * the saved values are in effect (the download path does this). Any failure
+ * (missing/corrupt file) silently falls back to defaults; a save made while the
+ * read is still in flight wins over the disk contents.
  */
 export async function loadPreferences(): Promise<Preferences> {
-  try {
-    const info = await FileSystem.getInfoAsync(PREFERENCES_FILE);
-    if (info.exists) {
-      const contents = await FileSystem.readAsStringAsync(PREFERENCES_FILE);
-      cache = normalize(JSON.parse(contents));
-    }
-  } catch {
-    cache = DEFAULT_PREFERENCES;
-  } finally {
-    loaded = true;
-  }
-  notify();
+  if (!loadPromise) loadPromise = readFromDisk();
+  await loadPromise;
+  // Return the *current* cache, not a snapshot pinned inside the first load's
+  // promise — saves made since then must win.
   return cache;
 }
 
+async function readFromDisk(): Promise<void> {
+  try {
+    const contents = await FileSystem.readAsStringAsync(PREFERENCES_FILE);
+    const fromDisk = normalize(JSON.parse(contents));
+    if (!dirty) {
+      cache = fromDisk;
+      notify();
+    }
+  } catch {
+    // Missing or corrupt file — keep the defaults (or any already-saved value).
+  }
+}
+
 /**
- * Synchronous accessor for non-React callers (e.g. the download service).
- * Returns the cached value, or defaults until `loadPreferences` has run.
+ * Synchronous accessor for React snapshots. Callers that must respect the
+ * persisted value (e.g. the download path) should `await loadPreferences()`.
  */
 export function getPreferences(): Preferences {
   return cache;
 }
 
-/** True once `loadPreferences` has completed (success or fallback). */
-export function preferencesLoaded(): boolean {
-  return loaded;
-}
-
 /** Merges a patch into the cache, persists it, and notifies subscribers. */
 export async function savePreferences(patch: Partial<Preferences>): Promise<void> {
+  dirty = true;
   cache = { ...cache, ...patch };
   notify();
   try {
@@ -143,6 +156,7 @@ function notify(): void {
 /** Test-only: resets the module singleton between cases. */
 export function resetPreferencesForTests(): void {
   cache = DEFAULT_PREFERENCES;
-  loaded = false;
+  dirty = false;
+  loadPromise = null;
   listeners.clear();
 }
