@@ -6,6 +6,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { AdBanner } from './src/components/AdBanner';
 import { InstagramResolver } from './src/components/InstagramResolver';
 import { Tab, TabBar } from './src/components/TabBar';
+import { ThreadsResolver } from './src/components/ThreadsResolver';
 import { DownloadScreen } from './src/screens/DownloadScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { colors } from './src/theme';
@@ -59,6 +60,7 @@ export default function App() {
     <SafeAreaProvider>
       <Main />
       <InstagramResolver />
+      <ThreadsResolver />
     </SafeAreaProvider>
   );
 }

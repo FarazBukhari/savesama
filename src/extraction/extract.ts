@@ -1,5 +1,6 @@
 import { resolveFinalUrl } from './http';
 import { extractInstagram } from './instagram';
+import { extractThreads } from './threads';
 import { ExtractionError, ExtractionResult, ParsedLink } from './types';
 import { parseLink } from './urlParser';
 import { extractYouTube } from './youtube';
@@ -9,7 +10,7 @@ export async function extractMedia(rawText: string): Promise<ExtractionResult> {
   if (!parsed) {
     throw new ExtractionError(
       'unrecognized link',
-      "That doesn't look like a supported link. Paste an Instagram post/reel or a YouTube video link."
+      "That doesn't look like a supported link. Paste an Instagram post/reel, a Threads post, or a YouTube video link."
     );
   }
 
@@ -32,10 +33,14 @@ export async function extractMedia(rawText: string): Promise<ExtractionResult> {
     );
   }
 
-  if (link.platform === 'youtube') {
-    return extractYouTube(link.shortcode);
+  switch (link.platform) {
+    case 'youtube':
+      return extractYouTube(link.shortcode);
+    case 'threads':
+      return extractThreads(link.shortcode);
+    case 'instagram':
+      return extractInstagram(link.shortcode);
   }
-  return extractInstagram(link.shortcode);
 }
 
 async function resolveShareLink(link: ParsedLink): Promise<ParsedLink> {
