@@ -9,7 +9,7 @@ import {
 } from '../../modules/foxy-audio-extractor';
 import { MediaItem } from '../extraction/types';
 import { loadPreferences, resolutionForPlatform } from './preferences';
-import { DownloadPlan, planVideoDownload } from './resolutionPlan';
+import { DownloadPlan, pickImageUrl, planVideoDownload } from './resolutionPlan';
 
 export class DownloadError extends Error {
   /** Friendly message safe to show in the UI. */
@@ -65,9 +65,9 @@ async function saveToFoxyAlbum(uri: string): Promise<void> {
   }
 }
 
-function guessExtension(item: MediaItem): string {
+function guessExtension(item: MediaItem, url: string = item.url): string {
   if (item.type === 'video') return 'mp4';
-  const path = item.url.split('?')[0].toLowerCase();
+  const path = url.split('?')[0].toLowerCase();
   for (const ext of IMAGE_EXTENSIONS) {
     if (path.endsWith(`.${ext}`)) return ext;
   }
@@ -148,14 +148,18 @@ export async function downloadToGallery(
 ): Promise<void> {
   await ensureMediaPermission();
 
-  if (item.type !== 'video') {
-    await downloadDirect(item, item.url, guessExtension(item), onProgress);
-    return;
-  }
-
   // Await the (idempotent) load so a cold-launch download can't race past the
   // saved preference and silently use the defaults.
   const pref = resolutionForPlatform(await loadPreferences(), item.platform ?? 'instagram');
+
+  if (item.type !== 'video') {
+    // Photos honour the preference by picking a smaller rendition from the source's
+    // own ladder — Instagram and Threads expose one, so no resizing is involved.
+    const url = pickImageUrl(item, pref);
+    await downloadDirect(item, url, guessExtension(item, url), onProgress);
+    return;
+  }
+
   const plan = planVideoDownload(item, pref);
 
   switch (plan.kind) {
