@@ -1,6 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ResolutionPref, resolutionLabel } from '../services/preferences';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import { ItemDownloadState } from './MediaCard';
 
@@ -8,8 +9,13 @@ interface FormatChoiceModalProps {
   visible: boolean;
   videoState: ItemDownloadState;
   audioState: ItemDownloadState;
+  /** Quality this save will use — the platform default, or a one-off override. */
+  resolution: ResolutionPref;
+  /** True when the chosen quality differs from the saved default. */
+  resolutionOverridden: boolean;
   onSaveVideo: () => void;
   onSaveAudio: () => void;
+  onChangeResolution: () => void;
   onClose: () => void;
 }
 
@@ -17,8 +23,11 @@ export function FormatChoiceModal({
   visible,
   videoState,
   audioState,
+  resolution,
+  resolutionOverridden,
   onSaveVideo,
   onSaveAudio,
+  onChangeResolution,
   onClose,
 }: FormatChoiceModalProps) {
   const insets = useSafeAreaInsets();
@@ -44,6 +53,23 @@ export function FormatChoiceModal({
             state={audioState}
             onPress={onSaveAudio}
           />
+
+          {/* Quality applies to the video save only, just for this download —
+              Settings keeps the per-platform default. */}
+          <Pressable
+            style={({ pressed }) => [styles.qualityRow, pressed && styles.rowPressed]}
+            onPress={onChangeResolution}
+            accessibilityRole="button"
+          >
+            <Text style={styles.qualityLabel}>Video quality</Text>
+            <View style={styles.qualityValueWrap}>
+              <Text style={styles.qualityValue}>{resolutionLabel(resolution)}</Text>
+              <Text style={styles.qualityHint}>
+                {resolutionOverridden ? 'Just this download' : 'Default · tap to change'}
+              </Text>
+            </View>
+            <Text style={styles.qualityChevron}>›</Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -110,6 +136,39 @@ function FormatChip({ state }: { state: ItemDownloadState }) {
 }
 
 const styles = StyleSheet.create({
+  qualityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.sunken,
+  },
+  qualityLabel: {
+    flex: 1,
+    fontSize: typography.body,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  qualityValueWrap: {
+    alignItems: 'flex-end',
+  },
+  qualityValue: {
+    fontSize: typography.subtitle,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  qualityHint: {
+    marginTop: 1,
+    fontSize: typography.small,
+    color: colors.textSecondary,
+  },
+  qualityChevron: {
+    marginLeft: spacing.sm,
+    fontSize: typography.subtitle,
+    color: colors.textSecondary,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: colors.scrim,

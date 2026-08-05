@@ -13,8 +13,11 @@ import { ItemDownloadState, MediaCard } from '../components/MediaCard';
 import { extractMedia } from '../extraction/extract';
 import { ExtractionError, ExtractionResult, MediaItem } from '../extraction/types';
 import { DownloadError } from '../services/download';
-import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
+import { ResolutionChoiceModal } from '../components/ResolutionChoiceModal';
 import { useDownloadJobs } from '../hooks/useDownloadJobs';
+import { usePreferences } from '../hooks/usePreferences';
+import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
+import { ResolutionPref, resolutionForPlatform } from '../services/preferences';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 
 const IDLE_STATE: ItemDownloadState = { status: 'idle', progress: 0 };
@@ -62,6 +65,16 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   // this screen's re-renders and tab switches.
   const jobs = useDownloadJobs();
   const downloads = jobsToStates(jobs);
+  const prefs = usePreferences();
+  // One-off quality for the item in the format sheet. Cleared when the sheet
+  // closes, so it never leaks into the next save or into Settings.
+  const [overrideResolution, setOverrideResolution] = useState<ResolutionPref | null>(null);
+  const [choosingResolution, setChoosingResolution] = useState(false);
+
+  const defaultResolution = modalItem
+    ? resolutionForPlatform(prefs, modalItem.platform ?? 'instagram')
+    : 'max';
+  const effectiveResolution = overrideResolution ?? defaultResolution;
 
   const runExtraction = useCallback(async (text: string) => {
     Keyboard.dismiss();
@@ -103,9 +116,9 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   }, [linkText, runExtraction]);
 
   const handleDownload = useCallback(
-    (item: MediaItem, format: 'video' | 'audio' = 'video') => {
+    (item: MediaItem, format: 'video' | 'audio' = 'video', resolution?: ResolutionPref) => {
       setError(null);
-      enqueueDownload(item, format, { onSaved });
+      enqueueDownload(item, format, { onSaved, resolution });
     },
     [onSaved]
   );
@@ -113,6 +126,12 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const handleCancel = useCallback((item: MediaItem) => {
     cancelDownload(jobId(item, 'video'));
     cancelDownload(jobId(item, 'audio'));
+  }, []);
+
+  const closeFormatSheet = useCallback(() => {
+    setModalItem(null);
+    setChoosingResolution(false);
+    setOverrideResolution(null);
   }, []);
 
   const handleSavePress = useCallback(
@@ -203,14 +222,35 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
       </ScrollView>
 
       {modalItem ? (
-        <FormatChoiceModal
-          visible
-          videoState={downloads[jobId(modalItem, 'video')] ?? IDLE_STATE}
-          audioState={downloads[jobId(modalItem, 'audio')] ?? IDLE_STATE}
-          onSaveVideo={() => void handleDownload(modalItem, 'video')}
-          onSaveAudio={() => void handleDownload(modalItem, 'audio')}
-          onClose={() => setModalItem(null)}
-        />
+        <>
+          <FormatChoiceModal
+            visible={!choosingResolution}
+            videoState={downloads[jobId(modalItem, 'video')] ?? IDLE_STATE}
+            audioState={downloads[jobId(modalItem, 'audio')] ?? IDLE_STATE}
+            resolution={effectiveResolution}
+            resolutionOverridden={overrideResolution !== null}
+            onSaveVideo={() => {
+              handleDownload(modalItem, 'video', overrideResolution ?? undefined);
+              closeFormatSheet();
+            }}
+            onSaveAudio={() => {
+              handleDownload(modalItem, 'audio');
+              closeFormatSheet();
+            }}
+            onChangeResolution={() => setChoosingResolution(true)}
+            onClose={closeFormatSheet}
+          />
+          <ResolutionChoiceModal
+            visible={choosingResolution}
+            title="Quality for this download"
+            value={effectiveResolution}
+            onSelect={(value) => {
+              setOverrideResolution(value);
+              setChoosingResolution(false);
+            }}
+            onClose={() => setChoosingResolution(false)}
+          />
+        </>
       ) : null}
     </>
   );

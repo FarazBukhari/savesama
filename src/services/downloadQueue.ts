@@ -19,6 +19,7 @@ import {
 } from '../../modules/foxy-download-service';
 import { MediaItem } from '../extraction/types';
 import { downloadAudioToGallery, downloadToGallery } from './download';
+import { ResolutionPref } from './preferences';
 
 export type DownloadFormat = 'video' | 'audio';
 
@@ -34,6 +35,8 @@ export interface DownloadJob {
   progress: number;
   /** User-facing failure text, set when status is 'error'. */
   error?: string;
+  /** One-off quality choice for this download; absent means use the saved default. */
+  resolution?: ResolutionPref;
 }
 
 /** One job per item+format — matches the key DownloadScreen renders against. */
@@ -85,6 +88,8 @@ export function pendingCount(): number {
 export interface EnqueueOptions {
   /** Called after each successful save, so the Saved tab can refresh. */
   onSaved?: () => void;
+  /** Overrides the platform's saved resolution for this download only. */
+  resolution?: ResolutionPref;
 }
 
 /**
@@ -103,7 +108,14 @@ export function enqueueDownload(
     return id;
   }
 
-  jobs.set(id, { id, item, format, status: 'queued', progress: 0 });
+  jobs.set(id, {
+    id,
+    item,
+    format,
+    status: 'queued',
+    progress: 0,
+    ...(options.resolution ? { resolution: options.resolution } : {}),
+  });
   publish();
   void run(options);
   return id;
@@ -156,12 +168,15 @@ async function run(options: EnqueueOptions): Promise<void> {
   try {
     for (let job = nextQueued(); job; job = nextQueued()) {
       update(job.id, { status: 'active', progress: 0 });
-      const download = job.format === 'audio' ? downloadAudioToGallery : downloadToGallery;
+      const onProgress = (fraction: number) => {
+        update(job.id, { progress: fraction });
+        if (serviceActive) updateDownloadService(serviceTitle(), fraction);
+      };
       try {
-        await download(job.item, (fraction) => {
-          update(job.id, { progress: fraction });
-          if (serviceActive) updateDownloadService(serviceTitle(), fraction);
-        });
+        // Audio has no resolution to pick — the stream is whatever the source serves.
+        await (job.format === 'audio'
+          ? downloadAudioToGallery(job.item, onProgress)
+          : downloadToGallery(job.item, onProgress, job.resolution));
         update(job.id, { status: 'done', progress: 1 });
         options.onSaved?.();
       } catch (error) {
