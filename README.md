@@ -14,7 +14,15 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
 - **Photos, videos, reels, and carousels** — multi-item Instagram and Threads posts show
   one card per item with individual *Save* buttons plus a *Save all* action.
 - **Save as video or audio** — for any video (Instagram reel, Threads post, or YouTube),
-  pick *Video* (MP4) or *Audio* (M4A); the audio track is extracted on-device.
+  pick *Video* (MP4) or *Audio* (M4A). Audio saves download **only** the audio stream where
+  the source publishes one, so a 13s reel's audio is ~105 KB instead of ~1.8 MB.
+- **Faster downloads** — files over 4MB are fetched as 4 parallel byte ranges and joined,
+  since one connection to Google's or Meta's CDN is often slower than the link allows.
+- **Download queue that keeps going** — saves are queued and run one at a time, survive tab
+  switches, and continue while the app is in the background via an Android foreground service
+  with a progress notification. Queued items can be cancelled before they start.
+- **Quality per download** — the save sheet has a *Video quality* row that overrides the
+  Settings default for that one download.
 - **Signs you in when Meta demands it** — Instagram and Threads download through a hidden
   WebView holding your own session, so anything you can view, you can save. The login
   screen appears only when a request comes back logged-out, and the session persists
@@ -35,12 +43,18 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
   YouTube watch/`youtu.be`/Shorts video links.
 - **Threads text-only posts** have nothing to download and say so.
 - **Selectable resolution (per platform).** Choose a default download quality for
-  Instagram, Threads and YouTube on the **Settings** tab (360p up to 1080p, or "Max").
-  Photos pick a smaller rendition from the source's own ladder. YouTube picks a lower rung,
-  and assembles 1080p by muxing its separate video/audio streams. Instagram and Threads
-  publish only one video rendition, so a capped video preference is honoured by downscaling
-  on-device (slower, and the short side is what's matched — "480p" means the shorter
-  dimension lands near 480). See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §8–§9.
+  Instagram, Threads and YouTube on the **Settings** tab (360p up to 1080p, or "Max"), or
+  override it for a single save from the format sheet. Photos pick a smaller rendition from
+  the source's own ladder. YouTube picks a lower rung, and assembles 1080p by muxing its
+  separate video/audio streams. Instagram and Threads serve only one *usable* (H.264) video
+  rendition, so a capped preference there is honoured by downscaling on-device — slower, and
+  the short side is what's matched ("480p" = the shorter dimension lands near 480). See
+  [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §9, §12–§14.
+- **Instagram/Threads video quality is capped below the original.** Meta's DASH manifest
+  advertises the full-resolution original (e.g. 1088x1936 where the downloadable rendition is
+  716x1274), but only as VP9 — which iOS can't put in an MP4 and Android muxes unevenly. So
+  the muxed H.264 rendition is used instead. Deliberate; see
+  [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §9.
 - **Songs/audio pages aren't supported.** A `/reels/audio/<id>` link shows a clear
   "not supported" message — Instagram walls the audio asset for anonymous clients and
   never serves full licensed tracks (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §2b).
@@ -65,6 +79,7 @@ src/
   extraction/
     urlParser.ts            # Link detection/normalization (all platforms, pure, tested)
     http.ts                 # fetch helpers + anonymous Instagram CSRF token
+    dashManifest.ts         # Reads the audio stream out of Meta's DASH manifest
     instagram.ts            # Instagram extraction (authenticated first, then anonymous)
     instagramApi.ts         # api/v1 media-info mapper, shared with Threads
     threads.ts              # Threads extraction (authenticated only)
@@ -74,6 +89,10 @@ src/
   services/
     mediaSession.ts         # Bridge from extraction to the mounted session WebViews
     download.ts             # Download with progress + save to gallery
+    downloadQueue.ts        # Module-level queue; one job at a time, outlives screens
+    rangedDownload.ts       # Parallel byte-range downloads + streamed join
+    resolutionPlan.ts       # Picks the rendition/plan for a resolution preference
+    preferences.ts          # Per-platform resolution defaults, persisted
     library.ts              # Saved-files listing for the Saved tab
   theme.ts                  # Colors, spacing, ad banner height
 ```
@@ -86,8 +105,11 @@ npm run typecheck   # tsc --noEmit
 npm test            # jest (URL parser + extraction parser tests)
 ```
 
-> Note: `expo-share-intent` requires a native build — the app does **not** run in Expo Go.
-> Use a development build (`eas build --profile development`) or the preview APK.
+> Note: `expo-share-intent`, `react-native-webview` and the two local native modules
+> (`foxy-audio-extractor`, `foxy-download-service`) all require a native build — the app does
+> **not** run in Expo Go. Use a development build (`eas build --profile development`) or the
+> preview APK. Adding `foxy-download-service` means an **existing dev build won't pick it up**;
+> rebuild.
 
 > 🔧 **Maintaining this app?** See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) — what to
 > check if Instagram or Threads extraction breaks, how to test extraction fast, why
