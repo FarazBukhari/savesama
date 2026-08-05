@@ -68,6 +68,34 @@ function planFor(format: MediaFormat): DownloadPlan {
 }
 
 /**
+ * Picks the image URL that best satisfies `pref`.
+ *
+ * Photos need no transcoding: Instagram and Threads publish a real ladder of
+ * full-frame renditions (`image_versions2.candidates`, aspect-filtered by the
+ * mapper), so honouring a cap is just choosing a rung.
+ *
+ *  - `max`, or no ladder: the item's own (largest) URL.
+ *  - a capped target: the largest rendition at or below it.
+ *  - target below every rendition: the smallest one — the closest the source can
+ *    do. Photos are never upscaled or resized on-device.
+ */
+export function pickImageUrl(item: MediaItem, pref: ResolutionPref): string {
+  const target = resolutionTargetHeight(pref);
+  if (target === null) return item.url;
+
+  const formats = (item.formats ?? []).slice().sort(byQualityDesc);
+  if (formats.length === 0) return item.url;
+
+  const atOrBelow = formats.filter((f) => {
+    const resolution = effectiveResolution(f);
+    return resolution != null && resolution <= target;
+  });
+  if (atOrBelow.length > 0) return atOrBelow[0].url;
+
+  return formats[formats.length - 1].url;
+}
+
+/**
  * Chooses how to download `item` to satisfy `pref`.
  *
  * Algorithm (all comparisons use the conventional short-side resolution):

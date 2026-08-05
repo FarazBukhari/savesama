@@ -23,6 +23,7 @@ import {
   getPreferences,
   loadPreferences,
   resetPreferencesForTests,
+  resolutionForPlatform,
   savePreferences,
 } from '../preferences';
 
@@ -55,9 +56,15 @@ describe('preferences', () => {
   });
 
   it('merges over defaults, ignoring unknown/invalid values', async () => {
-    store.file = JSON.stringify({ youtubeResolution: 'ultra', instagramResolution: '480', extra: 1 });
+    store.file = JSON.stringify({
+      youtubeResolution: 'ultra',
+      instagramResolution: '480',
+      threadsResolution: '720',
+      extra: 1,
+    });
     const prefs = await loadPreferences();
     expect(prefs.instagramResolution).toBe('480');
+    expect(prefs.threadsResolution).toBe('720');
     expect(prefs.youtubeResolution).toBe('max'); // 'ultra' is invalid → default
   });
 
@@ -92,5 +99,19 @@ describe('preferences', () => {
 
     expect(loaded.instagramResolution).toBe('1080');
     expect(getPreferences().instagramResolution).toBe('1080');
+  });
+});
+
+describe('resolutionForPlatform', () => {
+  it('gives each platform its own preference', () => {
+    const prefs = {
+      instagramResolution: '480' as const,
+      threadsResolution: '720' as const,
+      youtubeResolution: '1080' as const,
+    };
+    expect(resolutionForPlatform(prefs, 'instagram')).toBe('480');
+    // Threads must not silently inherit the Instagram cap.
+    expect(resolutionForPlatform(prefs, 'threads')).toBe('720');
+    expect(resolutionForPlatform(prefs, 'youtube')).toBe('1080');
   });
 });

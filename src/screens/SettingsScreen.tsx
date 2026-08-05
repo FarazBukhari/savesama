@@ -25,7 +25,13 @@ const PLATFORM_ROWS: PlatformRow[] = [
     key: 'instagramResolution',
     platform: 'Instagram',
     glyph: '📸',
-    hint: 'Reels and video posts',
+    hint: 'Reels, video posts and photos',
+  },
+  {
+    key: 'threadsResolution',
+    platform: 'Threads',
+    glyph: '🧵',
+    hint: 'Video posts and photos',
   },
   {
     key: 'youtubeResolution',
