@@ -43,7 +43,8 @@ export function ResolutionChoiceModal({
 }: ResolutionChoiceModalProps) {
   const insets = useSafeAreaInsets();
   // Capped presets can only promise on-device downscaling where the native
-  // transcoder exists (iOS today) — elsewhere they pick the closest rendition.
+  // transcoder exists (both platforms now) — elsewhere they pick the closest
+  // available rendition.
   const canTranscode = isTranscodeSupported();
 
   return (
