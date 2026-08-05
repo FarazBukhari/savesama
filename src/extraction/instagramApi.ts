@@ -1,3 +1,4 @@
+import { pickDashAudioUrl } from './dashManifest';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
 import { ExtractionResult, MediaFormat, MediaItem, SourcePlatform } from './types';
 
@@ -64,6 +65,9 @@ function nodeToItem(
     // on-device transcoding in the common case.
     const formats = buildVideoFormats(node);
     if (formats.length === 0) return null;
+    // video_dash_manifest carries an audio-only AdaptationSet; its video
+    // representations are VP9 and deliberately unused (see dashManifest.ts).
+    const audioOnlyUrl = pickDashAudioUrl(node['video_dash_manifest']);
     return {
       id,
       type: 'video',
@@ -73,6 +77,7 @@ function nodeToItem(
       height: formats[0].height,
       platform,
       formats,
+      ...(audioOnlyUrl ? { audioOnlyUrl } : {}),
     };
   }
 
