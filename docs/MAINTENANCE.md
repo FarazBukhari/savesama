@@ -14,7 +14,26 @@ need to adjust lives in two files:
 - [`src/extraction/instagram.ts`](../src/extraction/instagram.ts)
 - [`src/extraction/http.ts`](../src/extraction/http.ts)
 
-**The working recipe (verified June 2026):**
+**Read this first: the primary path is authenticated, not anonymous.** Since `b7b2b3a`,
+`extractInstagram` tries [`WebViewSessionResolver`](../src/components/WebViewSessionResolver.tsx)'s
+WebView fetch (`api/v1/media/<pk>/info/` with the user's own session) *before* any
+anonymous strategy. So on a real device the recipe below is only the fallback, and it runs
+at all only when no resolver is mounted (web build, jest, the `scripts/e2e-extract.ts`
+tester). See §10 for the same mechanism on Threads.
+
+Anonymous status as of **August 2026** (re-probed against live Instagram):
+
+| Strategy | State |
+| --- | --- |
+| `fetchViaGraphQl` | **Works.** doc_id `10015901848480474` still live; returns full media incl. `video_url`. |
+| `fetchViaEmbed` (crawler UA) | Works, **poster image only** — no `video_url`. |
+| `fetchViaOgTags` | **Removed.** Post pages serve no `og:` tags to a desktop UA; with a crawler UA they yield only `og:image`, which `fetchViaEmbed` already covers. |
+
+⚠️ The commit message on `b7b2b3a` claims all three anonymous strategies fail. That was
+true when the authenticated path was added; GraphQL has since started working again. Meta
+flips these back and forth — **re-probe before concluding anything is dead.**
+
+**The working recipe for the anonymous fallback (verified August 2026):**
 
 1. GET `https://www.instagram.com/` and read the anonymous token from the page **body**
    via `csrf_token":"<token>"` (in `getInstagramCsrfToken`, `http.ts`).
@@ -49,12 +68,11 @@ load a public post in a logged-out desktop browser with devtools open, filter Ne
 - The mobile `i.instagram.com/api/v1/media/<id>/info/` endpoint — **requires auth** (serves
   the logged-out app shell otherwise).
 
-The `fetchViaEmbed` fallback **works again** as of June 2026, but only with a **crawler
-user-agent** (`CRAWLER_USER_AGENT` = `facebookexternalhit/...` in `http.ts`): the embed
-page server-renders media for link-preview bots but ships an empty JS shell to a normal
-desktop UA. It's still just a backstop (it can't get a reel's `video_url`, only the poster
-image) — the GraphQL path is the one that matters. `fetchViaOgTags` essentially never
-succeeds now.
+The `fetchViaEmbed` fallback works only with a **crawler user-agent**
+(`CRAWLER_USER_AGENT` = `facebookexternalhit/...` in `http.ts`): the embed page
+server-renders media for link-preview bots but ships an empty JS shell to a normal desktop
+UA. It's still just a backstop (it can't get a reel's `video_url`, only the poster image) —
+of the anonymous strategies, GraphQL is the one that matters.
 
 ### How to test extraction fast (no device needed)
 
@@ -118,6 +136,12 @@ Saving audio from a reel works today and needs no auth.
   eas build --profile preview --platform android
   ```
 
+- CI ([`.github/workflows/build-apk.yml`](../.github/workflows/build-apk.yml)) builds the
+  APK on **pushes/merges to `main`** automatically, and on demand for any branch:
+  `gh workflow run build-apk.yml --ref <branch> -f profile=preview`. A `push` event carries
+  no `inputs`, so the workflow's `default: preview` does **not** apply — the job sets
+  `PROFILE: ${{ inputs.profile || 'preview' }}` and every step uses `$PROFILE`. Don't
+  reintroduce a bare `${{ inputs.profile }}` in a step or push builds get an empty profile.
 - Profiles live in [`eas.json`](../eas.json): `preview` and `development` produce an APK
   (`buildType: apk`); `production` is set up for store builds.
 - **Expo Go does not work** — `expo-share-intent` needs a native build. Use the preview
@@ -354,3 +378,82 @@ the Settings chooser sublabel says "Picks the closest available quality" instead
 promising a downscale. A *real* transcode failure on a supported platform surfaces as a
 `DownloadError` rather than being silently swallowed. Instagram's authenticated API
 already exposes a `video_versions` ladder, so it usually needs no transcode.
+
+---
+
+## 10. Threads extraction (authenticated only)
+
+Threads has **no anonymous path at all** — do not spend time looking for one. A logged-out
+client gets:
+
+- post pages → 302 to the Instagram OAuth login,
+- `api/v1/media/<pk>/info/` → the HTML app shell at **status 200** (this is what
+  `isLoginRequired` detects by sniffing a leading `<`).
+
+So [`extractThreads`](../src/extraction/threads.ts) always goes through
+[`WebViewSessionResolver`](../src/components/WebViewSessionResolver.tsx)'s WebView, which holds
+the user's threads.com session. With no resolver mounted (web build, jest, `scripts/e2e-extract.ts`) it
+fails fast with "Threads downloads need the app's sign-in view".
+
+**The working recipe (verified August 2026):**
+
+1. Decode the post code to the numeric media id with `shortcodeToMediaId` — Threads uses the
+   **same** url-safe-base64 encoding as Instagram shortcodes
+   (`DblSWtPD9-n` → `3955648572951617447`).
+2. From a page loaded on the **threads.com** origin, `fetch`
+   `https://www.threads.com/api/v1/media/<pk>/info/` with header
+   `X-IG-App-ID: 238260118697367` and `credentials: 'include'`.
+3. The payload is Instagram's private-API shape verbatim, so `mapMediaInfo` is shared —
+   only `platform` differs. `media_type`: 1 = image, 2 = video, 8 = carousel
+   (`carousel_media`), **19 = text-only post** (no media; surfaced as "no photo or video
+   to download").
+
+| Constant | Current value | What it is |
+| --- | --- | --- |
+| `THREADS_APP_ID` | `238260118697367` | Threads web app id (`threadsApi.ts`). Stable, unlike a doc_id. |
+
+⚠️ **Wrong-app-id failure signature:** sending Instagram's `936619743392459` to the Threads
+endpoint returns `400 {"message":"Media not found or unavailable","status":"fail"}` — which
+reads like a deleted post but is an app-id error. The reverse also holds: a Threads pk on
+`instagram.com/api/v1/...` fails the same way. The two graphs are separate.
+
+### Share links need a crawler user-agent
+
+The Threads app's share sheet emits `https://www.threads.com/share/<token>/`, which carries
+no post code. Resolving it is **UA-dependent**:
+
+- desktop UA → `200` + logged-out app shell, **no redirect**, code never revealed;
+- crawler UA (`facebookexternalhit/...`) → `302 Location:
+  https://www.threads.com/@user/post/<code>`.
+
+Hence `resolveShareLink` in [`extract.ts`](../src/extraction/extract.ts) passes
+`CRAWLER_USER_AGENT` for Threads and the desktop UA for Instagram. The resolved URL carries
+tracking params (`?xmt=…&slof=1`) that `parseLink` strips.
+
+### The login predicate is the fragile part
+
+Threads sign-in is an OAuth round trip **through instagram.com**:
+
+```
+threads.com/login
+  -> instagram.com/accounts/login/?…&next=instagram.com/oauth/oidc/?redirect_uri=threads.com/login/oidc/
+  -> threads.com/login/oidc/?code=…
+  -> threads.com/
+```
+
+The "signed in" predicate must therefore return **false for every instagram.com URL**. If it
+matches mid-OAuth, the modal closes early, the retry hits a still-unauthenticated
+threads.com origin, gets the HTML shell, and **re-opens the modal in a loop**. Bare
+`threads.com/` counts as signed in only *before* the instagram.com hop (the "already had a
+session, `/login` bounced to the feed" case) — that's what the `sawInstagram` flag guards.
+If a user reports the login sheet reopening forever, this predicate is the first suspect.
+
+### How to test fast
+
+`scripts/e2e-extract.ts` can't extract Threads (no WebView), but the two halves are testable
+separately:
+
+- URL parsing + share resolution: `urlParser.test.ts` / `extract.test.ts`.
+- The media-info call: open threads.com logged-in in a desktop browser and run the `fetch`
+  from step 2 in the devtools console. If that returns JSON but the app doesn't, the problem
+  is in the WebView/session layer, not the recipe.

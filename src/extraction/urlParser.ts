@@ -24,6 +24,12 @@ function splitUrl(raw: string): { host: string; path: string; query: string } | 
 const IG_AUDIO_PATH = /\/reels?\/audio\/(\d+)/;
 const IG_POST_PATH = /\/(?:[A-Za-z0-9_.]+\/)?(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
 
+// Threads post links come in three equivalent forms, all carrying the post code:
+// /@username/post/<code> (canonical, optionally suffixed /media), /post/<code>,
+// and the short /t/<code>. Threads redirects the latter two to the canonical form,
+// so the code alone is enough — no share-link resolution needed.
+const THREADS_POST_PATH = /\/(?:@[A-Za-z0-9_.]+\/)?(?:post|t)\/([A-Za-z0-9_-]+)/;
+
 // YouTube video ids are always exactly 11 url-safe-base64 characters.
 const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 // Path-based forms: /shorts/<id>, /embed/<id>, /v/<id>, /live/<id>.
@@ -79,6 +85,30 @@ export function parseLink(text: string): ParsedLink | null {
       platform: 'youtube',
       shortcode: videoId,
       canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      needsResolution: false,
+    };
+  }
+
+  // threads.net is the original host; it now redirects to threads.com, but old
+  // links (and the share sheet on older app versions) still use it.
+  const isThreads =
+    host === 'threads.com' ||
+    host === 'threads.net' ||
+    host.endsWith('.threads.com') ||
+    host.endsWith('.threads.net');
+  if (isThreads) {
+    // The Threads app's share sheet emits /share/<token>, which carries no post code —
+    // resolve the redirect first.
+    if (path.startsWith('/share/')) {
+      return { platform: 'threads', shortcode: null, canonicalUrl: raw, needsResolution: true };
+    }
+    const postMatch = path.match(THREADS_POST_PATH);
+    if (!postMatch) return null;
+    const shortcode = postMatch[1];
+    return {
+      platform: 'threads',
+      shortcode,
+      canonicalUrl: `https://www.threads.com/post/${shortcode}`,
       needsResolution: false,
     };
   }

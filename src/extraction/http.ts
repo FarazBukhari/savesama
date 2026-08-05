@@ -73,11 +73,20 @@ export function resetCsrfTokenCache(): void {
   cachedCsrfToken = null;
 }
 
-/** Follows redirects and returns the final URL (used for /share/ and /t/ short links). */
-export async function resolveFinalUrl(url: string): Promise<string> {
+/**
+ * Follows redirects and returns the final URL (used for /share/ and /t/ short links).
+ *
+ * The user agent matters: Threads answers a share link with the login shell at status
+ * 200 (no redirect) for a browser UA, but 302s to the canonical post URL for a
+ * link-preview crawler UA, so Threads callers pass CRAWLER_USER_AGENT.
+ */
+export async function resolveFinalUrl(
+  url: string,
+  userAgent: string = DESKTOP_USER_AGENT
+): Promise<string> {
   const response = await fetchWithTimeout(url, {
     headers: {
-      'User-Agent': DESKTOP_USER_AGENT,
+      'User-Agent': userAgent,
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
   });

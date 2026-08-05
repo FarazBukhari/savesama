@@ -1,5 +1,5 @@
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
-import { ExtractionResult, MediaFormat, MediaItem } from './types';
+import { ExtractionResult, MediaFormat, MediaItem, SourcePlatform } from './types';
 
 /** Instagram's public web app id, required on api/v1 requests. */
 export const IG_APP_ID = '936619743392459';
@@ -11,8 +11,16 @@ const MEDIA_TYPE_VIDEO = 2;
  * Maps a response from `api/v1/media/{id}/info/` into an ExtractionResult.
  * The endpoint returns `{ items: [media] }`; a media node is either a single
  * image/video or a carousel whose children live under `carousel_media`.
+ *
+ * Threads serves the same endpoint and payload shape from its own origin, so it
+ * reuses this mapper and only overrides `platform`. (Threads text-only posts use
+ * media_type 19 and carry no image/video versions — those map to null.)
  */
-export function mapMediaInfo(json: unknown, shortcode: string): ExtractionResult | null {
+export function mapMediaInfo(
+  json: unknown,
+  shortcode: string,
+  platform: SourcePlatform = 'instagram'
+): ExtractionResult | null {
   const media = getIn(json, ['items', 0]);
   if (!isRecord(media)) return null;
 
@@ -21,19 +29,19 @@ export function mapMediaInfo(json: unknown, shortcode: string): ExtractionResult
   if (carousel) {
     carousel.forEach((child, index) => {
       if (isRecord(child)) {
-        const item = nodeToItem(child, `${shortcode}-${index}`);
+        const item = nodeToItem(child, `${shortcode}-${index}`, platform);
         if (item) items.push(item);
       }
     });
   } else {
-    const item = nodeToItem(media, shortcode);
+    const item = nodeToItem(media, shortcode, platform);
     if (item) items.push(item);
   }
 
   if (items.length === 0) return null;
 
   return {
-    platform: 'instagram',
+    platform,
     shortcode,
     items,
     username: asString(getIn(media, ['user', 'username'])),
@@ -41,7 +49,11 @@ export function mapMediaInfo(json: unknown, shortcode: string): ExtractionResult
   };
 }
 
-function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null {
+function nodeToItem(
+  node: Record<string, unknown>,
+  id: string,
+  platform: SourcePlatform
+): MediaItem | null {
   const isVideo = node['media_type'] === MEDIA_TYPE_VIDEO || Array.isArray(node['video_versions']);
   const thumbnail = asString(getIn(node, ['image_versions2', 'candidates', 0, 'url']));
 
@@ -59,7 +71,7 @@ function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null
       thumbnailUrl: thumbnail,
       width: formats[0].width,
       height: formats[0].height,
-      platform: 'instagram',
+      platform,
       formats,
     };
   }
@@ -72,7 +84,7 @@ function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null
     thumbnailUrl: thumbnail,
     width: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'width'])),
     height: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'height'])),
-    platform: 'instagram',
+    platform,
   };
 }
 
