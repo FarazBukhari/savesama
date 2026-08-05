@@ -11,6 +11,12 @@
 // have them competing for the same bandwidth and make every one of them slower —
 // and progress harder to read.
 
+import {
+  isDownloadServiceSupported,
+  startDownloadService,
+  stopDownloadService,
+  updateDownloadService,
+} from '../../modules/foxy-download-service';
 import { MediaItem } from '../extraction/types';
 import { downloadAudioToGallery, downloadToGallery } from './download';
 
@@ -142,12 +148,20 @@ function nextQueued(): DownloadJob | undefined {
 async function run(options: EnqueueOptions): Promise<void> {
   if (running) return;
   running = true;
+  // Foreground service for the whole drain, not per job: starting and stopping it
+  // between queued items would flicker the notification and briefly leave the
+  // process unprotected.
+  const serviceActive = isDownloadServiceSupported();
+  if (serviceActive) startDownloadService(serviceTitle());
   try {
     for (let job = nextQueued(); job; job = nextQueued()) {
       update(job.id, { status: 'active', progress: 0 });
       const download = job.format === 'audio' ? downloadAudioToGallery : downloadToGallery;
       try {
-        await download(job.item, (fraction) => update(job.id, { progress: fraction }));
+        await download(job.item, (fraction) => {
+          update(job.id, { progress: fraction });
+          if (serviceActive) updateDownloadService(serviceTitle(), fraction);
+        });
         update(job.id, { status: 'done', progress: 1 });
         options.onSaved?.();
       } catch (error) {
@@ -162,8 +176,19 @@ async function run(options: EnqueueOptions): Promise<void> {
     // Cleared before returning so a job enqueued during the last await still
     // starts a fresh runner.
     running = false;
-    if (nextQueued()) void run(options);
+    const more = nextQueued();
+    // Only drop the service when the queue is actually empty, so a hand-off to the
+    // next runner doesn't leave the process unprotected mid-download.
+    if (serviceActive && !more) stopDownloadService();
+    if (more) void run(options);
   }
+}
+
+/** Notification title reflecting how much work is left. */
+function serviceTitle(): string {
+  const remaining = pendingCount();
+  if (remaining > 1) return `Downloading ${remaining} items`;
+  return 'Downloading';
 }
 
 function describeError(error: unknown): string {
