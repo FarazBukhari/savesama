@@ -13,11 +13,13 @@ export type ResolutionPref = 'max' | '1080' | '720' | '480' | '360';
 
 export interface Preferences {
   instagramResolution: ResolutionPref;
+  threadsResolution: ResolutionPref;
   youtubeResolution: ResolutionPref;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   instagramResolution: 'max',
+  threadsResolution: 'max',
   youtubeResolution: 'max',
 };
 
@@ -61,7 +63,14 @@ export function resolutionForPlatform(
   prefs: Preferences,
   platform: SourcePlatform
 ): ResolutionPref {
-  return platform === 'youtube' ? prefs.youtubeResolution : prefs.instagramResolution;
+  switch (platform) {
+    case 'youtube':
+      return prefs.youtubeResolution;
+    case 'threads':
+      return prefs.threadsResolution;
+    case 'instagram':
+      return prefs.instagramResolution;
+  }
 }
 
 const PREFERENCES_FILE = `${FileSystem.documentDirectory}foxy-preferences.json`;
@@ -87,6 +96,9 @@ function normalize(raw: unknown): Preferences {
     instagramResolution: isResolutionPref(record.instagramResolution)
       ? record.instagramResolution
       : DEFAULT_PREFERENCES.instagramResolution,
+    threadsResolution: isResolutionPref(record.threadsResolution)
+      ? record.threadsResolution
+      : DEFAULT_PREFERENCES.threadsResolution,
     youtubeResolution: isResolutionPref(record.youtubeResolution)
       ? record.youtubeResolution
       : DEFAULT_PREFERENCES.youtubeResolution,

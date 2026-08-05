@@ -1,5 +1,5 @@
 import { MediaItem } from '../../extraction/types';
-import { planVideoDownload } from '../resolutionPlan';
+import { pickImageUrl, planVideoDownload } from '../resolutionPlan';
 
 function videoItem(formats: MediaItem['formats'], fallbackHeight: number | null = null): MediaItem {
   return {
@@ -204,5 +204,63 @@ describe('planVideoDownload', () => {
       kind: 'direct',
       videoUrl: 'https://example/ig.mp4',
     });
+  });
+});
+
+function imageItem(formats: MediaItem['formats']): MediaItem {
+  return {
+    id: 'p',
+    type: 'image',
+    // Instagram/Threads set `url` to the largest (first) candidate.
+    url: 'https://example/640x1138.jpg',
+    thumbnailUrl: null,
+    width: 640,
+    height: 1138,
+    platform: 'instagram',
+    formats,
+  };
+}
+
+// Full-frame renditions only: the mapper strips the square centre-crops that share
+// these short-side sizes, which is what keeps a 480 target off a 480x480 crop.
+const PHOTO_FORMATS: MediaItem['formats'] = [
+  { url: 'https://example/640x1138.jpg', width: 640, height: 1138, bitrate: null, hasAudio: true },
+  { url: 'https://example/480x854.jpg', width: 480, height: 854, bitrate: null, hasAudio: true },
+  { url: 'https://example/320x569.jpg', width: 320, height: 569, bitrate: null, hasAudio: true },
+  { url: 'https://example/240x427.jpg', width: 240, height: 427, bitrate: null, hasAudio: true },
+];
+
+describe('pickImageUrl', () => {
+  it('max keeps the largest rendition', () => {
+    expect(pickImageUrl(imageItem(PHOTO_FORMATS), 'max')).toBe('https://example/640x1138.jpg');
+  });
+
+  it('picks the largest rendition at or below the target (short side)', () => {
+    expect(pickImageUrl(imageItem(PHOTO_FORMATS), '480')).toBe('https://example/480x854.jpg');
+    expect(pickImageUrl(imageItem(PHOTO_FORMATS), '360')).toBe('https://example/320x569.jpg');
+  });
+
+  it('never upscales: a target above every rendition keeps the largest', () => {
+    expect(pickImageUrl(imageItem(PHOTO_FORMATS), '1080')).toBe('https://example/640x1138.jpg');
+    expect(pickImageUrl(imageItem(PHOTO_FORMATS), '720')).toBe('https://example/640x1138.jpg');
+  });
+
+  it('falls back to the smallest rendition when the target is below all of them', () => {
+    const onlyLarge: MediaItem['formats'] = [
+      {
+        url: 'https://example/1440x2560.jpg',
+        width: 1440,
+        height: 2560,
+        bitrate: null,
+        hasAudio: true,
+      },
+      { url: 'https://example/720x1280.jpg', width: 720, height: 1280, bitrate: null, hasAudio: true },
+    ];
+    expect(pickImageUrl(imageItem(onlyLarge), '360')).toBe('https://example/720x1280.jpg');
+  });
+
+  it('uses the item url when the source exposes no ladder', () => {
+    const bare: MediaItem = { ...imageItem([]), formats: undefined };
+    expect(pickImageUrl(bare, '360')).toBe('https://example/640x1138.jpg');
   });
 });

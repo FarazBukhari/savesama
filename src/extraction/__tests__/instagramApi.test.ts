@@ -135,3 +135,84 @@ describe('mapMediaInfo', () => {
     expect(mapMediaInfo({}, 'X')).toBeNull();
   });
 });
+
+describe('mapMediaInfo — photo quality ladder', () => {
+  // Shape captured from a live api/v1 media-info response: `candidates` mixes
+  // full-frame renditions with square centre-crops at the SAME short-side sizes.
+  const PHOTO = {
+    items: [
+      {
+        media_type: 1,
+        original_width: 1206,
+        original_height: 2145,
+        image_versions2: {
+          candidates: [
+            { url: 'https://cdn/640x1138.jpg', width: 640, height: 1138 },
+            { url: 'https://cdn/480x854.jpg', width: 480, height: 854 },
+            { url: 'https://cdn/320x569.jpg', width: 320, height: 569 },
+            { url: 'https://cdn/240x427.jpg', width: 240, height: 427 },
+            { url: 'https://cdn/crop-640.jpg', width: 640, height: 640 },
+            { url: 'https://cdn/crop-480.jpg', width: 480, height: 480 },
+            { url: 'https://cdn/crop-320.jpg', width: 320, height: 320 },
+            { url: 'https://cdn/crop-150.jpg', width: 150, height: 150 },
+          ],
+        },
+        user: { username: 'alice' },
+        caption: { text: 'hi' },
+      },
+    ],
+  };
+
+  it('exposes the full-frame renditions as a ladder', () => {
+    const result = mapMediaInfo(PHOTO, 'ABC');
+    expect(result?.items[0].formats?.map((f) => [f.width, f.height])).toEqual([
+      [640, 1138],
+      [480, 854],
+      [320, 569],
+      [240, 427],
+    ]);
+  });
+
+  it('excludes square centre-crops, so a capped photo is never cropped', () => {
+    // Ranking by size alone would tie 480x854 with 480x480 for a 480 target and
+    // could silently save a cropped photo.
+    const urls = mapMediaInfo(PHOTO, 'ABC')?.items[0].formats?.map((f) => f.url) ?? [];
+    expect(urls.some((url) => url.includes('crop'))).toBe(false);
+  });
+
+  it('keeps every rendition for a genuinely square post', () => {
+    const square = {
+      items: [
+        {
+          media_type: 1,
+          original_width: 1080,
+          original_height: 1080,
+          image_versions2: {
+            candidates: [
+              { url: 'https://cdn/1080.jpg', width: 1080, height: 1080 },
+              { url: 'https://cdn/640.jpg', width: 640, height: 640 },
+              { url: 'https://cdn/320.jpg', width: 320, height: 320 },
+            ],
+          },
+          user: { username: 'alice' },
+          caption: null,
+        },
+      ],
+    };
+    expect(mapMediaInfo(square, 'SQ')?.items[0].formats).toHaveLength(3);
+  });
+
+  it('omits the ladder when only one rendition survives filtering', () => {
+    const single = {
+      items: [
+        {
+          media_type: 1,
+          image_versions2: { candidates: [{ url: 'https://cdn/one.jpg', width: 640, height: 800 }] },
+          user: { username: 'alice' },
+          caption: null,
+        },
+      ],
+    };
+    expect(mapMediaInfo(single, 'ONE')?.items[0].formats).toBeUndefined();
+  });
+});

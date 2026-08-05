@@ -77,6 +77,10 @@ function nodeToItem(
   }
 
   if (!thumbnail) return null;
+  // Unlike video_versions, `candidates` IS a genuine ladder (e.g. 640x1138, 480x854,
+  // 320x569, 240x427), so a photo can honour a resolution preference by simply
+  // picking a smaller rendition — no on-device resizing needed.
+  const formats = buildImageFormats(node);
   return {
     id,
     type: 'image',
@@ -85,7 +89,49 @@ function nodeToItem(
     width: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'width'])),
     height: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'height'])),
     platform,
+    ...(formats.length > 1 ? { formats } : {}),
   };
+}
+
+/** Aspect ratios within 2% count as the same framing. */
+const ASPECT_TOLERANCE = 0.02;
+
+/**
+ * Maps `image_versions2.candidates` into a quality ladder.
+ *
+ * ⚠️ The candidate list mixes two families: renditions of the full image
+ * (640x1138, 480x854, 320x569, 240x427) *and* square centre-crops
+ * (640x640, 480x480, 320x320, 240x240, 150x150). Ranking by size alone ties
+ * 480x854 against 480x480 for a 480 target, and picking the crop would silently
+ * save a cropped photo. So candidates are kept only when their aspect ratio
+ * matches the post's own — `original_width`/`original_height` when present, else
+ * the first (largest, always full-frame) candidate.
+ */
+function buildImageFormats(node: Record<string, unknown>): MediaFormat[] {
+  const candidates = asArray(getIn(node, ['image_versions2', 'candidates'])) ?? [];
+
+  const originalWidth = asNumber(node['original_width']);
+  const originalHeight = asNumber(node['original_height']);
+  let reference: number | null =
+    originalWidth && originalHeight ? originalWidth / originalHeight : null;
+
+  const formats: MediaFormat[] = [];
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue;
+    const url = asString(candidate['url']);
+    const width = asNumber(candidate['width']);
+    const height = asNumber(candidate['height']);
+    if (!url || !width || !height) continue;
+
+    const aspect = width / height;
+    // No original dimensions to compare against: the largest candidate is full-frame,
+    // so adopt its aspect as the reference.
+    if (reference == null) reference = aspect;
+    if (Math.abs(aspect - reference) / reference > ASPECT_TOLERANCE) continue;
+
+    formats.push({ url, width, height, bitrate: null, hasAudio: true });
+  }
+  return formats;
 }
 
 /** Maps Instagram's `video_versions` array (highest-first) into muxed formats. */
