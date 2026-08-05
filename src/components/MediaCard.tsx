@@ -61,7 +61,6 @@ export function MediaCard({ item, state, onDownload, onCancel }: MediaCardProps)
         state={state}
         onPress={() => onDownload(item)}
         onCancelPress={onCancel ? () => onCancel(item) : undefined}
-        reopenable={isVideo}
       />
     </View>
   );
@@ -71,12 +70,10 @@ function DownloadAction({
   state,
   onPress,
   onCancelPress,
-  reopenable = false,
 }: {
   state: ItemDownloadState;
   onPress: () => void;
   onCancelPress?: () => void;
-  reopenable?: boolean;
 }) {
   // Queued behind another download: the runner takes one job at a time. Tapping
   // removes it from the queue (the in-flight job can't be cancelled — see
@@ -96,6 +93,16 @@ function DownloadAction({
     );
   }
   if (state.status === 'downloading') {
+    // Tapping cancels: the transfer aborts immediately, and a native mux/transcode
+    // already running stops mattering because the result is never saved.
+    if (onCancelPress) {
+      return (
+        <PressableScale style={styles.actionArea} onPress={onCancelPress} accessibilityRole="button">
+          <Text style={styles.progressLabel}>{Math.round(state.progress * 100)}%</Text>
+          <Text style={styles.cancelHint}>Cancel</Text>
+        </PressableScale>
+      );
+    }
     return (
       <View style={styles.actionArea}>
         <Text style={styles.progressLabel}>{Math.round(state.progress * 100)}%</Text>
@@ -103,18 +110,16 @@ function DownloadAction({
     );
   }
   if (state.status === 'done') {
-    // Video cards: badge stays pressable so the format modal can be re-opened.
-    if (reopenable) {
-      return (
-        <PressableScale style={[styles.actionArea, styles.doneBadge]} onPress={onPress}>
-          <Text style={styles.doneLabel}>✓ Saved</Text>
-        </PressableScale>
-      );
-    }
+    // Stays pressable: videos re-open the format modal, photos save again. Either
+    // way the user needs a route back after changing the resolution.
     return (
-      <View style={[styles.actionArea, styles.doneBadge]}>
+      <PressableScale
+        style={[styles.actionArea, styles.doneBadge]}
+        onPress={onPress}
+        accessibilityRole="button"
+      >
         <Text style={styles.doneLabel}>✓ Saved</Text>
-      </View>
+      </PressableScale>
     );
   }
   return (
@@ -208,6 +213,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.sm,
+  },
+  cancelHint: {
+    marginTop: 1,
+    fontSize: typography.small,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   queuedLabel: {
     fontSize: typography.small,

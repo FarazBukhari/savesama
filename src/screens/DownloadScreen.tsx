@@ -71,6 +71,12 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const [overrideResolution, setOverrideResolution] = useState<ResolutionPref | null>(null);
   const [choosingResolution, setChoosingResolution] = useState(false);
 
+  // Download failures live on the job, not in this component's state — without
+  // this they were invisible, which is how a broken audio URL looked like "nothing
+  // happens".
+  const failedJob = jobs.find((job) => job.status === 'error');
+  const visibleError = error ?? failedJob?.error ?? null;
+
   const defaultResolution = modalItem
     ? resolutionForPlatform(prefs, modalItem.platform ?? 'instagram')
     : 'max';
@@ -118,12 +124,15 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const handleDownload = useCallback(
     (item: MediaItem, format: 'video' | 'audio' = 'video', resolution?: ResolutionPref) => {
       setError(null);
-      enqueueDownload(item, format, { onSaved, resolution });
+      // force: the user pressed Save deliberately, so a finished job re-runs (e.g.
+      // to save the same video again at a different quality).
+      enqueueDownload(item, format, { onSaved, resolution, force: true });
     },
     [onSaved]
   );
 
   const handleCancel = useCallback((item: MediaItem) => {
+    // Cancels whichever of the two is live; the other call is a no-op.
     cancelDownload(jobId(item, 'video'));
     cancelDownload(jobId(item, 'audio'));
   }, []);
@@ -148,7 +157,8 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const handleDownloadAll = useCallback(() => {
     if (!result) return;
     setError(null);
-    // Queue them all; the runner drains them one at a time.
+    // Queue them all; the runner drains them one at a time. No force here: already
+    // saved items are skipped rather than downloaded twice.
     for (const item of result.items) {
       const state = downloads[jobId(item, 'video')] ?? IDLE_STATE;
       if (state.status === 'done' || state.status === 'downloading' || state.status === 'queued') continue;
@@ -178,7 +188,7 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
           onSubmit={handleSubmit}
         />
 
-        {error ? <ErrorNotice message={error} /> : null}
+        {visibleError ? <ErrorNotice message={visibleError} /> : null}
 
         {busy ? (
           <View style={styles.fetchingCard}>
