@@ -1,4 +1,4 @@
-import { resolveFinalUrl } from './http';
+import { CRAWLER_USER_AGENT, resolveFinalUrl } from './http';
 import { extractInstagram } from './instagram';
 import { extractThreads } from './threads';
 import { ExtractionError, ExtractionResult, ParsedLink } from './types';
@@ -44,7 +44,10 @@ export async function extractMedia(rawText: string): Promise<ExtractionResult> {
 }
 
 async function resolveShareLink(link: ParsedLink): Promise<ParsedLink> {
-  const finalUrl = await resolveFinalUrl(link.canonicalUrl);
+  // Threads only redirects share links for a crawler UA; a browser UA gets the
+  // logged-out app shell at status 200 and the post code is never revealed.
+  const userAgent = link.platform === 'threads' ? CRAWLER_USER_AGENT : undefined;
+  const finalUrl = await resolveFinalUrl(link.canonicalUrl, userAgent);
   const resolved = parseLink(finalUrl);
   if (!resolved || resolved.needsResolution || !resolved.shortcode) {
     throw new ExtractionError(

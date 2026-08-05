@@ -119,12 +119,28 @@ describe('parseLink — threads', () => {
     ['https://threads.com/post/DbnQECjGl4X', 'DbnQECjGl4X'],
     ['https://www.threads.net/@someone/post/DbnQECjGl4X', 'DbnQECjGl4X'],
     ['https://www.threads.net/t/DbnQECjGl4X', 'DbnQECjGl4X'],
+    // What a /share/ link resolves to: tracking params must not leak into the code.
+    [
+      'https://www.threads.com/@romisa.khan804/post/DbnQECjGl4X?xmt=AQG0zt-U43KQ&slof=1',
+      'DbnQECjGl4X',
+    ],
   ])('parses %s', (url, shortcode) => {
     expect(parseLink(url)).toEqual({
       platform: 'threads',
       shortcode,
       canonicalUrl: `https://www.threads.com/post/${shortcode}`,
       needsResolution: false,
+    });
+  });
+
+  // The Threads app share sheet emits this form; the token is not the post code.
+  it('flags /share/<token> links for redirect resolution', () => {
+    const url = 'https://www.threads.com/share/BAsFhl_yx0/';
+    expect(parseLink(url)).toEqual({
+      platform: 'threads',
+      shortcode: null,
+      canonicalUrl: url,
+      needsResolution: true,
     });
   });
 
