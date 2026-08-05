@@ -1,4 +1,4 @@
-import { getIgFetcher } from '../services/instagramSession';
+import { getFetcher } from '../services/mediaSession';
 import { decodeHtmlEntities, decodeJsonString } from './html';
 import {
   CRAWLER_USER_AGENT,
@@ -49,7 +49,7 @@ export async function extractInstagram(shortcode: string): Promise<ExtractionRes
 }
 
 async function extractViaAuthenticatedFetch(shortcode: string): Promise<ExtractionResult | null> {
-  const fetcher = getIgFetcher();
+  const fetcher = getFetcher('instagram');
   if (!fetcher) return null;
 
   const mediaId = shortcodeToMediaId(shortcode);

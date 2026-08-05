@@ -1,8 +1,8 @@
 import {
-  ThreadsFetchResult,
-  registerThreadsFetcher,
-  unregisterThreadsFetcher,
-} from '../../services/threadsSession';
+  SessionFetchResult,
+  registerFetcher,
+  unregisterFetcher,
+} from '../../services/mediaSession';
 import { extractThreads } from '../threads';
 import { ExtractionError } from '../types';
 
@@ -61,7 +61,7 @@ const TEXT_ONLY_PAYLOAD = {
 };
 
 function withFetcher<T>(
-  result: ThreadsFetchResult | ((mediaId: string) => ThreadsFetchResult),
+  result: SessionFetchResult | ((mediaId: string) => SessionFetchResult),
   run: (calls: string[]) => Promise<T>
 ): Promise<T> {
   const calls: string[] = [];
@@ -69,11 +69,11 @@ function withFetcher<T>(
     calls.push(mediaId);
     return typeof result === 'function' ? result(mediaId) : result;
   };
-  registerThreadsFetcher(fetcher);
-  return run(calls).finally(() => unregisterThreadsFetcher(fetcher));
+  registerFetcher('threads', fetcher);
+  return run(calls).finally(() => unregisterFetcher('threads', fetcher));
 }
 
-function ok(payload: unknown): ThreadsFetchResult {
+function ok(payload: unknown): SessionFetchResult {
   return { ok: true, status: 200, body: JSON.stringify(payload) };
 }
 

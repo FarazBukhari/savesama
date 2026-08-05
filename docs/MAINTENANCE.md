@@ -15,7 +15,7 @@ need to adjust lives in two files:
 - [`src/extraction/http.ts`](../src/extraction/http.ts)
 
 **Read this first: the primary path is authenticated, not anonymous.** Since `b7b2b3a`,
-`extractInstagram` tries [`InstagramResolver`](../src/components/InstagramResolver.tsx)'s
+`extractInstagram` tries [`WebViewSessionResolver`](../src/components/WebViewSessionResolver.tsx)'s
 WebView fetch (`api/v1/media/<pk>/info/` with the user's own session) *before* any
 anonymous strategy. So on a real device the recipe below is only the fallback, and it runs
 at all only when no resolver is mounted (web build, jest, the `scripts/e2e-extract.ts`
@@ -338,8 +338,8 @@ client gets:
   `isLoginRequired` detects by sniffing a leading `<`).
 
 So [`extractThreads`](../src/extraction/threads.ts) always goes through
-[`ThreadsResolver`](../src/components/ThreadsResolver.tsx)'s WebView, which holds the user's
-threads.com session. With no resolver mounted (web build, jest, `scripts/e2e-extract.ts`) it
+[`WebViewSessionResolver`](../src/components/WebViewSessionResolver.tsx)'s WebView, which holds
+the user's threads.com session. With no resolver mounted (web build, jest, `scripts/e2e-extract.ts`) it
 fails fast with "Threads downloads need the app's sign-in view".
 
 **The working recipe (verified August 2026):**
