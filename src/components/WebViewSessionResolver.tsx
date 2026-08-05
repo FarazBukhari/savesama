@@ -3,86 +3,58 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 
-import { IG_APP_ID } from '../extraction/instagramApi';
 import {
-  IgFetchResult,
-  IgMediaInfoFetcher,
-  registerIgFetcher,
-  unregisterIgFetcher,
-} from '../services/instagramSession';
+  MediaInfoFetcher,
+  SessionFetchResult,
+  registerFetcher,
+  unregisterFetcher,
+} from '../services/mediaSession';
 import { colors, spacing, typography } from '../theme';
+import { SessionConfig, buildFetchJs, isLoginRequired } from './webViewSession';
 
-const IG_HOME = 'https://www.instagram.com/';
-const IG_LOGIN = 'https://www.instagram.com/accounts/login/';
 const REQUEST_TIMEOUT_MS = 20000;
 
 interface PendingRequest {
   mediaId: string;
-  resolve: (result: IgFetchResult) => void;
+  resolve: (result: SessionFetchResult) => void;
   awaitingLogin: boolean;
   timer: ReturnType<typeof setTimeout>;
 }
 
-// Runs a same-origin fetch inside the WebView so the authenticated session cookie
-// is attached, then posts the status + body back. mediaId is digits-only and reqId
-// is a number, so neither can break out of the template.
-function buildFetchJs(reqId: number, mediaId: string): string {
-  return `(function(){
-    function send(o){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
-    try {
-      fetch('https://www.instagram.com/api/v1/media/${mediaId}/info/', {
-        headers: { 'X-IG-App-ID': '${IG_APP_ID}', 'X-Requested-With': 'XMLHttpRequest' },
-        credentials: 'include'
-      })
-      .then(function(r){ return r.text().then(function(t){ return { s: r.status, t: t }; }); })
-      .then(function(o){ send({ reqId: ${reqId}, status: o.s, body: o.t }); })
-      .catch(function(e){ send({ reqId: ${reqId}, status: 0, body: String(e) }); });
-    } catch (e) { send({ reqId: ${reqId}, status: 0, body: String(e) }); }
-  })(); true;`;
-}
-
-function isLoginRequired(status: number, body: string): boolean {
-  if (status === 401 || status === 403) return true;
-  const head = body.slice(0, 500);
-  if (head.includes('login_required') || head.includes('"require_login"')) return true;
-  // When logged out, Instagram 302-redirects the api/v1 call to the login page and
-  // fetch follows it, returning an HTML document (status 200) instead of JSON.
-  const trimmed = body.trimStart();
-  return trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<');
-}
-
-// The session cookie is set the moment credentials are accepted, before Instagram
-// lands on the feed. Treat the home feed and the "save login info" (onetap) screen
-// as logged-in so we can close the modal immediately — and skip the onetap prompt.
-function isLoggedIn(url: string): boolean {
-  if (url.includes('/accounts/login')) return false;
-  return (
-    /^https:\/\/www\.instagram\.com\/(\?|#|$)/.test(url) ||
-    url.includes('/accounts/onetap') ||
-    url.includes('/feed')
-  );
-}
-
-export function InstagramResolver() {
+/**
+ * Holds one platform's authenticated session in an off-screen WebView and runs media-info
+ * fetches inside it, revealing a login modal only when a request comes back logged-out.
+ * The session then persists across launches via the WebView cookie store.
+ *
+ * Instagram and Threads serve the same `api/v1/media/{id}/info/` endpoint and payload, so
+ * they share this component; everything that differs is in `config` (see webViewSession.ts).
+ */
+export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
   const webViewRef = useRef<WebView>(null);
   const pending = useRef<Map<number, PendingRequest>>(new Map());
   const counter = useRef(0);
   const ready = useRef(false);
   const queue = useRef<number[]>([]);
+  // True once this login attempt has hopped to an external auth host (Threads' OAuth
+  // goes through instagram.com).
+  const sawAuthHop = useRef(false);
   const [loginVisible, setLoginVisible] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
 
-  const runFetch = useCallback((reqId: number) => {
-    const req = pending.current.get(reqId);
-    if (!req) return;
-    if (!ready.current) {
-      queue.current.push(reqId);
-      return;
-    }
-    webViewRef.current?.injectJavaScript(buildFetchJs(reqId, req.mediaId));
-  }, []);
+  const runFetch = useCallback(
+    (reqId: number) => {
+      const req = pending.current.get(reqId);
+      if (!req) return;
+      if (!ready.current) {
+        queue.current.push(reqId);
+        return;
+      }
+      webViewRef.current?.injectJavaScript(buildFetchJs(config, reqId, req.mediaId));
+    },
+    [config]
+  );
 
-  const settle = useCallback((reqId: number, result: IgFetchResult) => {
+  const settle = useCallback((reqId: number, result: SessionFetchResult) => {
     const req = pending.current.get(reqId);
     if (!req) return;
     clearTimeout(req.timer);
@@ -90,9 +62,9 @@ export function InstagramResolver() {
     req.resolve(result);
   }, []);
 
-  const fetcher = useCallback<IgMediaInfoFetcher>(
+  const fetcher = useCallback<MediaInfoFetcher>(
     (mediaId) =>
-      new Promise<IgFetchResult>((resolve) => {
+      new Promise<SessionFetchResult>((resolve) => {
         const reqId = ++counter.current;
         const timer = setTimeout(() => {
           settle(reqId, { ok: false, status: 0, body: 'timeout' });
@@ -104,9 +76,9 @@ export function InstagramResolver() {
   );
 
   useEffect(() => {
-    registerIgFetcher(fetcher);
-    return () => unregisterIgFetcher(fetcher);
-  }, [fetcher]);
+    registerFetcher(config.platform, fetcher);
+    return () => unregisterFetcher(config.platform, fetcher);
+  }, [config.platform, fetcher]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -127,6 +99,7 @@ export function InstagramResolver() {
         // Keep the request pending, reveal the login screen, and retry after login.
         req.awaitingLogin = true;
         clearTimeout(req.timer);
+        sawAuthHop.current = false;
         setSigningIn(false);
         setLoginVisible(true);
         return;
@@ -138,8 +111,16 @@ export function InstagramResolver() {
   );
 
   const retryAwaiting = useCallback(() => {
-    // Give each waiting request a fresh timeout, then re-issue the fetch now that
-    // the session should be authenticated.
+    // Reload first when configured: not for cookies — those are read at request time —
+    // but for origin. If the hidden WebView drifted off-origin, the injected fetch would
+    // be cross-origin and die on CORS.
+    if (config.reloadBeforeRetry) {
+      ready.current = false;
+      webViewRef.current?.reload();
+    }
+    // Give each waiting request a fresh timeout, then re-issue the fetch now that the
+    // session should be authenticated. runFetch queues it if the reload is still in
+    // flight; onLoadEnd flushes the queue.
     pending.current.forEach((req, reqId) => {
       if (!req.awaitingLogin) return;
       req.awaitingLogin = false;
@@ -148,21 +129,25 @@ export function InstagramResolver() {
       }, REQUEST_TIMEOUT_MS);
       runFetch(reqId);
     });
-  }, [runFetch, settle]);
+  }, [config.reloadBeforeRetry, runFetch, settle]);
 
   const onNavChange = useCallback(
     (nav: WebViewNavigation) => {
       if (!loginVisible) return;
-      // Fire as soon as the redirect to an authenticated URL *starts* (not on load
-      // end), and cover the WebView with a spinner, so the feed never flashes during
-      // the modal's slide-out animation.
-      if (isLoggedIn(nav.url)) {
+      if (config.isAuthHop(nav.url)) {
+        sawAuthHop.current = true;
+        return;
+      }
+      // Fire as soon as the redirect to an authenticated URL *starts* (not on load end),
+      // and cover the WebView with a spinner, so the feed never flashes during the
+      // modal's slide-out animation.
+      if (config.isLoggedIn(nav.url, sawAuthHop.current)) {
         setSigningIn(true);
         setLoginVisible(false);
         retryAwaiting();
       }
     },
-    [loginVisible, retryAwaiting]
+    [config, loginVisible, retryAwaiting]
   );
 
   const onCancelLogin = useCallback(() => {
@@ -175,6 +160,7 @@ export function InstagramResolver() {
 
   const onLoadEnd = useCallback(() => {
     ready.current = true;
+    setSigningIn(false);
     const queued = queue.current;
     queue.current = [];
     queued.forEach(runFetch);
@@ -182,14 +168,14 @@ export function InstagramResolver() {
 
   return (
     <>
-      {/* Off-screen WebView that holds the Instagram session and runs the fetches. */}
+      {/* Off-screen WebView that holds the session and runs the fetches. */}
       <View style={styles.hidden} pointerEvents="none">
         <WebView
           ref={webViewRef}
-          source={{ uri: IG_HOME }}
+          source={{ uri: config.homeUrl }}
           onMessage={onMessage}
           onLoadEnd={onLoadEnd}
-          onNavigationStateChange={onNavChange}
+          onNavigationStateChange={config.watchHiddenNavigation ? onNavChange : undefined}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
           domStorageEnabled
@@ -202,7 +188,7 @@ export function InstagramResolver() {
         <View style={styles.modalRoot}>
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderText}>
-              <Text style={styles.modalTitle}>Sign in to Instagram</Text>
+              <Text style={styles.modalTitle}>Sign in to {config.label}</Text>
               <Text style={styles.modalSubtitle}>Required to download · saved for next time</Text>
             </View>
             <Pressable onPress={onCancelLogin} hitSlop={12} style={styles.modalCancel}>
@@ -211,7 +197,7 @@ export function InstagramResolver() {
           </View>
           {loginVisible ? (
             <WebView
-              source={{ uri: IG_LOGIN }}
+              source={{ uri: config.loginUrl }}
               onNavigationStateChange={onNavChange}
               sharedCookiesEnabled
               thirdPartyCookiesEnabled
