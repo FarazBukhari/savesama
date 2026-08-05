@@ -97,6 +97,11 @@ export function parseLink(text: string): ParsedLink | null {
     host.endsWith('.threads.com') ||
     host.endsWith('.threads.net');
   if (isThreads) {
+    // The Threads app's share sheet emits /share/<token>, which carries no post code —
+    // resolve the redirect first.
+    if (path.startsWith('/share/')) {
+      return { platform: 'threads', shortcode: null, canonicalUrl: raw, needsResolution: true };
+    }
     const postMatch = path.match(THREADS_POST_PATH);
     if (!postMatch) return null;
     const shortcode = postMatch[1];
