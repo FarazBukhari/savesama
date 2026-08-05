@@ -1,12 +1,14 @@
 import { requireNativeModule } from 'expo-modules-core';
 
 export interface TranscodeVideoOptions {
-  /** Scale the video to this pixel height, preserving aspect ratio. */
+  /**
+   * Target SHORT-side resolution in pixels, preserving aspect ratio: 480 means
+   * the shorter dimension ends up near 480 whatever the orientation. Named
+   * `targetHeight` for the conventional "480p" reading, not because the height
+   * specifically is scaled — portrait video would be over-shrunk by the aspect
+   * ratio if it were. Both native implementations read it this way.
+   */
   targetHeight: number;
-  /** Video bitrate in bits/s. Omitted → derived from `targetHeight`. */
-  videoBitrate?: number;
-  /** Audio bitrate in bits/s. Defaults to 128000. */
-  audioBitrate?: number;
 }
 
 type FoxyAudioExtractorModule = {
@@ -68,7 +70,14 @@ export async function muxVideoAudio(
  * Downscales/compresses the video at `srcPath` to a smaller MP4 at `destPath`.
  * Unlike the remux paths this performs a real decode + scale + re-encode, so it
  * is comparatively slow and CPU/battery heavy. Used only when the source offers
- * no rendition at or below the user's chosen resolution.
+ * no rendition at or below the user's chosen resolution — which for Instagram and
+ * Threads is *always*, since their `video_versions` ladder is a fake (the entries
+ * are the same resolution, differing only in `type`).
+ *
+ * `targetHeight` is the conventional SHORT-side resolution: "480p" means the
+ * shorter dimension ends up near 480 whatever the orientation. Both native
+ * implementations and `resolutionPlan.ts` agree on that reading; a source already
+ * at or below the target is copied through without re-encoding.
  */
 export async function transcodeVideo(
   srcPath: string,
@@ -79,9 +88,11 @@ export async function transcodeVideo(
 }
 
 /**
- * Whether on-device downscaling is available (iOS yes; Android not yet — its
- * MediaCodec pipeline is a follow-up). Lets the download layer skip a doomed
- * native call and the UI describe capped presets honestly.
+ * Whether on-device downscaling is available (both platforms: iOS via
+ * AVAssetExportSession, Android via Media3 Transformer). Lets the download layer
+ * skip a doomed native call and the UI describe capped presets honestly. A device
+ * whose codecs can't handle a given clip still rejects at call time with
+ * ERR_TRANSCODE_UNSUPPORTED, which the download layer degrades on.
  */
 export function isTranscodeSupported(): boolean {
   try {
