@@ -9,6 +9,12 @@ import {
 } from '../../modules/foxy-audio-extractor';
 import { MediaItem } from '../extraction/types';
 import { loadPreferences, resolutionForPlatform } from './preferences';
+import {
+  fileSystemDeps,
+  probeRangedDownload,
+  runRangedDownload,
+  shouldSplit,
+} from './rangedDownload';
 import { DownloadPlan, pickImageUrl, planVideoDownload } from './resolutionPlan';
 
 export class DownloadError extends Error {
@@ -105,6 +111,22 @@ async function downloadFile(
   fileUri: string,
   onProgress: (fraction: number) => void
 ): Promise<FileSystem.FileSystemDownloadResult> {
+  // Large files split across parallel range requests — one connection to
+  // googlevideo/fbcdn is often slower than the link allows. Small files, servers
+  // that won't report a size, and servers without range support fall through to
+  // the single-connection path below.
+  const probe = await probeRangedDownload(url);
+  if (shouldSplit(probe) && probe.totalBytes !== null) {
+    try {
+      await runRangedDownload(url, fileUri, probe.totalBytes, onProgress, fileSystemDeps);
+      return { uri: fileUri, status: 200, headers: {}, mimeType: null } as FileSystem.FileSystemDownloadResult;
+    } catch {
+      // Any range/concat problem: start over on one connection rather than fail.
+      // runRangedDownload has already removed its parts and partial output.
+      onProgress(0);
+    }
+  }
+
   const download = FileSystem.createDownloadResumable(url, fileUri, {}, (progress) => {
     if (progress.totalBytesExpectedToWrite > 0) {
       onProgress(progress.totalBytesWritten / progress.totalBytesExpectedToWrite);
