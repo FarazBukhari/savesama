@@ -123,3 +123,63 @@ describe('mapPlayerResponse', () => {
     );
   });
 });
+
+describe('mapPlayerResponse — audio-only stream', () => {
+  it('exposes the adaptive AAC stream so audio saves skip the video download', () => {
+    const player = {
+      streamingData: {
+        formats: [
+          {
+            itag: 18,
+            mimeType: 'video/mp4; codecs="avc1.42001E, mp4a.40.2"',
+            url: 'https://yt/progressive.mp4',
+            width: 640,
+            height: 360,
+            bitrate: 568000,
+          },
+        ],
+        adaptiveFormats: [
+          {
+            itag: 140,
+            mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+            url: 'https://yt/audio-128k.m4a',
+            bitrate: 128000,
+          },
+          {
+            itag: 139,
+            mimeType: 'audio/mp4; codecs="mp4a.40.5"',
+            url: 'https://yt/audio-48k.m4a',
+            bitrate: 48000,
+          },
+        ],
+      },
+      videoDetails: { author: 'chan', title: 'vid' },
+    };
+    const result = mapPlayerResponse(player, 'abcdefghijk');
+    // Highest-bitrate AAC wins.
+    expect(result?.items[0].audioOnlyUrl).toBe('https://yt/audio-128k.m4a');
+  });
+
+  it('omits audioOnlyUrl when no adaptive AAC stream is offered', () => {
+    const player = {
+      streamingData: {
+        formats: [
+          {
+            itag: 18,
+            mimeType: 'video/mp4; codecs="avc1.42001E, mp4a.40.2"',
+            url: 'https://yt/progressive.mp4',
+            width: 640,
+            height: 360,
+            bitrate: 568000,
+          },
+        ],
+        // Opus/WebM only — unusable for a passthrough M4A.
+        adaptiveFormats: [
+          { itag: 251, mimeType: 'audio/webm; codecs="opus"', url: 'https://yt/a.webm', bitrate: 130000 },
+        ],
+      },
+      videoDetails: { author: 'chan', title: 'vid' },
+    };
+    expect(mapPlayerResponse(player, 'abcdefghijk')?.items[0].audioOnlyUrl).toBeUndefined();
+  });
+});

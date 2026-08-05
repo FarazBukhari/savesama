@@ -167,6 +167,11 @@ export function mapPlayerResponse(
   const url = asString(best['url']);
   if (!url) return null;
 
+  // Audio-only AAC stream: "Save as Audio" downloads this directly instead of
+  // pulling the whole video and stripping its audio track. Omitted rather than
+  // null when the video exposes no adaptive audio, so the fallback path applies.
+  const audioOnlyUrl = pickBestAdaptiveAudio(player);
+
   return {
     platform: 'youtube',
     shortcode: videoId,
@@ -180,6 +185,7 @@ export function mapPlayerResponse(
         height: asNumber(best['height']),
         platform: 'youtube',
         formats: buildFormats(player),
+        ...(audioOnlyUrl ? { audioOnlyUrl } : {}),
       } satisfies MediaItem,
     ],
     username: asString(getIn(player, ['videoDetails', 'author'])),
