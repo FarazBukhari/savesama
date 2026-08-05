@@ -1,5 +1,5 @@
-import { getIgFetcher } from '../services/instagramSession';
-import { decodeHtmlEntities, decodeJsonString, metaTagContent } from './html';
+import { getFetcher } from '../services/mediaSession';
+import { decodeHtmlEntities, decodeJsonString } from './html';
 import {
   CRAWLER_USER_AGENT,
   DESKTOP_USER_AGENT,
@@ -30,7 +30,6 @@ export async function extractInstagram(shortcode: string): Promise<ExtractionRes
   const strategies: ReadonlyArray<(code: string) => Promise<ExtractionResult | null>> = [
     fetchViaGraphQl,
     fetchViaEmbed,
-    fetchViaOgTags,
   ];
 
   let lastError: unknown = null;
@@ -50,7 +49,7 @@ export async function extractInstagram(shortcode: string): Promise<ExtractionRes
 }
 
 async function extractViaAuthenticatedFetch(shortcode: string): Promise<ExtractionResult | null> {
-  const fetcher = getIgFetcher();
+  const fetcher = getFetcher('instagram');
   if (!fetcher) return null;
 
   const mediaId = shortcodeToMediaId(shortcode);
@@ -227,31 +226,4 @@ export function parseEmbedHtml(html: string, shortcode: string): ExtractionResul
 function firstJsonString(html: string, pattern: RegExp): string | null {
   const match = html.match(pattern);
   return match ? decodeJsonString(match[1]) : null;
-}
-
-async function fetchViaOgTags(shortcode: string): Promise<ExtractionResult | null> {
-  const html = await fetchHtml(`https://www.instagram.com/p/${shortcode}/`);
-  if (!html) return null;
-
-  const videoUrl = metaTagContent(html, 'og:video');
-  const imageUrl = metaTagContent(html, 'og:image');
-  const url = videoUrl ?? imageUrl;
-  if (!url) return null;
-
-  return {
-    platform: 'instagram',
-    shortcode,
-    items: [
-      {
-        id: shortcode,
-        type: videoUrl ? 'video' : 'image',
-        url,
-        thumbnailUrl: imageUrl,
-        width: null,
-        height: null,
-      },
-    ],
-    username: null,
-    caption: null,
-  };
 }

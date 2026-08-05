@@ -1,6 +1,10 @@
 name: Build APK
 
 on:
+  # Automatic builds only for main (direct pushes and merged PRs). Other branches
+  # build on demand via the Actions tab / `gh workflow run`.
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       profile:
@@ -15,6 +19,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # A push event carries no inputs, so the workflow_dispatch `default` does not
+    # apply — fall back to it explicitly or eas gets an empty --profile.
+    env:
+      PROFILE: ${{ inputs.profile || 'preview' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -44,10 +52,10 @@ jobs:
         run: npm ci
 
       - name: Compute APK name
-        run: echo "APK_BASENAME=foxy-downloader-${{ inputs.profile }}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+        run: echo "APK_BASENAME=foxy-downloader-${PROFILE}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - name: Build APK
-        run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output "${{ github.workspace }}/${APK_BASENAME}.apk"
+        run: eas build --platform android --profile "$PROFILE" --local --non-interactive --output "${{ github.workspace }}/${APK_BASENAME}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
