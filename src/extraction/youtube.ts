@@ -87,15 +87,39 @@ export function resetYouTubeVisitorDataCache(): void {
   cachedVisitorData = null;
 }
 
-export async function extractYouTube(videoId: string): Promise<ExtractionResult> {
-  let player = await requestPlayer(videoId, false);
+/**
+ * Waits between bot-check retries. The check is IP-based rate limiting, so an
+ * immediate retry tends to hit the same wall — a short pause clears it far more
+ * often than retrying instantly does. Bounded to ~3.3s of added latency in the
+ * worst case so a genuinely blocked network still fails promptly.
+ */
+const BOT_CHECK_RETRY_DELAYS_MS = [800, 2500];
 
+export interface YouTubeExtractOptions {
+  /** Test seam: replaces the backoff wait so suites don't sleep for real. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function extractYouTube(
+  videoId: string,
+  options: YouTubeExtractOptions = {}
+): Promise<ExtractionResult> {
+  const sleep = options.sleep ?? defaultSleep;
+
+  let player = await requestPlayer(videoId, false);
   let result = mapPlayerResponse(player, videoId);
   if (result) return result;
 
-  // A bot-check usually means a missing/stale session token — refresh the
-  // visitorData once and retry before giving up.
-  if (isBotCheck(player)) {
+  // A bot-check usually means a missing/stale session token, or simply too many
+  // requests from this IP. Refresh the visitorData and retry with backoff before
+  // giving up; anything that isn't a bot check fails immediately.
+  for (const delay of BOT_CHECK_RETRY_DELAYS_MS) {
+    if (!isBotCheck(player)) break;
+    await sleep(delay);
     player = await requestPlayer(videoId, true);
     result = mapPlayerResponse(player, videoId);
     if (result) return result;
