@@ -43,6 +43,9 @@ function makeResponse(bodyText: string, url: string): Response {
   } as unknown as Response;
 }
 
+/** Skips the real backoff wait. */
+const noSleep = async () => {};
+
 describe('extractYouTube fetch path', () => {
   let calls: MockCall[];
 
@@ -112,17 +115,60 @@ describe('extractYouTube fetch path', () => {
     // First player call is bot-checked; second (after refresh) succeeds.
     mockFetch((i) => JSON.stringify(i === 0 ? BOT_CHECK_FIXTURE : PLAYER_FIXTURE));
 
-    const result = await extractYouTube('dQw4w9WgXcQ');
+    const result = await extractYouTube('dQw4w9WgXcQ', { sleep: noSleep });
     expect(result.items[0].url).toBe('https://r3.example/videoplayback?itag=18');
 
     const playerCalls = calls.filter((c) => c.url.includes('/youtubei/v1/player'));
     expect(playerCalls).toHaveLength(2);
   });
 
+  it('backs off between bot-check retries instead of hammering the same block', async () => {
+    // The check is IP-based rate limiting, so an instant retry usually hits the
+    // same wall. Two bot-checks then success = two waits, growing.
+    mockFetch((i) => JSON.stringify(i < 2 ? BOT_CHECK_FIXTURE : PLAYER_FIXTURE));
+    const waits: number[] = [];
+
+    const result = await extractYouTube('dQw4w9WgXcQ', {
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+    });
+
+    expect(result.items[0].url).toBe('https://r3.example/videoplayback?itag=18');
+    expect(waits).toEqual([800, 2500]);
+    expect(calls.filter((c) => c.url.includes('/youtubei/v1/player'))).toHaveLength(3);
+  });
+
+  it('refreshes visitorData on every bot-check retry', async () => {
+    mockFetch((i) => JSON.stringify(i < 2 ? BOT_CHECK_FIXTURE : PLAYER_FIXTURE));
+
+    await extractYouTube('dQw4w9WgXcQ', { sleep: noSleep });
+
+    // One initial fetch plus one per retry — a stale token is a common cause.
+    expect(calls.filter((c) => c.url.includes('/youtubei/v1/visitor_id'))).toHaveLength(3);
+  });
+
+  it('does not retry or wait for a non-bot-check failure', async () => {
+    // Age/privacy walls won't clear on retry; retrying just delays the message.
+    mockFetch(() => JSON.stringify(LOGIN_REQUIRED_FIXTURE));
+    const waits: number[] = [];
+
+    await expect(
+      extractYouTube('dQw4w9WgXcQ', {
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+      })
+    ).rejects.toMatchObject({ userMessage: expect.stringContaining('sign-in') });
+
+    expect(waits).toEqual([]);
+    expect(calls.filter((c) => c.url.includes('/youtubei/v1/player'))).toHaveLength(1);
+  });
+
   it('surfaces a sign-in message for age-restricted/private videos', async () => {
     mockFetch(() => JSON.stringify(LOGIN_REQUIRED_FIXTURE));
 
-    await expect(extractYouTube('dQw4w9WgXcQ')).rejects.toMatchObject({
+    await expect(extractYouTube('dQw4w9WgXcQ', { sleep: noSleep })).rejects.toMatchObject({
       userMessage: expect.stringContaining('sign-in'),
     });
   });
@@ -130,8 +176,10 @@ describe('extractYouTube fetch path', () => {
   it('reports a persistent "not a bot" check as a transient, retryable block', async () => {
     mockFetch(() => JSON.stringify(BOT_CHECK_FIXTURE));
 
-    await expect(extractYouTube('dQw4w9WgXcQ')).rejects.toMatchObject({
+    await expect(extractYouTube('dQw4w9WgXcQ', { sleep: noSleep })).rejects.toMatchObject({
       userMessage: expect.stringContaining('temporarily blocking'),
     });
+    // Bounded: the initial call plus one per configured backoff step.
+    expect(calls.filter((c) => c.url.includes('/youtubei/v1/player'))).toHaveLength(3);
   });
 });
