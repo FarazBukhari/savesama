@@ -12,14 +12,30 @@ import { LinkInput } from '../components/LinkInput';
 import { ItemDownloadState, MediaCard } from '../components/MediaCard';
 import { extractMedia } from '../extraction/extract';
 import { ExtractionError, ExtractionResult, MediaItem } from '../extraction/types';
-import { DownloadError, downloadAudioToGallery, downloadToGallery } from '../services/download';
+import { DownloadError } from '../services/download';
+import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
+import { useDownloadJobs } from '../hooks/useDownloadJobs';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 
-function stateKey(item: MediaItem, format: 'video' | 'audio' = 'video'): string {
-  return item.type === 'video' ? `${item.id}:${format}` : item.id;
-}
-
 const IDLE_STATE: ItemDownloadState = { status: 'idle', progress: 0 };
+
+/**
+ * Projects queue jobs onto the per-item state MediaCard renders. 'active' becomes
+ * 'downloading'; a cancelled job reads as idle so it can simply be re-queued.
+ */
+function jobsToStates(jobs: DownloadJob[]): Record<string, ItemDownloadState> {
+  const states: Record<string, ItemDownloadState> = {};
+  for (const job of jobs) {
+    const status: ItemDownloadState['status'] =
+      job.status === 'active'
+        ? 'downloading'
+        : job.status === 'cancelled'
+          ? 'idle'
+          : job.status;
+    states[job.id] = { status, progress: job.progress };
+  }
+  return states;
+}
 
 function friendlyMessage(error: unknown): string {
   if (error instanceof ExtractionError || error instanceof DownloadError) {
@@ -41,15 +57,17 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractionResult | null>(null);
-  const [downloads, setDownloads] = useState<Record<string, ItemDownloadState>>({});
   const [modalItem, setModalItem] = useState<MediaItem | null>(null);
+  // Download state lives in the queue module, not here, so a download outlives
+  // this screen's re-renders and tab switches.
+  const jobs = useDownloadJobs();
+  const downloads = jobsToStates(jobs);
 
   const runExtraction = useCallback(async (text: string) => {
     Keyboard.dismiss();
     setBusy(true);
     setError(null);
     setResult(null);
-    setDownloads({});
     try {
       const extraction = await extractMedia(text);
       setResult(extraction);
@@ -85,29 +103,17 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   }, [linkText, runExtraction]);
 
   const handleDownload = useCallback(
-    async (item: MediaItem, format: 'video' | 'audio' = 'video') => {
-      const key = stateKey(item, format);
-      setDownloads((previous) => ({
-        ...previous,
-        [key]: { status: 'downloading', progress: 0 },
-      }));
-      try {
-        const downloader = format === 'audio' ? downloadAudioToGallery : downloadToGallery;
-        await downloader(item, (fraction) => {
-          setDownloads((previous) => ({
-            ...previous,
-            [key]: { status: 'downloading', progress: fraction },
-          }));
-        });
-        setDownloads((previous) => ({ ...previous, [key]: { status: 'done', progress: 1 } }));
-        onSaved?.();
-      } catch (downloadError) {
-        setDownloads((previous) => ({ ...previous, [key]: { status: 'error', progress: 0 } }));
-        setError(friendlyMessage(downloadError));
-      }
+    (item: MediaItem, format: 'video' | 'audio' = 'video') => {
+      setError(null);
+      enqueueDownload(item, format, { onSaved });
     },
     [onSaved]
   );
+
+  const handleCancel = useCallback((item: MediaItem) => {
+    cancelDownload(jobId(item, 'video'));
+    cancelDownload(jobId(item, 'audio'));
+  }, []);
 
   const handleSavePress = useCallback(
     (item: MediaItem) => {
@@ -120,20 +126,20 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
     [handleDownload]
   );
 
-  const handleDownloadAll = useCallback(async () => {
+  const handleDownloadAll = useCallback(() => {
     if (!result) return;
     setError(null);
+    // Queue them all; the runner drains them one at a time.
     for (const item of result.items) {
-      const key = stateKey(item, 'video');
-      const state = downloads[key] ?? IDLE_STATE;
-      if (state.status === 'done' || state.status === 'downloading') continue;
-      await handleDownload(item, 'video');
+      const state = downloads[jobId(item, 'video')] ?? IDLE_STATE;
+      if (state.status === 'done' || state.status === 'downloading' || state.status === 'queued') continue;
+      enqueueDownload(item, 'video', { onSaved });
     }
-  }, [result, downloads, handleDownload]);
+  }, [result, downloads, onSaved]);
 
   const pendingCount = result
     ? result.items.filter(
-        (item) => (downloads[stateKey(item, 'video')] ?? IDLE_STATE).status !== 'done'
+        (item) => (downloads[jobId(item, 'video')] ?? IDLE_STATE).status !== 'done'
       ).length
     : 0;
 
@@ -185,7 +191,8 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
               <MediaCard
                 key={item.id}
                 item={item}
-                state={downloads[stateKey(item, 'video')] ?? IDLE_STATE}
+                state={downloads[jobId(item, 'video')] ?? IDLE_STATE}
+                onCancel={handleCancel}
                 onDownload={handleSavePress}
               />
             ))}
@@ -198,8 +205,8 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
       {modalItem ? (
         <FormatChoiceModal
           visible
-          videoState={downloads[stateKey(modalItem, 'video')] ?? IDLE_STATE}
-          audioState={downloads[stateKey(modalItem, 'audio')] ?? IDLE_STATE}
+          videoState={downloads[jobId(modalItem, 'video')] ?? IDLE_STATE}
+          audioState={downloads[jobId(modalItem, 'audio')] ?? IDLE_STATE}
           onSaveVideo={() => void handleDownload(modalItem, 'video')}
           onSaveAudio={() => void handleDownload(modalItem, 'audio')}
           onClose={() => setModalItem(null)}

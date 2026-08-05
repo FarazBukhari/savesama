@@ -4,7 +4,7 @@ import { MediaItem } from '../extraction/types';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 import { PressableScale } from './PressableScale';
 
-export type DownloadStatus = 'idle' | 'downloading' | 'done' | 'error';
+export type DownloadStatus = 'idle' | 'queued' | 'downloading' | 'done' | 'error';
 
 export interface ItemDownloadState {
   status: DownloadStatus;
@@ -15,9 +15,11 @@ interface MediaCardProps {
   item: MediaItem;
   state: ItemDownloadState;
   onDownload: (item: MediaItem) => void;
+  /** Removes a still-queued download. Absent for cards that can't be cancelled. */
+  onCancel?: (item: MediaItem) => void;
 }
 
-export function MediaCard({ item, state, onDownload }: MediaCardProps) {
+export function MediaCard({ item, state, onDownload, onCancel }: MediaCardProps) {
   const isVideo = item.type === 'video';
 
   return (
@@ -55,7 +57,12 @@ export function MediaCard({ item, state, onDownload }: MediaCardProps) {
         ) : null}
       </View>
 
-      <DownloadAction state={state} onPress={() => onDownload(item)} reopenable={isVideo} />
+      <DownloadAction
+        state={state}
+        onPress={() => onDownload(item)}
+        onCancelPress={onCancel ? () => onCancel(item) : undefined}
+        reopenable={isVideo}
+      />
     </View>
   );
 }
@@ -63,12 +70,31 @@ export function MediaCard({ item, state, onDownload }: MediaCardProps) {
 function DownloadAction({
   state,
   onPress,
+  onCancelPress,
   reopenable = false,
 }: {
   state: ItemDownloadState;
   onPress: () => void;
+  onCancelPress?: () => void;
   reopenable?: boolean;
 }) {
+  // Queued behind another download: the runner takes one job at a time. Tapping
+  // removes it from the queue (the in-flight job can't be cancelled — see
+  // downloadQueue.ts).
+  if (state.status === 'queued') {
+    if (onCancelPress) {
+      return (
+        <PressableScale style={styles.actionArea} onPress={onCancelPress} accessibilityRole="button">
+          <Text style={styles.queuedLabel}>Queued · tap to cancel</Text>
+        </PressableScale>
+      );
+    }
+    return (
+      <View style={styles.actionArea}>
+        <Text style={styles.queuedLabel}>Queued</Text>
+      </View>
+    );
+  }
   if (state.status === 'downloading') {
     return (
       <View style={styles.actionArea}>
@@ -182,6 +208,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.sm,
+  },
+  queuedLabel: {
+    fontSize: typography.small,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   progressLabel: {
     color: colors.accent,
