@@ -371,13 +371,58 @@ At download time `src/services/resolutionPlan.ts` `planVideoDownload` turns the 
 target for the source's actual orientation (up to `1920x1080`), and it **copies the file
 through unchanged** when the source is already at/below the target — no pointless lossy
 re-encode (this covers the Instagram embed/og fallback paths, whose dimensions are
-unknown at plan time). On **Android** the pipeline (`MediaCodec`→GL-scale→encoder) is a
-device-sensitive follow-up: the module exposes `isTranscodeSupported()` (`false` there),
-the download layer skips the native call and saves the closest available rendition, and
-the Settings chooser sublabel says "Picks the closest available quality" instead of
-promising a downscale. A *real* transcode failure on a supported platform surfaces as a
-`DownloadError` rather than being silently swallowed. Instagram's authenticated API
-already exposes a `video_versions` ladder, so it usually needs no transcode.
+unknown at plan time). **Android** uses **Media3 Transformer** (`androidx.media3:media3-transformer`,
+pinned with `media3-effect`/`media3-common` at one version in the module's `build.gradle`),
+so `isTranscodeSupported()` is now `true` on both platforms.
+
+⚠️ **`targetHeight` means the SHORT side**, not the literal height — "480p" = shorter
+dimension near 480, whatever the orientation. `resolutionPlan.ts` (`effectiveResolution`),
+the Swift, and the Kotlin all agree on this, and they must keep agreeing. Media3's
+`Presentation.createForHeight` is *height*-based, so it is deliberately **not** used: a
+portrait 716x1274 reel at a 480 target would come out 270x480 — over-shrunk by the aspect
+ratio. The Kotlin instead reads orientation-corrected dimensions via
+`MediaMetadataRetriever` (a 90°/270° rotation means swapping raw width/height), computes an
+even-pixel output box, and passes it to `Presentation.createForWidthAndHeight(..., LAYOUT_SCALE_TO_FIT)`.
+Odd dimensions are rounded down to even because many H.264 encoders reject them.
+
+Other Android specifics worth not rediscovering:
+
+- Transformer must be built, started, and listened to on **one Looper thread**; Expo runs
+  `AsyncFunction` bodies off the main thread, so the call hops to the main looper first.
+- Nearly every Transformer/effect class is `@UnstableApi`, so the Kotlin needs
+  `@OptIn(UnstableApi::class)` or it won't compile.
+- `ExportException`s whose `errorCode` is a decoder/encoder capability failure are
+  re-reported as **`ERR_TRANSCODE_UNSUPPORTED`**, which `downloadTranscoded` degrades on
+  (saves the original rather than failing the download). Any other export failure surfaces
+  as a real `DownloadError`, so transcoder regressions stay visible.
+
+**Instagram/Threads video always needs the transcode.** Their `video_versions` array looks
+like a quality ladder but is not: the entries are the *same* resolution and differ only by
+`type` (101/102/103). Verified August 2026:
+
+```
+pk 3956341135589369127: original 480x600   → video_versions [480x600 t101, 480x600 t102, 480x600 t103]
+pk 3956124961814886073: original 1088x1936 → video_versions [716x1274 t101, 716x1274 t102, 716x1274 t103]
+```
+
+So a capped video preference on those platforms can only be honoured by re-encoding — which
+is exactly why the feature appeared to do nothing on Android before this.
+
+
+### Photos honour the preference without any re-encoding
+
+`image_versions2.candidates` *is* a real ladder (640x1138, 480x854, 320x569, 240x427), so
+`pickImageUrl` just picks a rung — no transcoder involved. But the candidate list also
+contains **square centre-crops at the same short-side sizes** (640x640, 480x480, 320x320,
+240x240, 150x150). Ranking by size alone ties 480x854 with 480x480 for a 480 target, and
+choosing the crop would silently save a *cropped* photo. `buildImageFormats`
+(`instagramApi.ts`) therefore keeps only candidates whose aspect ratio matches the post's
+own (`original_width`/`original_height`, falling back to the largest candidate, which is
+always full-frame). There is a regression test asserting no crop is ever selected.
+
+Note the largest candidate is typically 640px on the short side, so a 720 or 1080 *photo*
+preference is a no-op that returns the original — correct, but don't describe it as
+"1080p photos".
 
 ---
 

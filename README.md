@@ -34,11 +34,13 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
   Threads posts (`/@user/post/<code>`, `/post/<code>`, `/t/<code>`, `/share/<token>`);
   YouTube watch/`youtu.be`/Shorts video links.
 - **Threads text-only posts** have nothing to download and say so.
-- **Selectable resolution (per platform).** Choose a default download quality for each
-  source on the **Settings** tab (360p up to 1080p, or "Max"). YouTube 1080p is assembled
-  on-device by muxing the separate video/audio streams; lower rungs are picked from the
-  quality ladder each source exposes. See [docs/MAINTENANCE.md](docs/MAINTENANCE.md)
-  §8–§9.
+- **Selectable resolution (per platform).** Choose a default download quality for
+  Instagram, Threads and YouTube on the **Settings** tab (360p up to 1080p, or "Max").
+  Photos pick a smaller rendition from the source's own ladder. YouTube picks a lower rung,
+  and assembles 1080p by muxing its separate video/audio streams. Instagram and Threads
+  publish only one video rendition, so a capped video preference is honoured by downscaling
+  on-device (slower, and the short side is what's matched — "480p" means the shorter
+  dimension lands near 480). See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §8–§9.
 - **Songs/audio pages aren't supported.** A `/reels/audio/<id>` link shows a clear
   "not supported" message — Instagram walls the audio asset for anonymous clients and
   never serves full licensed tracks (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §2b).
