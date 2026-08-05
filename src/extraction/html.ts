@@ -17,18 +17,3 @@ export function decodeJsonString(value: string): string {
     return value.replace(/\\u0026/g, '&').replace(/\\\//g, '/');
   }
 }
-
-/** Returns the decoded content of an og/meta tag like <meta property="og:video" content="..."> */
-export function metaTagContent(html: string, property: string): string | null {
-  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const propertyFirst = new RegExp(
-    `<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`,
-    'i'
-  );
-  const contentFirst = new RegExp(
-    `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`,
-    'i'
-  );
-  const match = html.match(propertyFirst) ?? html.match(contentFirst);
-  return match ? decodeHtmlEntities(match[1]) : null;
-}

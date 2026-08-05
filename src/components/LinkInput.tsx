@@ -27,7 +27,7 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
           onSubmitEditing={onSubmit}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Paste an Instagram or YouTube link"
+          placeholder="Paste an Instagram, Threads or YouTube link"
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
