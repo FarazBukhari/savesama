@@ -18,6 +18,7 @@ import {
   updateDownloadService,
 } from '../../modules/foxy-download-service';
 import { MediaItem } from '../extraction/types';
+import { CancelToken, createCancelToken, isCancelledError } from './cancellation';
 import { downloadAudioToGallery, downloadToGallery } from './download';
 import { ResolutionPref } from './preferences';
 
@@ -48,6 +49,8 @@ type Listener = (jobs: DownloadJob[]) => void;
 
 const jobs = new Map<string, DownloadJob>();
 const listeners = new Set<Listener>();
+/** Cancel token of the job currently in flight, so it can be aborted. */
+let activeToken: { id: string; token: CancelToken } | null = null;
 let running = false;
 
 /** Cached array so useSyncExternalStore's getSnapshot stays referentially stable. */
@@ -90,6 +93,12 @@ export interface EnqueueOptions {
   onSaved?: () => void;
   /** Overrides the platform's saved resolution for this download only. */
   resolution?: ResolutionPref;
+  /**
+   * Re-runs a job that already finished. Set when the user explicitly asks to save
+   * again — otherwise a completed job is left alone so "Save all" doesn't
+   * re-download everything.
+   */
+  force?: boolean;
 }
 
 /**
@@ -104,8 +113,13 @@ export function enqueueDownload(
 ): string {
   const id = jobId(item, format);
   const existing = jobs.get(id);
-  if (existing && (existing.status === 'queued' || existing.status === 'active' || existing.status === 'done')) {
-    return id;
+  if (existing) {
+    // In-flight work is never restarted.
+    if (existing.status === 'queued' || existing.status === 'active') return id;
+    // A finished job re-runs when asked explicitly, or when the quality changed —
+    // saving the same video at a different resolution is a different download.
+    const qualityChanged = existing.status === 'done' && existing.resolution !== options.resolution;
+    if (existing.status === 'done' && !options.force && !qualityChanged) return id;
   }
 
   jobs.set(id, {
@@ -122,18 +136,28 @@ export function enqueueDownload(
 }
 
 /**
- * Removes a job that has not started yet.
+ * Cancels a job, queued or in flight.
  *
- * The in-flight job is deliberately NOT cancellable: expo-file-system's download
- * handle is not currently threaded out to here, and the native mux/transcode steps
- * cannot be interrupted mid-call. Cancelling the active job would leave partial
- * files whose cleanup we could not guarantee, so it is refused rather than faked.
+ * A queued job is simply marked. The active job's cancel token aborts its HTTP
+ * transfer immediately; a native mux/transcode already in progress can't be
+ * interrupted, so cancellation takes effect when that call returns — either way the
+ * file is never saved and the download's own cleanup removes the cache files.
  */
 export function cancelDownload(id: string): boolean {
   const job = jobs.get(id);
-  if (!job || job.status !== 'queued') return false;
-  update(id, { status: 'cancelled' });
-  return true;
+  if (!job) return false;
+
+  if (job.status === 'queued') {
+    update(id, { status: 'cancelled' });
+    return true;
+  }
+
+  if (job.status === 'active' && activeToken?.id === id) {
+    activeToken.token.cancel();
+    return true;
+  }
+
+  return false;
 }
 
 /** Drops finished/failed jobs so the list doesn't grow without bound. */
@@ -172,19 +196,25 @@ async function run(options: EnqueueOptions): Promise<void> {
         update(job.id, { progress: fraction });
         if (serviceActive) updateDownloadService(serviceTitle(), fraction);
       };
+      const token = createCancelToken();
+      activeToken = { id: job.id, token };
       try {
         // Audio has no resolution to pick — the stream is whatever the source serves.
         await (job.format === 'audio'
-          ? downloadAudioToGallery(job.item, onProgress)
-          : downloadToGallery(job.item, onProgress, job.resolution));
+          ? downloadAudioToGallery(job.item, onProgress, token)
+          : downloadToGallery(job.item, onProgress, job.resolution, token));
         update(job.id, { status: 'done', progress: 1 });
         options.onSaved?.();
       } catch (error) {
-        update(job.id, {
-          status: 'error',
-          progress: 0,
-          error: describeError(error),
-        });
+        // A cancellation is the user's own doing, not a failure to report.
+        update(
+          job.id,
+          isCancelledError(error)
+            ? { status: 'cancelled', progress: 0 }
+            : { status: 'error', progress: 0, error: describeError(error) }
+        );
+      } finally {
+        activeToken = null;
       }
     }
   } finally {
@@ -220,4 +250,5 @@ export function resetDownloadQueueForTests(): void {
   listeners.clear();
   snapshot = [];
   running = false;
+  activeToken = null;
 }

@@ -1,4 +1,5 @@
 import { MediaItem } from '../../extraction/types';
+import { CancelToken, CancelledError } from '../cancellation';
 
 // `mock`-prefixed names are the only ones jest.mock's factory may close over.
 const mockDownloadToGallery = jest.fn();
@@ -189,22 +190,51 @@ describe('cancelDownload', () => {
     expect(downloadToGallery).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses to cancel the in-flight job', async () => {
-    // Cancelling mid-download would leave partial files we can't reliably clean up.
-    let release = () => {};
+  it('cancels the in-flight job through its cancel token', async () => {
+    // The downloader observes the token and rejects with CancelledError, exactly as
+    // the real download paths do at their checkpoints.
+    let capturedToken: CancelToken | undefined;
     downloadToGallery.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        release = resolve;
-      })
+      (_item: MediaItem, _onProgress: unknown, _res: unknown, token: CancelToken) =>
+        new Promise<void>((_resolve, reject) => {
+          capturedToken = token;
+          token.onCancel(() => reject(new CancelledError()));
+        })
     );
+
     enqueueDownload(videoItem('a'));
     await Promise.resolve();
     await Promise.resolve();
-
     expect(getDownloadJob('a:video')?.status).toBe('active');
-    expect(cancelDownload('a:video')).toBe(false);
-    release();
+
+    expect(cancelDownload('a:video')).toBe(true);
+    expect(capturedToken?.cancelled).toBe(true);
     await drain();
+
+    // A cancellation is the user's own doing — not surfaced as an error.
+    expect(getDownloadJob('a:video')?.status).toBe('cancelled');
+    expect(getDownloadJob('a:video')?.error).toBeUndefined();
+  });
+
+  it('keeps draining after a cancellation', async () => {
+    let first = true;
+    downloadToGallery.mockImplementation(
+      (_item: MediaItem, _onProgress: unknown, _res: unknown, token: CancelToken) => {
+        if (!first) return Promise.resolve();
+        first = false;
+        return new Promise<void>((_resolve, reject) => {
+          token.onCancel(() => reject(new CancelledError()));
+          setTimeout(() => cancelDownload('a:video'), 0);
+        });
+      }
+    );
+
+    enqueueDownload(videoItem('a'));
+    enqueueDownload(videoItem('b'));
+    await drain();
+
+    expect(getDownloadJob('a:video')?.status).toBe('cancelled');
+    expect(getDownloadJob('b:video')?.status).toBe('done');
   });
 
   it('returns false for an unknown job', () => {
@@ -237,7 +267,8 @@ describe('per-download resolution override', () => {
     expect(downloadToGallery).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a' }),
       expect.any(Function),
-      '720'
+      '720',
+      expect.anything()
     );
   });
 
@@ -247,7 +278,8 @@ describe('per-download resolution override', () => {
     expect(downloadToGallery).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a' }),
       expect.any(Function),
-      undefined
+      undefined,
+      expect.anything()
     );
   });
 
@@ -257,7 +289,57 @@ describe('per-download resolution override', () => {
     await drain();
     expect(downloadAudioToGallery).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a' }),
-      expect.any(Function)
+      expect.any(Function),
+      expect.anything()
     );
+  });
+});
+
+describe('re-downloading a finished job', () => {
+  it('re-runs when the quality changed', async () => {
+    // Saving the same video at a different resolution is a different download; the
+    // Saved badge must not be a dead end.
+    enqueueDownload(videoItem('a'), 'video', { resolution: 'max' });
+    await drain();
+    expect(downloadToGallery).toHaveBeenCalledTimes(1);
+
+    enqueueDownload(videoItem('a'), 'video', { resolution: '480' });
+    await drain();
+    expect(downloadToGallery).toHaveBeenCalledTimes(2);
+    expect(getDownloadJob('a:video')?.resolution).toBe('480');
+  });
+
+  it('re-runs on an explicit force even at the same quality', async () => {
+    enqueueDownload(videoItem('a'), 'video', { resolution: '480' });
+    await drain();
+    enqueueDownload(videoItem('a'), 'video', { resolution: '480', force: true });
+    await drain();
+    expect(downloadToGallery).toHaveBeenCalledTimes(2);
+  });
+
+  it('still ignores an unforced re-queue at the same quality', async () => {
+    // "Save all" relies on this so it doesn't re-download what's already saved.
+    enqueueDownload(videoItem('a'), 'video', { resolution: '480' });
+    await drain();
+    enqueueDownload(videoItem('a'), 'video', { resolution: '480' });
+    await drain();
+    expect(downloadToGallery).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-runs a cancelled job without needing force', async () => {
+    downloadToGallery.mockImplementationOnce(
+      (_item: MediaItem, _onProgress: unknown, _res: unknown, token: CancelToken) =>
+        new Promise<void>((_resolve, reject) => {
+          token.onCancel(() => reject(new CancelledError()));
+          setTimeout(() => cancelDownload('a:video'), 0);
+        })
+    );
+    enqueueDownload(videoItem('a'));
+    await drain();
+    expect(getDownloadJob('a:video')?.status).toBe('cancelled');
+
+    enqueueDownload(videoItem('a'));
+    await drain();
+    expect(getDownloadJob('a:video')?.status).toBe('done');
   });
 });

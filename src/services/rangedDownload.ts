@@ -1,6 +1,8 @@
 import { File } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { CancelToken } from './cancellation';
+
 /**
  * Splits a download across several parallel HTTP range requests and joins the
  * parts back into one file.
@@ -88,7 +90,8 @@ export interface RangedDownloadDeps {
     url: string,
     fileUri: string,
     range: { start: number; end: number },
-    onBytes: (bytesWritten: number) => void
+    onBytes: (bytesWritten: number) => void,
+    token?: CancelToken
   ) => Promise<void>;
   /** Concatenates `parts` into `destUri`, in order. */
   concatenate: (parts: string[], destUri: string) => Promise<void>;
@@ -109,7 +112,8 @@ export async function runRangedDownload(
   totalBytes: number,
   onProgress: (fraction: number) => void,
   deps: RangedDownloadDeps,
-  connections: number = DEFAULT_CONNECTIONS
+  connections: number = DEFAULT_CONNECTIONS,
+  token?: CancelToken
 ): Promise<void> {
   const ranges = planRanges(totalBytes, connections);
   const partUris = ranges.map((_, index) => `${destUri}.part${index}`);
@@ -125,12 +129,20 @@ export async function runRangedDownload(
   try {
     await Promise.all(
       ranges.map((range, index) =>
-        deps.downloadRange(url, partUris[index], range, (bytes) => {
-          written[index] = bytes;
-          report();
-        })
+        deps.downloadRange(
+          url,
+          partUris[index],
+          range,
+          (bytes) => {
+            written[index] = bytes;
+            report();
+          },
+          token
+        )
       )
     );
+    // Joining is the expensive tail; don't do it for a download the user cancelled.
+    token?.throwIfCancelled();
     await deps.concatenate(partUris, destUri);
     onProgress(1);
   } catch (error) {
@@ -144,14 +156,23 @@ export async function runRangedDownload(
 
 /** Real filesystem/network implementations of {@link RangedDownloadDeps}. */
 export const fileSystemDeps: RangedDownloadDeps = {
-  async downloadRange(url, fileUri, range, onBytes) {
+  async downloadRange(url, fileUri, range, onBytes, token) {
     const download = FileSystem.createDownloadResumable(
       url,
       fileUri,
       { headers: { Range: `bytes=${range.start}-${range.end}` } },
       (progress) => onBytes(progress.totalBytesWritten)
     );
-    const result = await download.downloadAsync();
+    const unregister = token?.onCancel(() => {
+      void download.cancelAsync().catch(() => undefined);
+    });
+    let result;
+    try {
+      result = await download.downloadAsync();
+    } finally {
+      unregister?.();
+    }
+    token?.throwIfCancelled();
     if (!result || result.status < 200 || result.status >= 300) {
       throw new Error(`range ${range.start}-${range.end} returned ${result?.status ?? 'unknown'}`);
     }

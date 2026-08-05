@@ -53,3 +53,34 @@ describe('pickDashAudioUrl', () => {
     expect(pickDashAudioUrl(MANIFEST.slice(0, MANIFEST.length / 2))).toBeNull();
   });
 });
+
+describe('pickDashAudioUrl — XML entity decoding', () => {
+  // Meta's real BaseURLs are signed and carry query strings, so every `&` arrives
+  // escaped as `&amp;`. Leaving them encoded makes the CDN answer 403 — verified
+  // against a live manifest whose raw URL had 11 of them.
+  const SIGNED = `<MPD><Period><AdaptationSet contentType="audio">
+    <Representation bandwidth="62303" codecs="mp4a.40.5" mimeType="audio/mp4">
+      <BaseURL>https://cdn.fbcdn.net/v/audio.m4a?efg=eyJ2IjoxfQ&amp;_nc_ht=cdn&amp;oh=00_AbC&amp;oe=68A1</BaseURL>
+    </Representation></AdaptationSet></Period></MPD>`;
+
+  it('decodes &amp; so the signed URL is usable', () => {
+    const url = pickDashAudioUrl(SIGNED);
+    expect(url).toBe(
+      'https://cdn.fbcdn.net/v/audio.m4a?efg=eyJ2IjoxfQ&_nc_ht=cdn&oh=00_AbC&oe=68A1'
+    );
+    expect(url).not.toContain('&amp;');
+  });
+
+  it('decodes the other XML entities and numeric references', () => {
+    const manifest = SIGNED.replace(
+      'oe=68A1',
+      'a=&lt;&gt;&quot;&apos;&#61;&#x41;'
+    );
+    expect(pickDashAudioUrl(manifest)).toContain('a=<>"\'=A');
+  });
+
+  it('does not double-decode: &amp;lt; stays a literal &lt;', () => {
+    const manifest = SIGNED.replace('oe=68A1', 'q=&amp;lt;');
+    expect(pickDashAudioUrl(manifest)).toContain('q=&lt;');
+  });
+});

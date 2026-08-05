@@ -32,6 +32,26 @@ interface DashRepresentation {
   codecs: string | null;
 }
 
+/**
+ * Decodes the XML entities Meta escapes inside `<BaseURL>`.
+ *
+ * ⚠️ This is not cosmetic. The URLs carry query strings, so every `&` arrives as
+ * `&amp;` — a signed URL with 11 of them answers **403** until they are decoded.
+ * (A browser's DOMParser does this implicitly, which is exactly why a devtools probe
+ * of the same manifest succeeds while the app's regex-parsed URL fails.)
+ */
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, code: string) => String.fromCharCode(parseInt(code, 16)))
+    // &amp; last: decoding it earlier would let "&amp;lt;" turn into "<".
+    .replace(/&amp;/g, '&');
+}
+
 function attribute(tag: string, name: string): string | null {
   // \b guards against `width` matching inside `bandwidth`.
   const match = tag.match(new RegExp(`\\b${name}="([^"]*)"`));
@@ -63,7 +83,7 @@ function representations(block: string): DashRepresentation[] {
     const baseUrl = slice.match(/<BaseURL>([^<]+)<\/BaseURL>/);
     if (baseUrl) {
       reps.push({
-        url: baseUrl[1].trim(),
+        url: decodeXmlEntities(baseUrl[1].trim()),
         bandwidth: Number(attribute(openTag, 'bandwidth') ?? 0),
         codecs: attribute(openTag, 'codecs'),
       });
