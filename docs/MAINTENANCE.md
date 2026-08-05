@@ -120,9 +120,9 @@ this in [`urlParser.test.ts`](../src/extraction/__tests__/urlParser.test.ts).
 **If you ever wire up song pages:** a small backend or an in-app WebView using the
 user's own session.
 
-Note this is **separate** from "Save as Audio" (§7): that feature extracts the audio
-track from a **reel** the user already downloaded — it doesn't touch song-page links.
-Saving audio from a reel works today and needs no auth.
+Note this is **separate** from "Save as Audio" (§7, §11): that feature saves the audio of a
+**reel/video** the user is downloading — it doesn't touch song-page links. It works today and
+needs no auth, and as of §11 it downloads only the audio stream rather than the whole video.
 
 ---
 
@@ -396,17 +396,38 @@ Other Android specifics worth not rediscovering:
   (saves the original rather than failing the download). Any other export failure surfaces
   as a real `DownloadError`, so transcoder regressions stay visible.
 
-**Instagram/Threads video always needs the transcode.** Their `video_versions` array looks
-like a quality ladder but is not: the entries are the *same* resolution and differ only by
-`type` (101/102/103). Verified August 2026:
+**Instagram/Threads video: `video_versions` is not a ladder, but a ladder does exist.**
+
+`video_versions` looks like a quality ladder and is not — its entries are the *same*
+resolution, differing only by `type` (101/102/103). Verified August 2026:
 
 ```
 pk 3956341135589369127: original 480x600   → video_versions [480x600 t101, 480x600 t102, 480x600 t103]
 pk 3956124961814886073: original 1088x1936 → video_versions [716x1274 t101, 716x1274 t102, 716x1274 t103]
 ```
 
-So a capped video preference on those platforms can only be honoured by re-encoding — which
-is exactly why the feature appeared to do nothing on Android before this.
+A real ladder *is* published, in the `video_dash_manifest` field on the same payload — and
+it includes the full original the muxed renditions don't expose:
+
+```
+video_versions → 716x1274 only
+DASH manifest  → 540x960 @203kbps, 716x1274 @302/408/591/823/1129/1609kbps, 1088x1936 @2612kbps
+```
+
+⚠️ We deliberately do **not** take video from the manifest. Those representations are
+**VP9**: iOS cannot carry VP9 in an MP4 at all, Android's `MediaMuxer` support for it is
+uneven, and gallery/player compatibility varies. Using them would mean either muxing
+VP9+AAC (compatibility risk) or transcoding to H.264 (slow) — so video still comes from
+`video_versions`, and a test in `instagramApi.test.ts` pins that.
+
+**Known, deliberately-deferred limitation:** because of the above, "Max" tops out at
+716x1274 for these posts even though a 1088x1936 rendition exists. Lifting that ceiling
+means solving the VP9 container problem first. This is a choice, not an oversight.
+
+Consequence for capped preferences: since only one muxed rendition is served, a target
+below it can only be honoured by re-encoding — which is exactly why the feature appeared to
+do nothing on Android before the transcoder existed. Only the manifest's *audio* stream is
+used (see §11).
 
 
 ### Photos honour the preference without any re-encoding
@@ -502,3 +523,134 @@ separately:
 - The media-info call: open threads.com logged-in in a desktop browser and run the `fetch`
   from step 2 in the devtools console. If that returns JSON but the app doesn't, the problem
   is in the WebView/session layer, not the recipe.
+
+---
+
+## 11. Audio-only downloads
+
+"Save as Audio" used to download the whole video and strip the track out. Both sources
+publish a standalone audio stream, so it now fetches only that — `item.audioOnlyUrl`.
+
+| Source | Where the audio stream comes from |
+| --- | --- |
+| YouTube | the adaptive AAC stream (itag 140), already parsed for the HD mux path |
+| Instagram / Threads | the `audio` AdaptationSet inside `video_dash_manifest` (AAC, ~62kbps) |
+
+Verified August 2026: a plain GET of Meta's audio `BaseURL` returns a **complete fragmented
+MP4** — `ftyp + moov + sidx + moof/mdat×7`, 105,100 bytes for 62.3kbps × 13.374s. So despite
+the `SegmentBase indexRange` attribute, **no range-driven segment assembly is needed**. That
+turns a 13s reel's audio save from ~1.8MB into ~105KB.
+
+[`dashManifest.ts`](../src/extraction/dashManifest.ts) reads the manifest with plain string
+matching — React Native has no `DOMParser` and one field doesn't justify an XML dependency.
+Tests use the verbatim tag shape from a live manifest.
+
+Fallbacks that must stay:
+
+- Posts with `is_dash_eligible: 0` carry no manifest → `audioOnlyUrl` is absent and the old
+  download-then-strip path runs.
+- Meta's DASH audio is **HE-AAC** (`mp4a.40.5`) in a *fragmented* MP4, not the AAC-LC the
+  native remux normally sees. If `extractAudio` fails on it, the downloaded stream is saved
+  as-is — it is already a valid audio MP4, and a container preference isn't worth failing a
+  download over.
+
+⚠️ Regex gotcha when reading manifests: `width="` also matches inside `bandwidth="`. Use a
+`\b` word boundary (this bug produced nonsense dimensions during the original probe).
+
+---
+
+## 12. Download speed: parallel range requests
+
+A single connection to `googlevideo` / `fbcdn` is often slower than the link allows, so an
+85MB 1080p video takes far longer than its size suggests.
+[`rangedDownload.ts`](../src/services/rangedDownload.ts) splits anything over **4MB** into
+**4 concurrent byte ranges** and joins them. A 1-byte `Range: bytes=0-0` probe establishes
+size and range support first; without a `206` and a `content-range` total, the download falls
+back to one connection.
+
+⚠️ **Unmeasured.** The speedup is a reasoned expectation, not a benchmark — YouTube's bot
+check blocked repeated throughput probes from the dev machine. If a user reports no
+improvement, the bottleneck may simply be their bandwidth, in which case more connections
+move the same bytes in the same time.
+
+Two correctness traps, both already handled — don't reintroduce them:
+
+- **Never join parts as base64.** Base64 pads each part to a 4-character boundary, so
+  concatenating encoded parts corrupts everything after the first unless every part length is
+  a multiple of 3. Parts are streamed into one writer via SDK 56's
+  `File.readableStream()` / `writableStream()`, which also keeps peak memory at one chunk
+  instead of holding the whole file in JS.
+- **A server that ignores `Range` answers `200` with the whole file.** Concatenating that
+  with sibling parts yields a corrupt video, so a `200` on any range past the first is
+  treated as a failure.
+
+Any failure deletes every part *and* the partial output, then retries on a single connection.
+
+---
+
+## 13. The download queue and the background service
+
+[`downloadQueue.ts`](../src/services/downloadQueue.ts) owns download state at module level.
+`DownloadScreen` subscribes through `useDownloadJobs`, so progress survives tab switches and
+re-renders, and "Save all" queues everything at once instead of awaiting a loop.
+
+- **Jobs run one at a time on purpose.** Each download already fans out into 4 parallel
+  range requests; concurrent jobs would compete for the same bandwidth and make all of them
+  slower.
+- **The in-flight job cannot be cancelled** — queued ones can. `expo-file-system`'s download
+  handle isn't threaded out to the queue and the native mux/transcode calls can't be
+  interrupted mid-call, so cancelling the active job would leave partial files whose cleanup
+  couldn't be guaranteed. `cancelDownload` returns `false` for it rather than faking it.
+- Job identity is `item.id` for photos and `item.id:<format>` for videos, so a video's audio
+  and video saves are independent jobs.
+
+[`foxy-download-service`](../modules/foxy-download-service) is an Android **foreground
+service** that keeps the process alive while the queue drains. It downloads nothing: on
+Android the RN JS thread keeps running while backgrounded, and it is *process death* that
+interrupts a transfer. The notification a foreground service must post doubles as progress
+UI (silent LOW-importance channel).
+
+- No new npm dependency — the notification is built with `NotificationCompat` in Kotlin, so
+  `expo-notifications` isn't needed.
+- The service spans the whole drain, not each job, so the notification doesn't flicker and
+  the process is never briefly unprotected during hand-off to a follow-up runner.
+- `START_NOT_STICKY`: downloads are driven from JS, so a service restarted without that JS
+  state would show progress for work that isn't happening.
+- `requireNativeModule` is resolved **lazily**, not at import time. It throws when the native
+  side is absent (under jest, and in any dev build predating this module), and an import-time
+  throw would take down the whole queue.
+- **iOS is an explicit no-op** (`isSupported()` → false): backgrounded JS is suspended there,
+  so the equivalent needs a background `URLSession` owning the transfer.
+- `app.json` needs `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` and
+  `POST_NOTIFICATIONS`. Without the last one (Android 13+) the notification is silently not
+  shown, but the service still runs and downloads are unaffected.
+
+⚠️ This module means **a new dev build is required** — autolinking a native module can't be
+picked up by an existing one.
+
+---
+
+## 14. Per-download quality override
+
+Settings holds the per-platform default; the format sheet's "Video quality" row overrides it
+for one save. The override travels as `job.resolution` into `downloadToGallery(item,
+onProgress, override?)`, and is cleared when the sheet closes so it can't leak into the next
+save or into Settings. The row reads "Default · tap to change" or "Just this download" so the
+active mode is unambiguous.
+
+Audio gets no quality choice — the source serves one audio stream.
+
+---
+
+## 15. YouTube bot-check backoff
+
+`extractYouTube` retries a "confirm you're not a bot" response with a fresh `visitorData` and
+a **backoff** (800ms, then 2500ms), bounded to ~3.3s of extra latency. The check is IP-based
+rate limiting, so the previous instant retry usually hit the same wall. Non-bot-check
+failures (age/privacy walls) still fail immediately — retrying can't clear those.
+
+The wait is injectable (`extractYouTube(id, { sleep })`) so tests don't sleep for real.
+
+**The durable fix is a signed-in YouTube session**, which is now plumbable via
+`WebViewSessionResolver` (see §1/§10). Backoff only widens the window. Reproduction is easy:
+run a handful of extractions from one IP in quick succession.
