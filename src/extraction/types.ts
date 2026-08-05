@@ -52,6 +52,15 @@ export interface MediaItem {
   height: number | null;
   /** Which platform produced this item, so the download layer can pick the right preference. */
   platform?: SourcePlatform;
+  /**
+   * A standalone audio-only stream for this item, when the source publishes one:
+   * YouTube's adaptive AAC (itag 140) stream, or the audio `AdaptationSet` in the
+   * DASH manifest Instagram and Threads ship on video posts. "Save as Audio" uses
+   * it to skip downloading the video entirely — on a 13s reel that is ~105 KB
+   * instead of ~1.8 MB. Absent when the source only serves muxed files, in which
+   * case the audio track is stripped from the downloaded video as before.
+   */
+  audioOnlyUrl?: string | null;
   /** Full quality ladder when the source exposes one. Absent for images and single-URL fallbacks. */
   formats?: MediaFormat[];
 }

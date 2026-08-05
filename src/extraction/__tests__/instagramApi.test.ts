@@ -216,3 +216,45 @@ describe('mapMediaInfo — photo quality ladder', () => {
     expect(mapMediaInfo(single, 'ONE')?.items[0].formats).toBeUndefined();
   });
 });
+
+describe('mapMediaInfo — DASH audio stream', () => {
+  const withManifest = (manifest?: string) => ({
+    items: [
+      {
+        media_type: 2,
+        video_versions: [{ url: 'https://cdn/v.mp4', width: 716, height: 1274 }],
+        image_versions2: { candidates: [{ url: 'https://cdn/thumb.jpg', width: 640, height: 1138 }] },
+        ...(manifest ? { video_dash_manifest: manifest } : {}),
+        user: { username: 'alice' },
+        caption: { text: 'hi' },
+      },
+    ],
+  });
+
+  const MANIFEST =
+    '<MPD><Period><AdaptationSet contentType="video">' +
+    '<Representation bandwidth="2612000" codecs="vp09.00.40.08" mimeType="video/mp4" width="1088" height="1936">' +
+    '<BaseURL>https://cdn/dash-video.mp4</BaseURL></Representation></AdaptationSet>' +
+    '<AdaptationSet contentType="audio">' +
+    '<Representation bandwidth="62303" codecs="mp4a.40.5" mimeType="audio/mp4">' +
+    '<BaseURL>https://cdn/dash-audio.m4a</BaseURL></Representation></AdaptationSet></Period></MPD>';
+
+  it('exposes the manifest audio stream for audio-only downloads', () => {
+    const item = mapMediaInfo(withManifest(MANIFEST), 'ABC')?.items[0];
+    expect(item?.audioOnlyUrl).toBe('https://cdn/dash-audio.m4a');
+  });
+
+  it('keeps video coming from video_versions, not the VP9 DASH ladder', () => {
+    // The DASH manifest advertises the full 1088x1936 original, but it is VP9 —
+    // unmuxable on iOS and unevenly supported by Android's MediaMuxer — so video
+    // must still come from the muxed video_versions entry.
+    const item = mapMediaInfo(withManifest(MANIFEST), 'ABC')?.items[0];
+    expect(item?.url).toBe('https://cdn/v.mp4');
+    expect(item?.formats?.map((f) => f.url)).toEqual(['https://cdn/v.mp4']);
+  });
+
+  it('omits audioOnlyUrl when the post carries no manifest (is_dash_eligible = 0)', () => {
+    const item = mapMediaInfo(withManifest(), 'ABC')?.items[0];
+    expect(item?.audioOnlyUrl).toBeUndefined();
+  });
+});

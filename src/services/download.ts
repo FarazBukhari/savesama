@@ -345,14 +345,24 @@ async function downloadTranscoded(
 }
 
 /**
- * Downloads a video item, extracts the audio track on-device (no re-encode),
- * saves the resulting M4A to the device library, then removes all cache files.
+ * Saves a video item's audio as an M4A.
+ *
+ * When the source publishes a standalone audio stream (`item.audioOnlyUrl` —
+ * YouTube's adaptive AAC, or the audio track of Instagram/Threads' DASH manifest)
+ * only that stream is downloaded: for a 13s reel ~105 KB instead of ~1.8 MB, and
+ * for a YouTube video a few MB instead of tens. Otherwise the whole video is
+ * downloaded and its audio track stripped, as before.
  */
 export async function downloadAudioToGallery(
   item: MediaItem,
   onProgress: (fraction: number) => void
 ): Promise<void> {
   await ensureMediaPermission();
+
+  if (item.audioOnlyUrl) {
+    await downloadAudioStream(item, item.audioOnlyUrl, onProgress);
+    return;
+  }
 
   const videoUri = cacheUri(item, 'src.mp4');
   const audioUri = cacheUri(item, 'audio.m4a');
@@ -388,4 +398,51 @@ export async function downloadAudioToGallery(
   }
 
   onProgress(1);
+}
+
+/**
+ * Audio-only path: download just the audio stream, then save it as an M4A.
+ *
+ * The stream is already an audio-only MP4, so the native remux only rewrites the
+ * container (no re-encode, and nothing to strip). Meta's DASH audio is *fragmented*
+ * MP4 (ftyp + moov + sidx + moof/mdat…) and HE-AAC (`mp4a.40.5`) rather than the
+ * AAC-LC the remux path normally sees, so a remux failure falls back to saving the
+ * downloaded file as-is: it is a valid audio MP4 either way, and a container
+ * preference is not worth failing a download over.
+ *
+ * Progress: download 0→0.85, remux 0.85→0.9, save 0.9→1.0.
+ */
+async function downloadAudioStream(
+  item: MediaItem,
+  url: string,
+  onProgress: (fraction: number) => void
+): Promise<void> {
+  const srcUri = cacheUri(item, 'audiosrc.m4a');
+  const outUri = cacheUri(item, 'audio.m4a');
+
+  try {
+    const srcResult = await downloadFile(url, srcUri, (f) => onProgress(0.85 * f));
+    onProgress(0.85);
+
+    let fileToSave = srcResult.uri;
+    try {
+      await extractAudio(srcResult.uri, outUri);
+      fileToSave = outUri;
+    } catch {
+      // Keep the downloaded stream: already audio-only, already playable.
+    }
+    onProgress(0.9);
+
+    try {
+      await saveToFoxyAlbum(fileToSave);
+    } catch (error) {
+      throw new DownloadError(
+        `gallery save failed: ${String(error)}`,
+        'Downloaded the audio, but saving to your library failed. Check storage permissions.'
+      );
+    }
+    onProgress(1);
+  } finally {
+    await Promise.all([deleteQuietly(srcUri), deleteQuietly(outUri)]);
+  }
 }
