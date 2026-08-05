@@ -109,20 +109,41 @@ async function deleteQuietly(fileUri: string): Promise<void> {
 async function downloadFile(
   url: string,
   fileUri: string,
-  onProgress: (fraction: number) => void
+  onProgress: (fraction: number) => void,
+  allowSplit = true
 ): Promise<FileSystem.FileSystemDownloadResult> {
   // Large files split across parallel range requests — one connection to
   // googlevideo/fbcdn is often slower than the link allows. Small files, servers
   // that won't report a size, and servers without range support fall through to
   // the single-connection path below.
-  const probe = await probeRangedDownload(url);
-  if (shouldSplit(probe) && probe.totalBytes !== null) {
-    try {
-      await runRangedDownload(url, fileUri, probe.totalBytes, onProgress, fileSystemDeps);
-      return { uri: fileUri, status: 200, headers: {}, mimeType: null } as FileSystem.FileSystemDownloadResult;
-    } catch {
-      // Any range/concat problem: start over on one connection rather than fail.
-      // runRangedDownload has already removed its parts and partial output.
+  //
+  // `allowSplit` is false for transfers already known to be small (photos, audio
+  // streams): the probe costs a full round-trip, which for a ~100KB file can cost
+  // more than the split saves.
+  if (allowSplit) {
+    const probe = await probeRangedDownload(url);
+    if (shouldSplit(probe) && probe.totalBytes !== null) {
+      try {
+        await runRangedDownload(url, fileUri, probe.totalBytes, onProgress, fileSystemDeps);
+        // The joined file is returned by path rather than by a real download result.
+        // Verify it actually landed: downstream callers hand this uri to the native
+        // mux/transcode calls, and a missing or unreadable file there would fail in a
+        // much more confusing place.
+        const info = await FileSystem.getInfoAsync(fileUri);
+        if (info.exists && (info.size ?? 0) > 0) {
+          return {
+            uri: fileUri,
+            status: 200,
+            headers: {},
+            mimeType: null,
+          } as FileSystem.FileSystemDownloadResult;
+        }
+      } catch {
+        // Fall through to the single-connection path.
+      }
+      // Any range/concat problem, or a missing joined file: start over on one
+      // connection rather than fail. runRangedDownload already removed its parts.
+      await deleteQuietly(fileUri);
       onProgress(0);
     }
   }
@@ -218,7 +239,13 @@ async function downloadDirect(
   extension: string,
   onProgress: (fraction: number) => void
 ): Promise<void> {
-  const result = await downloadFile(url, cacheUri(item, `dl.${extension}`), onProgress);
+  // Photos are ~100KB-1MB; only video is worth probing for a range split.
+  const result = await downloadFile(
+    url,
+    cacheUri(item, `dl.${extension}`),
+    onProgress,
+    item.type === 'video'
+  );
 
   try {
     // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
@@ -273,10 +300,16 @@ async function downloadMuxed(
         videoFraction = f;
         reportCombined();
       }),
-      downloadFile(plan.audioUrl, audioUri, (f) => {
-        audioFraction = f;
-        reportCombined();
-      }),
+      // The audio stream is a fraction of the video's size — not worth a probe.
+      downloadFile(
+        plan.audioUrl,
+        audioUri,
+        (f) => {
+          audioFraction = f;
+          reportCombined();
+        },
+        false
+      ),
     ]);
     if (videoSettled.status === 'rejected') throw videoSettled.reason;
     if (audioSettled.status === 'rejected') throw audioSettled.reason;
@@ -448,7 +481,8 @@ async function downloadAudioStream(
   const outUri = cacheUri(item, 'audio.m4a');
 
   try {
-    const srcResult = await downloadFile(url, srcUri, (f) => onProgress(0.85 * f));
+    // Audio-only streams are small (a 13s reel's is ~105KB): skip the range probe.
+    const srcResult = await downloadFile(url, srcUri, (f) => onProgress(0.85 * f), false);
     onProgress(0.85);
 
     let fileToSave = srcResult.uri;
