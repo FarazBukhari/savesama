@@ -1,11 +1,11 @@
-export type SourcePlatform = 'instagram' | 'youtube';
+export type SourcePlatform = 'instagram' | 'threads' | 'youtube';
 
 export type MediaType = 'image' | 'video';
 
 export interface ParsedLink {
   platform: SourcePlatform;
   /**
-   * Content id for the link. For Instagram this is the post shortcode
+   * Content id for the link. For Instagram and Threads this is the post shortcode
    * (e.g. "DA1b2C3dEfG"); for YouTube it is the 11-char video id.
    * Null when the link is a redirect that must be resolved first.
    */
