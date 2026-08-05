@@ -229,3 +229,35 @@ describe('bookkeeping', () => {
     expect(getDownloadJobs()).toHaveLength(0);
   });
 });
+
+describe('per-download resolution override', () => {
+  it('passes the override through to the video downloader', async () => {
+    enqueueDownload(videoItem('a'), 'video', { resolution: '720' });
+    await drain();
+    expect(downloadToGallery).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a' }),
+      expect.any(Function),
+      '720'
+    );
+  });
+
+  it('passes undefined when no override is given, so the saved default applies', async () => {
+    enqueueDownload(videoItem('a'), 'video');
+    await drain();
+    expect(downloadToGallery).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a' }),
+      expect.any(Function),
+      undefined
+    );
+  });
+
+  it('does not pass a resolution to audio downloads', async () => {
+    // Audio has no rendition ladder to choose from.
+    enqueueDownload(videoItem('a'), 'audio', { resolution: '360' });
+    await drain();
+    expect(downloadAudioToGallery).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a' }),
+      expect.any(Function)
+    );
+  });
+});

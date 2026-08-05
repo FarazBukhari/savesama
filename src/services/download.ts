@@ -8,7 +8,7 @@ import {
   transcodeVideo,
 } from '../../modules/foxy-audio-extractor';
 import { MediaItem } from '../extraction/types';
-import { loadPreferences, resolutionForPlatform } from './preferences';
+import { ResolutionPref, loadPreferences, resolutionForPlatform } from './preferences';
 import {
   fileSystemDeps,
   probeRangedDownload,
@@ -159,20 +159,25 @@ async function downloadFile(
  * Downloads a media item to the app cache, saves it into the device gallery,
  * then removes the cached copy.
  *
- * For videos the user's per-platform resolution preference decides *how*: the
- * chosen rendition is downloaded directly, an HD (adaptive) rendition is muxed
- * from separate video+audio streams, or — when the source has nothing at or
- * below the target — the smallest rendition is downscaled on-device.
+ * For videos the resolution decides *how*: the chosen rendition is downloaded
+ * directly, an HD (adaptive) rendition is muxed from separate video+audio streams,
+ * or — when the source has nothing at or below the target — the smallest rendition
+ * is downscaled on-device.
+ *
+ * `override` is a one-off choice made at save time (the quality row in the format
+ * sheet). Without it the platform's saved default from Settings applies.
  */
 export async function downloadToGallery(
   item: MediaItem,
-  onProgress: (fraction: number) => void
+  onProgress: (fraction: number) => void,
+  override?: ResolutionPref
 ): Promise<void> {
   await ensureMediaPermission();
 
   // Await the (idempotent) load so a cold-launch download can't race past the
   // saved preference and silently use the defaults.
-  const pref = resolutionForPlatform(await loadPreferences(), item.platform ?? 'instagram');
+  const pref =
+    override ?? resolutionForPlatform(await loadPreferences(), item.platform ?? 'instagram');
 
   if (item.type !== 'video') {
     // Photos honour the preference by picking a smaller rendition from the source's
