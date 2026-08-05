@@ -53,17 +53,25 @@ An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels f
 ## Project structure
 
 ```
-App.tsx                     # Single screen: share-intent wiring, state, layout
+App.tsx                     # Tabs, share-intent wiring, state, layout; mounts one
+                            # WebViewSessionResolver per authenticated platform
 src/
   components/               # Header, LinkInput, MediaCard, ErrorNotice, EmptyState, AdBanner
+    WebViewSessionResolver.tsx  # Hidden session WebView + login modal (both platforms)
+    webViewSession.ts       # Per-platform config + login predicates (pure, tested)
   extraction/
-    urlParser.ts            # Link detection/normalization (Instagram + YouTube, pure, tested)
+    urlParser.ts            # Link detection/normalization (all platforms, pure, tested)
     http.ts                 # fetch helpers + anonymous Instagram CSRF token
-    instagram.ts            # Instagram extraction (graphql/query + CSRF)
+    instagram.ts            # Instagram extraction (authenticated first, then anonymous)
+    instagramApi.ts         # api/v1 media-info mapper, shared with Threads
+    threads.ts              # Threads extraction (authenticated only)
+    threadsApi.ts           # Threads app id + origin
     youtube.ts              # YouTube extraction (InnerTube player, ANDROID_VR client)
     extract.ts              # Platform dispatcher + share-link redirect resolution
   services/
+    mediaSession.ts         # Bridge from extraction to the mounted session WebViews
     download.ts             # Download with progress + save to gallery
+    library.ts              # Saved-files listing for the Saved tab
   theme.ts                  # Colors, spacing, ad banner height
 ```
 

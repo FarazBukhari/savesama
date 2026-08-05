@@ -4,9 +4,9 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdBanner } from './src/components/AdBanner';
-import { InstagramResolver } from './src/components/InstagramResolver';
 import { Tab, TabBar } from './src/components/TabBar';
-import { ThreadsResolver } from './src/components/ThreadsResolver';
+import { INSTAGRAM_SESSION, THREADS_SESSION } from './src/components/webViewSession';
+import { WebViewSessionResolver } from './src/components/WebViewSessionResolver';
 import { DownloadScreen } from './src/screens/DownloadScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { colors } from './src/theme';
@@ -59,8 +59,8 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <Main />
-      <InstagramResolver />
-      <ThreadsResolver />
+      <WebViewSessionResolver config={INSTAGRAM_SESSION} />
+      <WebViewSessionResolver config={THREADS_SESSION} />
     </SafeAreaProvider>
   );
 }

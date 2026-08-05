@@ -1,8 +1,8 @@
 import {
-  ThreadsFetchResult,
-  registerThreadsFetcher,
-  unregisterThreadsFetcher,
-} from '../../services/threadsSession';
+  SessionFetchResult,
+  registerFetcher,
+  unregisterFetcher,
+} from '../../services/mediaSession';
 import { extractMedia } from '../extract';
 import { ExtractionError } from '../types';
 
@@ -42,11 +42,11 @@ describe('extractMedia — threads share links', () => {
       .mockResolvedValue({ ok: true, status: 200, url: CANONICAL, text: async () => '' } as Response);
 
     const seen: string[] = [];
-    const fetcher = async (mediaId: string): Promise<ThreadsFetchResult> => {
+    const fetcher = async (mediaId: string): Promise<SessionFetchResult> => {
       seen.push(mediaId);
       return { ok: true, status: 200, body: JSON.stringify(PAYLOAD) };
     };
-    registerThreadsFetcher(fetcher);
+    registerFetcher('threads', fetcher);
 
     try {
       const result = await extractMedia('https://www.threads.com/share/BAsFhl_yx0/');
@@ -60,7 +60,7 @@ describe('extractMedia — threads share links', () => {
       );
       expect(seen).toEqual(['3956124961814886073']);
     } finally {
-      unregisterThreadsFetcher(fetcher);
+      unregisterFetcher('threads', fetcher);
       fetchSpy.mockRestore();
     }
   });

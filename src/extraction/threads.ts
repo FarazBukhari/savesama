@@ -1,4 +1,4 @@
-import { getThreadsFetcher } from '../services/threadsSession';
+import { getFetcher } from '../services/mediaSession';
 import { shortcodeToMediaId } from './shortcode';
 import { mapMediaInfo } from './threadsApi';
 import { ExtractionError, ExtractionResult } from './types';
@@ -12,7 +12,7 @@ import { ExtractionError, ExtractionResult } from './types';
  * Instagram shortcodes, so shortcodeToMediaId works unchanged.
  */
 export async function extractThreads(shortcode: string): Promise<ExtractionResult> {
-  const fetcher = getThreadsFetcher();
+  const fetcher = getFetcher('threads');
   if (!fetcher) {
     throw new ExtractionError(
       'threads resolver not mounted',

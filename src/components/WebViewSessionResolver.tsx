@@ -3,100 +3,58 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 
-import { THREADS_APP_ID, THREADS_ORIGIN } from '../extraction/threadsApi';
 import {
-  ThreadsFetchResult,
-  ThreadsMediaInfoFetcher,
-  registerThreadsFetcher,
-  unregisterThreadsFetcher,
-} from '../services/threadsSession';
+  MediaInfoFetcher,
+  SessionFetchResult,
+  registerFetcher,
+  unregisterFetcher,
+} from '../services/mediaSession';
 import { colors, spacing, typography } from '../theme';
+import { SessionConfig, buildFetchJs, isLoginRequired } from './webViewSession';
 
-const THREADS_HOME = `${THREADS_ORIGIN}/`;
-const THREADS_LOGIN = `${THREADS_ORIGIN}/login`;
 const REQUEST_TIMEOUT_MS = 20000;
 
 interface PendingRequest {
   mediaId: string;
-  resolve: (result: ThreadsFetchResult) => void;
+  resolve: (result: SessionFetchResult) => void;
   awaitingLogin: boolean;
   timer: ReturnType<typeof setTimeout>;
 }
 
-// Runs the media-info fetch inside the WebView so the httpOnly threads.com session
-// cookie is attached, then posts the status + body back. mediaId is digits-only and
-// reqId is a number, so neither can break out of the template.
-function buildFetchJs(reqId: number, mediaId: string): string {
-  return `(function(){
-    function send(o){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
-    try {
-      fetch('${THREADS_ORIGIN}/api/v1/media/${mediaId}/info/', {
-        headers: { 'X-IG-App-ID': '${THREADS_APP_ID}', 'X-Requested-With': 'XMLHttpRequest' },
-        credentials: 'include'
-      })
-      .then(function(r){ return r.text().then(function(t){ return { s: r.status, t: t }; }); })
-      .then(function(o){ send({ reqId: ${reqId}, status: o.s, body: o.t }); })
-      .catch(function(e){ send({ reqId: ${reqId}, status: 0, body: String(e) }); });
-    } catch (e) { send({ reqId: ${reqId}, status: 0, body: String(e) }); }
-  })(); true;`;
-}
-
-function isLoginRequired(status: number, body: string): boolean {
-  if (status === 401 || status === 403) return true;
-  const head = body.slice(0, 500);
-  if (head.includes('login_required') || head.includes('"require_login"')) return true;
-  // Logged out, Threads serves its HTML app shell (status 200) instead of JSON.
-  const trimmed = body.trimStart();
-  return trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<');
-}
-
 /**
- * Threads sign-in is an OAuth round trip *through instagram.com*:
+ * Holds one platform's authenticated session in an off-screen WebView and runs media-info
+ * fetches inside it, revealing a login modal only when a request comes back logged-out.
+ * The session then persists across launches via the WebView cookie store.
  *
- *   threads.com/login
- *     -> instagram.com/accounts/login/?...&next=instagram.com/oauth/oidc/?redirect_uri=threads.com/login/oidc/
- *     -> threads.com/login/oidc/?code=...
- *     -> threads.com/
- *
- * So this must never match an instagram.com URL: closing the modal mid-OAuth would
- * retry the fetch against a still-unauthenticated threads.com origin, get the HTML
- * shell back, and re-open the modal in a loop.
- *
- * The threads.com OIDC callback always means signed in. Bare threads.com root only
- * counts *before* the OAuth hop starts — that is the "already had a session, /login
- * bounced straight to the feed" case. Once instagram.com has been visited the sign-in
- * is in flight, and only the callback ends it.
+ * Instagram and Threads serve the same `api/v1/media/{id}/info/` endpoint and payload, so
+ * they share this component; everything that differs is in `config` (see webViewSession.ts).
  */
-function isLoggedIn(url: string, sawInstagram: boolean): boolean {
-  if (!/^https:\/\/(www\.)?threads\.(com|net)\//.test(url)) return false;
-  if (url.includes('/login/oidc')) return true;
-  if (url.includes('/login')) return false;
-  if (sawInstagram) return false;
-  return /^https:\/\/(www\.)?threads\.(com|net)\/(\?|#|$)/.test(url);
-}
-
-export function ThreadsResolver() {
+export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
   const webViewRef = useRef<WebView>(null);
   const pending = useRef<Map<number, PendingRequest>>(new Map());
   const counter = useRef(0);
   const ready = useRef(false);
   const queue = useRef<number[]>([]);
+  // True once this login attempt has hopped to an external auth host (Threads' OAuth
+  // goes through instagram.com).
+  const sawAuthHop = useRef(false);
   const [loginVisible, setLoginVisible] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
-  // True once the current login attempt has hopped to instagram.com for OAuth.
-  const sawInstagram = useRef(false);
 
-  const runFetch = useCallback((reqId: number) => {
-    const req = pending.current.get(reqId);
-    if (!req) return;
-    if (!ready.current) {
-      queue.current.push(reqId);
-      return;
-    }
-    webViewRef.current?.injectJavaScript(buildFetchJs(reqId, req.mediaId));
-  }, []);
+  const runFetch = useCallback(
+    (reqId: number) => {
+      const req = pending.current.get(reqId);
+      if (!req) return;
+      if (!ready.current) {
+        queue.current.push(reqId);
+        return;
+      }
+      webViewRef.current?.injectJavaScript(buildFetchJs(config, reqId, req.mediaId));
+    },
+    [config]
+  );
 
-  const settle = useCallback((reqId: number, result: ThreadsFetchResult) => {
+  const settle = useCallback((reqId: number, result: SessionFetchResult) => {
     const req = pending.current.get(reqId);
     if (!req) return;
     clearTimeout(req.timer);
@@ -104,9 +62,9 @@ export function ThreadsResolver() {
     req.resolve(result);
   }, []);
 
-  const fetcher = useCallback<ThreadsMediaInfoFetcher>(
+  const fetcher = useCallback<MediaInfoFetcher>(
     (mediaId) =>
-      new Promise<ThreadsFetchResult>((resolve) => {
+      new Promise<SessionFetchResult>((resolve) => {
         const reqId = ++counter.current;
         const timer = setTimeout(() => {
           settle(reqId, { ok: false, status: 0, body: 'timeout' });
@@ -118,9 +76,9 @@ export function ThreadsResolver() {
   );
 
   useEffect(() => {
-    registerThreadsFetcher(fetcher);
-    return () => unregisterThreadsFetcher(fetcher);
-  }, [fetcher]);
+    registerFetcher(config.platform, fetcher);
+    return () => unregisterFetcher(config.platform, fetcher);
+  }, [config.platform, fetcher]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -141,7 +99,7 @@ export function ThreadsResolver() {
         // Keep the request pending, reveal the login screen, and retry after login.
         req.awaitingLogin = true;
         clearTimeout(req.timer);
-        sawInstagram.current = false;
+        sawAuthHop.current = false;
         setSigningIn(false);
         setLoginVisible(true);
         return;
@@ -153,39 +111,43 @@ export function ThreadsResolver() {
   );
 
   const retryAwaiting = useCallback(() => {
-    // Reload the hidden WebView first. Not for cookies — those are read at request
-    // time — but for origin: if it drifted off threads.com (or is showing the
-    // logged-out shell), the injected fetch would be cross-origin and die on CORS.
-    webViewRef.current?.reload();
+    // Reload first when configured: not for cookies — those are read at request time —
+    // but for origin. If the hidden WebView drifted off-origin, the injected fetch would
+    // be cross-origin and die on CORS.
+    if (config.reloadBeforeRetry) {
+      ready.current = false;
+      webViewRef.current?.reload();
+    }
+    // Give each waiting request a fresh timeout, then re-issue the fetch now that the
+    // session should be authenticated. runFetch queues it if the reload is still in
+    // flight; onLoadEnd flushes the queue.
     pending.current.forEach((req, reqId) => {
       if (!req.awaitingLogin) return;
       req.awaitingLogin = false;
       req.timer = setTimeout(() => {
         settle(reqId, { ok: false, status: 0, body: 'timeout' });
       }, REQUEST_TIMEOUT_MS);
-      // ready is cleared by the reload; onLoadEnd flushes the queue.
-      ready.current = false;
-      queue.current.push(reqId);
+      runFetch(reqId);
     });
-  }, [settle]);
+  }, [config.reloadBeforeRetry, runFetch, settle]);
 
   const onNavChange = useCallback(
     (nav: WebViewNavigation) => {
       if (!loginVisible) return;
-      if (nav.url.includes('instagram.com')) {
-        sawInstagram.current = true;
+      if (config.isAuthHop(nav.url)) {
+        sawAuthHop.current = true;
         return;
       }
-      // Fire as soon as the redirect to an authenticated threads.com URL *starts*
-      // (not on load end), and cover the WebView with a spinner, so the feed never
-      // flashes during the modal's slide-out animation.
-      if (isLoggedIn(nav.url, sawInstagram.current)) {
+      // Fire as soon as the redirect to an authenticated URL *starts* (not on load end),
+      // and cover the WebView with a spinner, so the feed never flashes during the
+      // modal's slide-out animation.
+      if (config.isLoggedIn(nav.url, sawAuthHop.current)) {
         setSigningIn(true);
         setLoginVisible(false);
         retryAwaiting();
       }
     },
-    [loginVisible, retryAwaiting]
+    [config, loginVisible, retryAwaiting]
   );
 
   const onCancelLogin = useCallback(() => {
@@ -206,13 +168,14 @@ export function ThreadsResolver() {
 
   return (
     <>
-      {/* Off-screen WebView that holds the Threads session and runs the fetches. */}
+      {/* Off-screen WebView that holds the session and runs the fetches. */}
       <View style={styles.hidden} pointerEvents="none">
         <WebView
           ref={webViewRef}
-          source={{ uri: THREADS_HOME }}
+          source={{ uri: config.homeUrl }}
           onMessage={onMessage}
           onLoadEnd={onLoadEnd}
+          onNavigationStateChange={config.watchHiddenNavigation ? onNavChange : undefined}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
           domStorageEnabled
@@ -225,7 +188,7 @@ export function ThreadsResolver() {
         <View style={styles.modalRoot}>
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderText}>
-              <Text style={styles.modalTitle}>Sign in to Threads</Text>
+              <Text style={styles.modalTitle}>Sign in to {config.label}</Text>
               <Text style={styles.modalSubtitle}>Required to download · saved for next time</Text>
             </View>
             <Pressable onPress={onCancelLogin} hitSlop={12} style={styles.modalCancel}>
@@ -234,7 +197,7 @@ export function ThreadsResolver() {
           </View>
           {loginVisible ? (
             <WebView
-              source={{ uri: THREADS_LOGIN }}
+              source={{ uri: config.loginUrl }}
               onNavigationStateChange={onNavChange}
               sharedCookiesEnabled
               thirdPartyCookiesEnabled
