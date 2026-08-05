@@ -545,6 +545,13 @@ turns a 13s reel's audio save from ~1.8MB into ~105KB.
 matching — React Native has no `DOMParser` and one field doesn't justify an XML dependency.
 Tests use the verbatim tag shape from a live manifest.
 
+⚠️⚠️ **Decode the XML entities in `<BaseURL>`.** The manifest is XML, so every `&` in the
+signed query string arrives as `&amp;`. A URL with 11 of them answers **403**; decoded, the
+same URL answers 200. This shipped broken once precisely because a browser devtools probe
+uses `DOMParser`, which decodes entities implicitly — so the probe passed while the app's
+regex-extracted URL failed. YouTube audio was unaffected because its URL comes from JSON.
+If Instagram/Threads audio downloads start failing again, check this first.
+
 Fallbacks that must stay:
 
 - Posts with `is_dash_eligible: 0` carry no manifest → `audioOnlyUrl` is absent and the old
@@ -597,10 +604,17 @@ re-renders, and "Save all" queues everything at once instead of awaiting a loop.
 - **Jobs run one at a time on purpose.** Each download already fans out into 4 parallel
   range requests; concurrent jobs would compete for the same bandwidth and make all of them
   slower.
-- **The in-flight job cannot be cancelled** — queued ones can. `expo-file-system`'s download
-  handle isn't threaded out to the queue and the native mux/transcode calls can't be
-  interrupted mid-call, so cancelling the active job would leave partial files whose cleanup
-  couldn't be guaranteed. `cancelDownload` returns `false` for it rather than faking it.
+- **Both queued and in-flight jobs can be cancelled.**
+  [`cancellation.ts`](../src/services/cancellation.ts) provides a token per job:
+  in-flight `expo-file-system` transfers register their `cancelAsync` with it and abort
+  immediately, while native mux/transcode calls — which cannot be interrupted mid-call — are
+  bracketed by `throwIfCancelled()` checkpoints, so a cancel during a transcode takes effect
+  when it returns and the file is simply never saved. Each path's existing `finally` blocks
+  delete the cache files, so nothing is left behind. A cancelled job is marked `cancelled`,
+  not `error` — it is the user's own doing.
+- Two subtleties the token handles: registering an abort **after** cancellation aborts
+  immediately (a transfer starting in that window must not run unsupervised), and completed
+  transfers **unregister** so a later cancel doesn't call `cancelAsync` on a finished handle.
 - Job identity is `item.id` for photos and `item.id:<format>` for videos, so a video's audio
   and video saves are independent jobs.
 
@@ -639,6 +653,18 @@ save or into Settings. The row reads "Default · tap to change" or "Just this do
 active mode is unambiguous.
 
 Audio gets no quality choice — the source serves one audio stream.
+
+**A finished job re-runs when the quality changes.** `enqueueDownload` ignores a re-queue of
+a completed job so "Save all" doesn't re-download everything, but it makes two exceptions:
+an explicit `force` (the user pressed Save deliberately) and a differing `resolution`, since
+saving the same video at another quality is a different download. The "✓ Saved" badge stays
+pressable for this reason — for videos it re-opens the format sheet, for photos it saves
+again. Without that, changing the resolution after a save was a dead end.
+
+**Download failures must be surfaced from the job, not from the call site.** Since downloads
+moved into the queue, `DownloadScreen` no longer awaits them, so a failing download only
+appears as `job.error`. The screen reads that into its ErrorNotice — when it didn't, a broken
+audio URL looked exactly like "nothing happens".
 
 ---
 
