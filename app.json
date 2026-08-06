@@ -6,6 +6,13 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "savesama",
+    "updates": {
+      "url": "https://u.expo.dev/56b9a925-7dc3-4721-bb0d-0cebbe602a50",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
