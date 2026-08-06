@@ -32,18 +32,23 @@ export interface SavedAsset {
   creationTime: number | null;
   /** UNIX ms; null if unavailable. */
   modificationTime: number | null;
+  /** On-disk name, shown as the row title in list view. Null if unreadable. */
+  filename: string | null;
 }
 
 /** Resolves the fields we render from a media-library `Asset`. */
 async function toSavedAsset(asset: Asset): Promise<SavedAsset> {
-  const [uri, mediaType, duration, creationTime, modificationTime] = await Promise.all([
+  const [uri, mediaType, duration, creationTime, modificationTime, filename] = await Promise.all([
     asset.getUri(),
     asset.getMediaType(),
     asset.getDuration(),
     asset.getCreationTime(),
     asset.getModificationTime(),
+    // Only the list view needs this, so a failure must not cost us the asset —
+    // everything else in this Promise.all is load-bearing, this isn't.
+    asset.getFilename().catch(() => null),
   ]);
-  return { id: asset.id, uri, mediaType, duration, creationTime, modificationTime };
+  return { id: asset.id, uri, mediaType, duration, creationTime, modificationTime, filename };
 }
 
 /**

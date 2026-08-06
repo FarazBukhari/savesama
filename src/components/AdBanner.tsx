@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AD_BANNER_HEIGHT, colors, radius, spacing } from '../theme';
+import { useThemedStyles } from '../ThemeProvider';
+import { AD_BANNER_HEIGHT, radius, spacing, Theme, typography } from '../theme';
 
 interface AdBannerProps {
   bottomInset: number;
@@ -12,6 +13,8 @@ interface AdBannerProps {
  * container so the layout doesn't shift when ads go live.
  */
 export function AdBanner({ bottomInset }: AdBannerProps) {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={[styles.container, { paddingBottom: bottomInset }]}>
       <View style={styles.placeholder}>
@@ -21,27 +24,28 @@ export function AdBanner({ bottomInset }: AdBannerProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  placeholder: {
-    height: AD_BANNER_HEIGHT - spacing.lg,
-    borderRadius: radius.sm,
-    backgroundColor: colors.sunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  label: {
-    color: colors.placeholder,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.card,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+    },
+    placeholder: {
+      height: AD_BANNER_HEIGHT - spacing.lg,
+      borderRadius: radius.sm,
+      backgroundColor: theme.colors.sunken,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.sm,
+    },
+    label: {
+      color: theme.colors.placeholder,
+      fontSize: typography.caption,
+      letterSpacing: 1.5,
+      textTransform: 'uppercase',
+      fontWeight: '600',
+    },
+  });

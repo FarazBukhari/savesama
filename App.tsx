@@ -1,6 +1,8 @@
+import Feather from '@expo/vector-icons/Feather';
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdBanner } from './src/components/AdBanner';
@@ -10,18 +12,18 @@ import { WebViewSessionResolver } from './src/components/WebViewSessionResolver'
 import { DownloadScreen } from './src/screens/DownloadScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { loadPreferences } from './src/services/preferences';
-import { colors } from './src/theme';
+import { ThemeProvider, useTheme } from './src/ThemeProvider';
 
 function Main() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  // The icon set ships its own font and loads it asynchronously. Without this
+  // gate every icon renders as a blank box for the first frames.
+  const [fontsLoaded] = useFonts(Feather.font);
 
   const [tab, setTab] = useState<Tab>('download');
-  // Warm the preferences cache once at launch so downloads read the saved
-  // resolution without waiting on disk. Falls back to defaults on any error.
-  useEffect(() => {
-    void loadPreferences();
-  }, []);
+  // Preferences are already on disk-read: ThemeProvider gates this subtree on
+  // them, so the download path reads the saved resolution, not the default.
   // Mount the library lazily so we don't request full media-read permission at
   // launch — only once the user first opens the Saved tab. Kept mounted after
   // that to preserve scroll/state and avoid re-prompting.
@@ -41,24 +43,32 @@ function Main() {
     [refreshLibrary]
   );
 
-  return (
-    <View style={styles.root}>
-      <StatusBar style="dark" />
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
+      </View>
+    );
+  }
 
-      <View style={[styles.screen, tab !== 'download' && styles.hidden]}>
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
+
+      <View style={[{ flex: 1 }, tab !== 'download' && hidden]}>
         <DownloadScreen onSaved={refreshLibrary} />
       </View>
       {libraryMounted ? (
-        <View style={[styles.screen, tab !== 'saved' && styles.hidden]}>
+        <View style={[{ flex: 1 }, tab !== 'saved' && hidden]}>
           <LibraryScreen refreshToken={libraryRefresh} />
         </View>
       ) : null}
-      <View style={[styles.screen, tab !== 'settings' && styles.hidden]}>
+      <View style={[{ flex: 1 }, tab !== 'settings' && hidden]}>
         <SettingsScreen />
       </View>
 
       <AdBanner bottomInset={0} />
-      <View style={[styles.tabBarInset, { paddingBottom: insets.bottom }]}>
+      <View style={{ backgroundColor: theme.colors.card, paddingBottom: insets.bottom }}>
         <TabBar active={tab} onChange={handleTabChange} />
       </View>
     </View>
@@ -68,25 +78,13 @@ function Main() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <Main />
-      <WebViewSessionResolver config={INSTAGRAM_SESSION} />
-      <WebViewSessionResolver config={THREADS_SESSION} />
+      <ThemeProvider>
+        <Main />
+        <WebViewSessionResolver config={INSTAGRAM_SESSION} />
+        <WebViewSessionResolver config={THREADS_SESSION} />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  screen: {
-    flex: 1,
-  },
-  hidden: {
-    display: 'none',
-  },
-  tabBarInset: {
-    backgroundColor: colors.card,
-  },
-});
+const hidden = { display: 'none' } as const;

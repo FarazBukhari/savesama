@@ -18,7 +18,8 @@ import { useDownloadJobs } from '../hooks/useDownloadJobs';
 import { usePreferences } from '../hooks/usePreferences';
 import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
 import { ResolutionPref, resolutionForPlatform } from '../services/preferences';
-import { colors, radius, shadows, spacing, typography } from '../theme';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { fonts, radius, spacing, Theme, typography } from '../theme';
 
 const IDLE_STATE: ItemDownloadState = { status: 'idle', progress: 0 };
 
@@ -54,6 +55,8 @@ interface DownloadScreenProps {
 
 export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
 
   const [linkText, setLinkText] = useState('');
@@ -172,14 +175,31 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
       ).length
     : 0;
 
+  const activeCount = jobs.filter(
+    (job) => job.status === 'active' || job.status === 'queued'
+  ).length;
+  const failedCount = jobs.filter((job) => job.status === 'error').length;
+
   return (
     <>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Header />
+        <Header
+          title="Foxy"
+          right={
+            failedCount > 0 ? (
+              <Text style={[styles.pip, styles.pipError]}>
+                {failedCount} failed
+              </Text>
+            ) : activeCount > 0 ? (
+              <Text style={styles.pip}>{activeCount} active</Text>
+            ) : null
+          }
+        />
+        <View style={styles.formGap} />
         <LinkInput
           value={linkText}
           busy={busy}
@@ -188,43 +208,45 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
           onSubmit={handleSubmit}
         />
 
-        {visibleError ? <ErrorNotice message={visibleError} /> : null}
+        {visibleError ? (
+          <ErrorNotice title="Couldn't get that one" message={visibleError} />
+        ) : null}
 
         {busy ? (
-          <View style={styles.fetchingCard}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.fetchingLabel}>Fetching media…</Text>
+          <View style={styles.fetchingRow}>
+            <ActivityIndicator color={theme.colors.accent} size="small" />
+            <Text style={styles.fetchingLabel}>Reading the post…</Text>
           </View>
         ) : null}
 
         {result ? (
           <View style={styles.results}>
             <View style={styles.resultsHeader}>
-              <Text style={styles.resultsTitle}>
-                {result.username ? `@${result.username}` : 'Post'}
-                <Text style={styles.resultsCount}>
-                  {'  ·  '}
-                  {result.items.length} {result.items.length === 1 ? 'item' : 'items'}
-                </Text>
+              <Text style={styles.overline}>
+                Found · {result.items.length} {result.items.length === 1 ? 'item' : 'items'}
+                {result.username ? ` · @${result.username}` : ''}
               </Text>
               {result.items.length > 1 && pendingCount > 0 ? (
                 <Pressable
-                  style={({ pressed }) => [styles.downloadAll, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.saveAll, pressed && styles.pressed]}
                   onPress={() => void handleDownloadAll()}
                 >
-                  <Text style={styles.downloadAllLabel}>Save all</Text>
+                  <Text style={styles.saveAllLabel}>Save all</Text>
                 </Pressable>
               ) : null}
             </View>
-            {result.items.map((item) => (
-              <MediaCard
-                key={item.id}
-                item={item}
-                state={downloads[jobId(item, 'video')] ?? IDLE_STATE}
-                onCancel={handleCancel}
-                onDownload={handleSavePress}
-              />
-            ))}
+            <View style={styles.group}>
+              {result.items.map((item, index) => (
+                <MediaCard
+                  key={item.id}
+                  item={item}
+                  state={downloads[jobId(item, 'video')] ?? IDLE_STATE}
+                  onCancel={handleCancel}
+                  onDownload={handleSavePress}
+                  last={index === result.items.length - 1}
+                />
+              ))}
+            </View>
           </View>
         ) : null}
 
@@ -268,62 +290,78 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  fetchingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    marginTop: spacing.md,
-    ...shadows.card,
-  },
-  fetchingLabel: {
-    marginLeft: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  results: {
-    marginTop: spacing.xl,
-  },
-  resultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  resultsTitle: {
-    fontSize: typography.headline,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  resultsCount: {
-    fontWeight: '500',
-    fontSize: typography.subtitle,
-    color: colors.textSecondary,
-  },
-  downloadAll: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    ...shadows.glow,
-  },
-  downloadAllLabel: {
-    color: colors.textOnAccent,
-    fontWeight: '700',
-    fontSize: typography.small,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xxl,
+    },
+    formGap: {
+      height: spacing.lg,
+    },
+    pip: {
+      fontFamily: fonts.mono,
+      fontSize: typography.figure,
+      color: theme.colors.accent,
+      backgroundColor: theme.colors.accentSoft,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 3,
+      overflow: 'hidden',
+    },
+    pipError: {
+      color: theme.colors.error,
+      backgroundColor: theme.colors.errorSoft,
+    },
+    fetchingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.lg,
+    },
+    fetchingLabel: {
+      color: theme.colors.textSecondary,
+      fontSize: typography.small + 1,
+    },
+    results: {
+      marginTop: spacing.xl,
+    },
+    resultsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+    },
+    overline: {
+      flexShrink: 1,
+      fontSize: typography.figure,
+      fontWeight: '700',
+      letterSpacing: 1.4,
+      textTransform: 'uppercase',
+      color: theme.colors.textSecondary,
+    },
+    saveAll: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs + 2,
+    },
+    saveAllLabel: {
+      color: theme.colors.text,
+      fontWeight: '700',
+      fontSize: typography.small,
+    },
+    group: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.md,
+      overflow: 'hidden',
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+  });

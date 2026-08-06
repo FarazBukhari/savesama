@@ -646,8 +646,8 @@ picked up by an existing one.
 
 ## 14. Settings screen contents and per-download quality override
 
-Settings shows three sections: **Default resolution** (per platform), **Where files are
-saved**, and **Supported apps**.
+Settings shows four sections: **Appearance** (theme mode), **Default resolution** (per
+platform), **Accounts** (per-platform sign out), and **Where files are saved**.
 
 The save locations are **display-only by design**, not an unfinished control. Android's
 MediaStore roots an album by media type, so photos/videos live under `Pictures/` and audio
@@ -656,11 +656,28 @@ under `Music/` — they cannot share one folder, and Foxy only chooses the album
 that constant, so renaming the album updates the screen automatically. See the
 `saveToFoxyAlbum` comment for why two albums exist.
 
-**Supported apps** is a plain list kept next to `PLATFORM_ROWS` in `SettingsScreen.tsx`. When
-a platform is added, both arrays need the new entry — plus the user-facing copy in
-`Header.tsx` (default subtitle), `EmptyState.tsx` (steps + note), `LinkInput.tsx`
-(placeholder) and `extract.ts`'s "unrecognized link" message. Threads shipped without those
-four for a while, which is how the app ended up supporting a platform it never mentioned.
+**Accounts** lists the two platforms that need a session. The signed-in state shown there is
+a *hint*, not the truth: the cookie lives inside the hidden WebView and there is no API to
+read it, so `instagramSignedIn` / `threadsSignedIn` in preferences are written when a login
+completes and cleared on sign out. The next authed request is the real test — if the hint is
+stale, the login modal simply appears as it always did.
+
+**Sign out drives the site's own logout page.** `react-native-webview` exposes no
+cookie-clearing API, so `WebViewSessionResolver` registers a `signOut` handler with
+`mediaSession`, which points the hidden WebView's `source` at `config.logoutUrl` and, on the
+following `onLoadEnd`, back at `config.homeUrl` so the injected fetch stays same-origin. It
+steers through `source` rather than injecting `location.replace` because injection silently
+no-ops before the WebView's first load has finished. Adding a platform means adding its
+logout URL to the `SessionConfig`.
+
+> `THREADS_SESSION.logoutUrl` (`/logout`) has not been confirmed against a real device. If
+> signing out of Threads leaves the session alive, that URL is the thing to check first.
+
+When a platform is added, `PLATFORM_ROWS` and `ACCOUNT_ROWS` in `SettingsScreen.tsx` both
+need an entry — plus the user-facing copy in `EmptyState.tsx` (steps + note),
+`LinkInput.tsx` (placeholder) and `extract.ts`'s "unrecognized link" message. Threads
+shipped without those for a while, which is how the app ended up supporting a platform it
+never mentioned.
 
 ### Per-download quality override
 
@@ -703,3 +720,43 @@ The wait is injectable (`extractYouTube(id, { sleep })`) so tests don't sleep fo
 **The durable fix is a signed-in YouTube session**, which is now plumbable via
 `WebViewSessionResolver` (see §1/§10). Backoff only widens the window. Reproduction is easy:
 run a handful of extractions from one IP in quick succession.
+
+
+---
+
+## 16. Theming
+
+`theme.ts` exports `lightTheme` and `darkTheme` filling one `Theme` interface, plus the
+theme-independent scales (`spacing`, `radius`, `typography`, `fonts`, `AD_BANNER_HEIGHT`)
+which stay plain module exports — a component that only needs spacing shouldn't need a hook.
+
+`ThemeProvider` resolves which one is active from `preferences.themeMode`, falling back to
+`useColorScheme()` when that's `'auto'`. Components read it two ways:
+
+```ts
+const theme = useTheme();                       // for inline values and icon colors
+const styles = useThemedStyles(makeStyles);     // for StyleSheets
+```
+
+`makeStyles` **must** be declared at module scope. `useThemedStyles` memoises on
+`[makeStyles, theme]`, so a factory defined inside the component changes identity every
+render and the memo never hits.
+
+Two rules the palette encodes:
+
+- **Depth is a hairline, not a shadow.** `theme.shadows` has one recipe, `raised`, and only
+  modals and sheets use it. Everything else separates with `borderColor: theme.colors.border`
+  at `StyleSheet.hairlineWidth`. Shadows read wrong on a dark ground and needed two sets of
+  values; a hairline needs one token.
+- **The accent changes hue between themes.** Dark uses `#FF7A3D`; light drops to `#D04E19`
+  because the brighter orange only reaches 3.1:1 on white, which fails for the small bold
+  figures it sits on. Anything referencing the accent must go through the token, never a
+  literal.
+
+**Machine output is monospace.** URLs, resolutions, durations, file counts and dates use
+`fonts.mono` (`Menlo` on iOS, `monospace` on Android). Human-written copy stays in the system
+UI face. It's the fastest way to tell, at a glance, what Foxy found versus what Foxy said.
+
+Icons are Feather from `@expo/vector-icons`. The font loads asynchronously, so `App.tsx`
+gates the first render on `useFonts(Feather.font)` — without it every icon is a blank box
+for the first frames.
