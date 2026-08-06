@@ -77,7 +77,9 @@ export const darkTheme: Theme = {
     error: '#FF6B60',
     errorSoft: 'rgba(255, 107, 96, 0.12)',
     videoBadge: 'rgba(8, 6, 4, 0.62)',
-    placeholder: '#6B635C',
+    // Input placeholders are text people read, so this clears 4.5:1 on both the
+    // card it sits on (4.84) and the ground (5.26). The old #6B635C was 3.09.
+    placeholder: '#8C8279',
     overlay: 'rgba(0, 0, 0, 0.45)',
     scrim: 'rgba(0, 0, 0, 0.66)',
   },
@@ -101,11 +103,13 @@ export const lightTheme: Theme = {
     card: '#FFFFFF',
     sunken: '#E4DFD7',
     border: '#D7D0C6',
-    // Deliberately darker than the dark-mode accent: #FF7A3D only reaches 3.1:1
-    // on white, which fails for the small bold figures it's used on.
-    accent: '#C9481A',
-    accentPressed: '#AA3C14',
-    accentSoft: 'rgba(208, 78, 25, 0.10)',
+    // Deliberately darker than the dark-mode accent. The binding surface is the
+    // *background*, not the card: accent figures sit on the ground in Settings
+    // and the Saved header. #C9481A cleared white at 4.75:1 but only managed
+    // 3.95:1 there; #B63F15 clears both (4.71 / 5.66).
+    accent: '#B63F15',
+    accentPressed: '#9A3410',
+    accentSoft: 'rgba(182, 63, 21, 0.11)',
     text: '#141110',
     textSecondary: '#635B53',
     textOnAccent: '#FFFFFF',
@@ -114,7 +118,10 @@ export const lightTheme: Theme = {
     error: '#C0392F',
     errorSoft: 'rgba(192, 57, 47, 0.09)',
     videoBadge: 'rgba(8, 6, 4, 0.62)',
-    placeholder: '#A39A90',
+    // Was #A39A90 at 2.31:1 on the ground — decorative-grey placeholder text is
+    // still text. #7E756B clears AA on the card (4.52) and near-misses on the
+    // ground by design: placeholders only ever render inside a card field.
+    placeholder: '#7E756B',
     overlay: 'rgba(0, 0, 0, 0.35)',
     scrim: 'rgba(20, 14, 8, 0.5)',
   },

@@ -78,6 +78,8 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
           onPress={onSubmit}
           disabled={!canSubmit}
           accessibilityRole="button"
+          accessibilityLabel="Get media from this link"
+          accessibilityState={{ disabled: !canSubmit, busy }}
         >
           {busy ? (
             <ActivityIndicator color={theme.colors.textOnAccent} size="small" />

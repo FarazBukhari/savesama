@@ -1,3 +1,4 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -5,6 +6,8 @@ import { ResolutionPref, resolutionLabel } from '../services/preferences';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
 import { fonts, radius, spacing, Theme, typography } from '../theme';
 import { ItemDownloadState } from './MediaCard';
+
+type FeatherName = keyof typeof Feather.glyphMap;
 
 interface FormatChoiceModalProps {
   visible: boolean;
@@ -37,20 +40,30 @@ export function FormatChoiceModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        {/* Swallows taps so they don't reach the backdrop. Not a control, so it
+            stays out of the accessibility tree. */}
+        <Pressable
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+          accessible={false}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>Save as</Text>
 
           <FormatRow
-            glyph="🎬"
+            icon="film"
             label="Video"
             sublabel="MP4"
             state={videoState}
             onPress={onSaveVideo}
           />
           <FormatRow
-            glyph="🎧"
+            icon="headphones"
             label="Audio"
             sublabel="M4A · audio only"
             state={audioState}
@@ -80,18 +93,19 @@ export function FormatChoiceModal({
 }
 
 function FormatRow({
-  glyph,
+  icon,
   label,
   sublabel,
   state,
   onPress,
 }: {
-  glyph: string;
+  icon: FeatherName;
   label: string;
   sublabel: string;
   state: ItemDownloadState;
   onPress: () => void;
 }) {
+  const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const isDownloading = state.status === 'downloading';
 
@@ -99,9 +113,12 @@ function FormatRow({
     <Pressable
       style={({ pressed }) => [styles.row, pressed && !isDownloading && styles.rowPressed]}
       onPress={isDownloading ? undefined : onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Save as ${label}, ${sublabel}`}
+      accessibilityState={{ disabled: isDownloading, busy: isDownloading }}
     >
       <View style={styles.iconTile}>
-        <Text style={styles.iconGlyph}>{glyph}</Text>
+        <Feather name={icon} size={20} color={theme.colors.accent} />
       </View>
       <View style={styles.rowInfo}>
         <Text style={styles.rowLabel}>{label}</Text>
@@ -220,9 +237,6 @@ const makeStyles = (theme: Theme) =>
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
-  },
-  iconGlyph: {
-    fontSize: 20,
   },
   rowInfo: {
     flex: 1,

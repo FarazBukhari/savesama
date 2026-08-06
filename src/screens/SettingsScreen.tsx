@@ -126,6 +126,11 @@ export function SettingsScreen() {
             key={row.key}
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => setEditing(row)}
+            accessibilityRole="button"
+            accessibilityLabel={`${row.platform} default quality, currently ${shortResolution(
+              prefs[row.key]
+            )}`}
+            accessibilityHint="Opens the quality chooser"
           >
             <View style={styles.rowCopy}>
               <Text style={styles.rowLabel}>{row.platform}</Text>

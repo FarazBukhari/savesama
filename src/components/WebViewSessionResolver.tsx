@@ -247,7 +247,13 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
               <Text style={styles.modalTitle}>Sign in to {config.label}</Text>
               <Text style={styles.modalSubtitle}>Required to download · saved for next time</Text>
             </View>
-            <Pressable onPress={onCancelLogin} hitSlop={12} style={styles.modalCancel}>
+            <Pressable
+              onPress={onCancelLogin}
+              hitSlop={12}
+              style={styles.modalCancel}
+              accessibilityRole="button"
+              accessibilityLabel={`Cancel signing in to ${config.label}`}
+            >
               <Text style={styles.modalClose}>Cancel</Text>
             </Pressable>
           </View>
