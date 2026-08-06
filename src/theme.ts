@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 /**
- * Foxy's design tokens.
+ * SaveSama's design tokens.
  *
  * Principles:
  *  - Two themes, one shape. `lightTheme` and `darkTheme` fill the same `Theme`,

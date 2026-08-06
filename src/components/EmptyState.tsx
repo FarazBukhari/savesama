@@ -9,10 +9,10 @@ type FeatherName = keyof typeof Feather.glyphMap;
 const STEPS: { icon: FeatherName; text: string }[] = [
   {
     icon: 'share',
-    text: 'Tap Share on an Instagram post, Threads post or YouTube video and pick Foxy',
+    text: 'Tap Share on an Instagram post, Threads post or YouTube video and pick SaveSama',
   },
   { icon: 'clipboard', text: 'Or copy the link and hit Paste above' },
-  { icon: 'download', text: 'Check what Foxy found, then save it to your gallery' },
+  { icon: 'download', text: 'Check what SaveSama found, then save it to your gallery' },
 ];
 
 export function EmptyState() {

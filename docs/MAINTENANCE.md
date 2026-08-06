@@ -1,4 +1,4 @@
-# Foxy Downloader — Maintenance & Operations Notes
+# SaveSama — Maintenance & Operations Notes
 
 Practical, breakage-prone, and operational knowledge for working on this app.
 Keep this current as things change.
@@ -128,7 +128,7 @@ needs no auth, and as of §11 it downloads only the audio stream rather than the
 
 ## 3. Build & release (EAS)
 
-- The project is linked to EAS as **`@farazbukhari/foxy-downloader`**
+- The project is linked to EAS as **`@farazbukhari/savesama`**
   (projectId `716a367e-a260-4e84-8e2f-73b8f730762d`, in `app.json` → `extra.eas`).
 - Preview APK (sideload on any Android phone):
 
@@ -651,10 +651,10 @@ platform), **Accounts** (per-platform sign out), and **Where files are saved**.
 
 The save locations are **display-only by design**, not an unfinished control. Android's
 MediaStore roots an album by media type, so photos/videos live under `Pictures/` and audio
-under `Music/` — they cannot share one folder, and Foxy only chooses the album *name*
+under `Music/` — they cannot share one folder, and SaveSama only chooses the album *name*
 (`ALBUM_NAME` in `download.ts`), never the parent directory. Both rows derive their text from
 that constant, so renaming the album updates the screen automatically. See the
-`saveToFoxyAlbum` comment for why two albums exist.
+`saveToAppAlbum` comment for why two albums exist.
 
 **Accounts** lists the two platforms that need a session. The signed-in state shown there is
 a *hint*, not the truth: the cookie lives inside the hidden WebView and there is no API to
@@ -755,8 +755,38 @@ Two rules the palette encodes:
 
 **Machine output is monospace.** URLs, resolutions, durations, file counts and dates use
 `fonts.mono` (`Menlo` on iOS, `monospace` on Android). Human-written copy stays in the system
-UI face. It's the fastest way to tell, at a glance, what Foxy found versus what Foxy said.
+UI face. It's the fastest way to tell, at a glance, what SaveSama found versus what SaveSama said.
 
 Icons are Feather from `@expo/vector-icons`. The font loads asynchronously, so `App.tsx`
 gates the first render on `useFonts(Feather.font)` — without it every icon is a blank box
 for the first frames.
+
+
+---
+
+## 17. The rename (Foxy Downloader → SaveSama)
+
+The app shipped as *Foxy Downloader* before it was renamed. Three things were
+deliberately **not** renamed with it, because each one would have silently
+destroyed user data:
+
+| Kept | Why |
+|---|---|
+| `foxy-preferences.json` | An internal path. Renaming it resets every saved preference on upgrade. |
+| `modules/foxy-*` | Local native modules — the Kotlin/Swift class names and Expo module names are load-bearing. |
+| `LEGACY_ALBUM_NAMES` | See below. |
+
+**Saved files survive the rename.** Two compatibility shims do that work:
+
+- `KNOWN_ALBUM_NAMES` in `download.ts` is `[ALBUM_NAME, ...LEGACY_ALBUM_NAMES]`,
+  and `listSavedAssets()` collects from every album with one of those titles.
+  Without it, the Saved tab would go empty on upgrade — the files stay on disk,
+  but the app looks for an album called `SaveSama` and the old ones are titled
+  `Foxy Downloader`.
+- `SAVED_FILENAME` in `savedName.ts` matches both the `savesama_` and `foxy_`
+  prefixes, so pre-rename files still resolve to a readable title instead of
+  falling back to the raw filename.
+
+New files are only ever written under the current name. If a future rename
+happens, append to `LEGACY_ALBUM_NAMES` and add the old prefix to that regex —
+don't replace them.

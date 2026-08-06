@@ -191,7 +191,7 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
         keyboardShouldPersistTaps="handled"
       >
         <Header
-          title="Foxy"
+          title="SaveSama"
           subtitle="Save video, photos and audio from Instagram, Threads and YouTube"
           right={
             failedCount > 0 ? (

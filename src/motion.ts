@@ -2,7 +2,7 @@ import { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-rean
 import type { CSSTransitionProperties } from 'react-native-reanimated';
 
 /**
- * Foxy's motion system.
+ * SaveSama's motion system.
  *
  * Rules this file exists to enforce:
  *

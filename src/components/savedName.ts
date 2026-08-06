@@ -1,12 +1,15 @@
 import { MediaType } from 'expo-media-library';
 
 /**
- * Foxy writes files as `foxy_<shortcode>[-<n>]_<timestamp>_dl.<ext>`. That is a
- * good filename and a terrible label — a list of
- * `foxy_DboX9Zakaiz-11_1785936336888_dl.jpg` tells you nothing about which
+ * The app writes files as `savesama_<shortcode>[-<n>]_<timestamp>_dl.<ext>`.
+ * That's a good filename and a terrible label — a list of
+ * `savesama_DboX9Zakaiz-11_1785936336888_dl.jpg` tells you nothing about which
  * clip is which. This turns it back into something a person can read.
+ *
+ * `foxy_` is still accepted: files saved before the app was renamed are still
+ * on the device and still listed in the Saved tab.
  */
-const FOXY_FILENAME = /^foxy_(.+?)(?:-(\d+))?_\d{10,}_dl\.[A-Za-z0-9]+$/;
+const SAVED_FILENAME = /^(?:savesama|foxy)_(.+?)(?:-(\d+))?_\d{10,}_dl\.[A-Za-z0-9]+$/;
 
 export interface SavedName {
   /** Primary line: what the thing is, and which one of the post it came from. */
@@ -25,7 +28,7 @@ export function prettyName(filename: string | null, mediaType: MediaType): Saved
   const kind = kindLabel(mediaType);
   if (!filename) return { title: kind, code: null };
 
-  const match = FOXY_FILENAME.exec(filename);
+  const match = SAVED_FILENAME.exec(filename);
   if (match) {
     const [, code, index] = match;
     // Carousel items keep their position, so "Photo 3" and "Photo 4" stay
