@@ -19,7 +19,7 @@ need to adjust lives in two files:
 WebView fetch (`api/v1/media/<pk>/info/` with the user's own session) *before* any
 anonymous strategy. So on a real device the recipe below is only the fallback, and it runs
 at all only when no resolver is mounted (web build, jest, the `scripts/e2e-extract.ts`
-tester). See §9 for the same mechanism on Threads.
+tester). See §10 for the same mechanism on Threads.
 
 Anonymous status as of **August 2026** (re-probed against live Instagram):
 
@@ -120,9 +120,9 @@ this in [`urlParser.test.ts`](../src/extraction/__tests__/urlParser.test.ts).
 **If you ever wire up song pages:** a small backend or an in-app WebView using the
 user's own session.
 
-Note this is **separate** from "Save as Audio" (§7): that feature extracts the audio
-track from a **reel** the user already downloaded — it doesn't touch song-page links.
-Saving audio from a reel works today and needs no auth.
+Note this is **separate** from "Save as Audio" (§7, §11): that feature saves the audio of a
+**reel/video** the user is downloading — it doesn't touch song-page links. It works today and
+needs no auth, and as of §11 it downloads only the audio stream rather than the whole video.
 
 ---
 
@@ -270,10 +270,15 @@ Instagram's anonymous CSRF token (§1): fetch a session token first, send it wit
 If the player response still comes back as a bot-check, `extractYouTube` refreshes the
 `visitorData` once and retries before surfacing an error.
 
-We pick a **progressive** format (muxed audio + video) from `streamingData.formats`,
-highest resolution first. Progressive caps at **itag 22 (720p)**, usually only
-**itag 18 (360p)** is served. `adaptiveFormats` (1080p+ video-only / audio-only) are
-intentionally ignored — see "HD" below.
+The default `MediaItem.url` is still a **progressive** format (muxed audio + video)
+from `streamingData.formats`, highest resolution first — progressive caps at **itag 22
+(720p)**, usually only **itag 18 (360p)** is served. As of the resolution-selection
+feature, `mapPlayerResponse` *also* attaches a full `formats` ladder via `buildFormats`:
+progressive streams (`hasAudio: true`) plus **adaptive H.264/MP4 video-only** streams
+(1080p+, `hasAudio: false`) each paired with the best **adaptive AAC/M4A audio** stream
+(`audioUrl`). The download layer selects a rung from this ladder per the user's
+per-platform preference and muxes the HD pairs on-device — see §9. VP9/Opus/WebM adaptive
+variants are excluded because they can't passthrough into an MP4 container.
 
 **Constants to check first if it breaks** (top of `youtube.ts`):
 
@@ -316,19 +321,133 @@ prefers 720p, ignores adaptive/ciphered) and
 [`youtube.fetch.test.ts`](../src/extraction/__tests__/youtube.fetch.test.ts) (asserts the
 ANDROID_VR POST and the bot/login error branches).
 
-### HD (1080p+) is a planned follow-up — not yet supported
+### HD (1080p+) — supported via on-device muxing
 
-1080p and above are only offered as **separate** video-only + audio-only adaptive streams.
-Combining them needs an on-device **muxer** (video + audio → MP4). The local
-`foxy-audio-extractor` module (§7) only *strips* audio out; it can't mux two tracks
-together. Adding HD means extending that native module (Android `MediaMuxer` with both an
-`audio/*` and a `video/*` track; iOS `AVMutableComposition` with both tracks) and teaching
-`youtube.ts` to emit a paired video+audio item plus a new download path that muxes before
-saving. Until then, progressive (≤720p) is the intentional ceiling.
+1080p and above are only offered as **separate** video-only + audio-only adaptive streams,
+so the app downloads both and combines them with an on-device **muxer** (video + audio →
+MP4, no re-encode). This lives in `foxy-audio-extractor` (§7) as `muxVideoAudio` (Android
+`MediaMuxer` with both a `video/*` and `audio/*` track; iOS `AVMutableComposition` + a
+passthrough export). `youtube.ts` `buildFormats` only ever pairs an **H.264/MP4 video-only**
+stream with the **AAC/M4A (itag 140) audio-only** stream so the passthrough mux is valid;
+VP9/Opus/WebM are excluded. See §9 for how the resolution preference drives it.
 
 ---
 
-## 9. Threads extraction (authenticated only)
+## 9. Resolution selection & the Settings screen
+
+Users pick a **default download resolution per platform** (Instagram / YouTube) on the
+**Settings** tab. Preferences persist to `${documentDirectory}foxy-preferences.json` via
+`src/services/preferences.ts` (a module singleton + `useSyncExternalStore` hook,
+`src/hooks/usePreferences.ts`). `loadPreferences()` is **idempotent** (one disk read,
+cached promise) and is both warmed at launch in `App.tsx` and awaited by
+`downloadToGallery`, so a cold-launch download can't race past the saved value; a save
+made while the initial read is still in flight wins over the disk contents (`dirty` flag).
+Default is `'max'`. Note `'max'` on YouTube now prefers a 1080p adaptive pair (muxed
+on-device) over the 720p progressive stream — with an automatic **fallback to the
+progressive `item.url`** if the HD downloads or the mux fail, so no video that downloaded
+before the feature can fail because of it.
+
+**Resolution semantics: targets are the conventional short side.** Portrait videos
+(reels, Shorts) store the long side in `height` (a "1080p" reel is 1080x1920), so all
+comparisons use `min(width, height)` when both are known (`effectiveResolution` in
+`resolutionPlan.ts`), and `targetHeight` handed to the native transcoder means "short
+side". Formats with unknown dimensions sort first under `'max'`, trusting the source's
+highest-first ordering.
+
+At download time `src/services/resolutionPlan.ts` `planVideoDownload` turns the item's
+`formats` ladder + the preference into one of three strategies, executed in
+`src/services/download.ts`:
+
+- **`direct`** — chosen rung is muxed (progressive / Instagram `video_versions`): download it.
+- **`mux`** — chosen rung is a YouTube adaptive video-only stream: download video + its
+  paired audio **in parallel** and `muxVideoAudio` them (see §8); falls back to the
+  progressive stream on any failure.
+- **`transcode`** — the source has no rung at/below the target: download the smallest
+  **muxed** rung (never a video-only stream — the transcode path does no muxing, so that
+  would save a silent video) and downscale it with `transcodeVideo`.
+
+`transcodeVideo` is a real decode+scale+re-encode (not a remux). On **iOS** it uses
+`AVAssetExportSession` presets chosen so the *fitted output's short side* covers the
+target for the source's actual orientation (up to `1920x1080`), and it **copies the file
+through unchanged** when the source is already at/below the target — no pointless lossy
+re-encode (this covers the Instagram embed/og fallback paths, whose dimensions are
+unknown at plan time). **Android** uses **Media3 Transformer** (`androidx.media3:media3-transformer`,
+pinned with `media3-effect`/`media3-common` at one version in the module's `build.gradle`),
+so `isTranscodeSupported()` is now `true` on both platforms.
+
+⚠️ **`targetHeight` means the SHORT side**, not the literal height — "480p" = shorter
+dimension near 480, whatever the orientation. `resolutionPlan.ts` (`effectiveResolution`),
+the Swift, and the Kotlin all agree on this, and they must keep agreeing. Media3's
+`Presentation.createForHeight` is *height*-based, so it is deliberately **not** used: a
+portrait 716x1274 reel at a 480 target would come out 270x480 — over-shrunk by the aspect
+ratio. The Kotlin instead reads orientation-corrected dimensions via
+`MediaMetadataRetriever` (a 90°/270° rotation means swapping raw width/height), computes an
+even-pixel output box, and passes it to `Presentation.createForWidthAndHeight(..., LAYOUT_SCALE_TO_FIT)`.
+Odd dimensions are rounded down to even because many H.264 encoders reject them.
+
+Other Android specifics worth not rediscovering:
+
+- Transformer must be built, started, and listened to on **one Looper thread**; Expo runs
+  `AsyncFunction` bodies off the main thread, so the call hops to the main looper first.
+- Nearly every Transformer/effect class is `@UnstableApi`, so the Kotlin needs
+  `@OptIn(UnstableApi::class)` or it won't compile.
+- `ExportException`s whose `errorCode` is a decoder/encoder capability failure are
+  re-reported as **`ERR_TRANSCODE_UNSUPPORTED`**, which `downloadTranscoded` degrades on
+  (saves the original rather than failing the download). Any other export failure surfaces
+  as a real `DownloadError`, so transcoder regressions stay visible.
+
+**Instagram/Threads video: `video_versions` is not a ladder, but a ladder does exist.**
+
+`video_versions` looks like a quality ladder and is not — its entries are the *same*
+resolution, differing only by `type` (101/102/103). Verified August 2026:
+
+```
+pk 3956341135589369127: original 480x600   → video_versions [480x600 t101, 480x600 t102, 480x600 t103]
+pk 3956124961814886073: original 1088x1936 → video_versions [716x1274 t101, 716x1274 t102, 716x1274 t103]
+```
+
+A real ladder *is* published, in the `video_dash_manifest` field on the same payload — and
+it includes the full original the muxed renditions don't expose:
+
+```
+video_versions → 716x1274 only
+DASH manifest  → 540x960 @203kbps, 716x1274 @302/408/591/823/1129/1609kbps, 1088x1936 @2612kbps
+```
+
+⚠️ We deliberately do **not** take video from the manifest. Those representations are
+**VP9**: iOS cannot carry VP9 in an MP4 at all, Android's `MediaMuxer` support for it is
+uneven, and gallery/player compatibility varies. Using them would mean either muxing
+VP9+AAC (compatibility risk) or transcoding to H.264 (slow) — so video still comes from
+`video_versions`, and a test in `instagramApi.test.ts` pins that.
+
+**Known, deliberately-deferred limitation:** because of the above, "Max" tops out at
+716x1274 for these posts even though a 1088x1936 rendition exists. Lifting that ceiling
+means solving the VP9 container problem first. This is a choice, not an oversight.
+
+Consequence for capped preferences: since only one muxed rendition is served, a target
+below it can only be honoured by re-encoding — which is exactly why the feature appeared to
+do nothing on Android before the transcoder existed. Only the manifest's *audio* stream is
+used (see §11).
+
+
+### Photos honour the preference without any re-encoding
+
+`image_versions2.candidates` *is* a real ladder (640x1138, 480x854, 320x569, 240x427), so
+`pickImageUrl` just picks a rung — no transcoder involved. But the candidate list also
+contains **square centre-crops at the same short-side sizes** (640x640, 480x480, 320x320,
+240x240, 150x150). Ranking by size alone ties 480x854 with 480x480 for a 480 target, and
+choosing the crop would silently save a *cropped* photo. `buildImageFormats`
+(`instagramApi.ts`) therefore keeps only candidates whose aspect ratio matches the post's
+own (`original_width`/`original_height`, falling back to the largest candidate, which is
+always full-frame). There is a regression test asserting no crop is ever selected.
+
+Note the largest candidate is typically 640px on the short side, so a 720 or 1080 *photo*
+preference is a no-op that returns the original — correct, but don't describe it as
+"1080p photos".
+
+---
+
+## 10. Threads extraction (authenticated only)
 
 Threads has **no anonymous path at all** — do not spend time looking for one. A logged-out
 client gets:
@@ -404,3 +523,183 @@ separately:
 - The media-info call: open threads.com logged-in in a desktop browser and run the `fetch`
   from step 2 in the devtools console. If that returns JSON but the app doesn't, the problem
   is in the WebView/session layer, not the recipe.
+
+---
+
+## 11. Audio-only downloads
+
+"Save as Audio" used to download the whole video and strip the track out. Both sources
+publish a standalone audio stream, so it now fetches only that — `item.audioOnlyUrl`.
+
+| Source | Where the audio stream comes from |
+| --- | --- |
+| YouTube | the adaptive AAC stream (itag 140), already parsed for the HD mux path |
+| Instagram / Threads | the `audio` AdaptationSet inside `video_dash_manifest` (AAC, ~62kbps) |
+
+Verified August 2026: a plain GET of Meta's audio `BaseURL` returns a **complete fragmented
+MP4** — `ftyp + moov + sidx + moof/mdat×7`, 105,100 bytes for 62.3kbps × 13.374s. So despite
+the `SegmentBase indexRange` attribute, **no range-driven segment assembly is needed**. That
+turns a 13s reel's audio save from ~1.8MB into ~105KB.
+
+[`dashManifest.ts`](../src/extraction/dashManifest.ts) reads the manifest with plain string
+matching — React Native has no `DOMParser` and one field doesn't justify an XML dependency.
+Tests use the verbatim tag shape from a live manifest.
+
+⚠️⚠️ **Decode the XML entities in `<BaseURL>`.** The manifest is XML, so every `&` in the
+signed query string arrives as `&amp;`. A URL with 11 of them answers **403**; decoded, the
+same URL answers 200. This shipped broken once precisely because a browser devtools probe
+uses `DOMParser`, which decodes entities implicitly — so the probe passed while the app's
+regex-extracted URL failed. YouTube audio was unaffected because its URL comes from JSON.
+If Instagram/Threads audio downloads start failing again, check this first.
+
+Fallbacks that must stay:
+
+- Posts with `is_dash_eligible: 0` carry no manifest → `audioOnlyUrl` is absent and the old
+  download-then-strip path runs.
+- Meta's DASH audio is **HE-AAC** (`mp4a.40.5`) in a *fragmented* MP4, not the AAC-LC the
+  native remux normally sees. If `extractAudio` fails on it, the downloaded stream is saved
+  as-is — it is already a valid audio MP4, and a container preference isn't worth failing a
+  download over.
+
+⚠️ Regex gotcha when reading manifests: `width="` also matches inside `bandwidth="`. Use a
+`\b` word boundary (this bug produced nonsense dimensions during the original probe).
+
+---
+
+## 12. Download speed: parallel range requests
+
+A single connection to `googlevideo` / `fbcdn` is often slower than the link allows, so an
+85MB 1080p video takes far longer than its size suggests.
+[`rangedDownload.ts`](../src/services/rangedDownload.ts) splits anything over **4MB** into
+**4 concurrent byte ranges** and joins them. A 1-byte `Range: bytes=0-0` probe establishes
+size and range support first; without a `206` and a `content-range` total, the download falls
+back to one connection.
+
+⚠️ **Unmeasured.** The speedup is a reasoned expectation, not a benchmark — YouTube's bot
+check blocked repeated throughput probes from the dev machine. If a user reports no
+improvement, the bottleneck may simply be their bandwidth, in which case more connections
+move the same bytes in the same time.
+
+Two correctness traps, both already handled — don't reintroduce them:
+
+- **Never join parts as base64.** Base64 pads each part to a 4-character boundary, so
+  concatenating encoded parts corrupts everything after the first unless every part length is
+  a multiple of 3. Parts are streamed into one writer via SDK 56's
+  `File.readableStream()` / `writableStream()`, which also keeps peak memory at one chunk
+  instead of holding the whole file in JS.
+- **A server that ignores `Range` answers `200` with the whole file.** Concatenating that
+  with sibling parts yields a corrupt video, so a `200` on any range past the first is
+  treated as a failure.
+
+Any failure deletes every part *and* the partial output, then retries on a single connection.
+
+---
+
+## 13. The download queue and the background service
+
+[`downloadQueue.ts`](../src/services/downloadQueue.ts) owns download state at module level.
+`DownloadScreen` subscribes through `useDownloadJobs`, so progress survives tab switches and
+re-renders, and "Save all" queues everything at once instead of awaiting a loop.
+
+- **Jobs run one at a time on purpose.** Each download already fans out into 4 parallel
+  range requests; concurrent jobs would compete for the same bandwidth and make all of them
+  slower.
+- **Both queued and in-flight jobs can be cancelled.**
+  [`cancellation.ts`](../src/services/cancellation.ts) provides a token per job:
+  in-flight `expo-file-system` transfers register their `cancelAsync` with it and abort
+  immediately, while native mux/transcode calls — which cannot be interrupted mid-call — are
+  bracketed by `throwIfCancelled()` checkpoints, so a cancel during a transcode takes effect
+  when it returns and the file is simply never saved. Each path's existing `finally` blocks
+  delete the cache files, so nothing is left behind. A cancelled job is marked `cancelled`,
+  not `error` — it is the user's own doing.
+- Two subtleties the token handles: registering an abort **after** cancellation aborts
+  immediately (a transfer starting in that window must not run unsupervised), and completed
+  transfers **unregister** so a later cancel doesn't call `cancelAsync` on a finished handle.
+- Job identity is `item.id` for photos and `item.id:<format>` for videos, so a video's audio
+  and video saves are independent jobs.
+
+[`foxy-download-service`](../modules/foxy-download-service) is an Android **foreground
+service** that keeps the process alive while the queue drains. It downloads nothing: on
+Android the RN JS thread keeps running while backgrounded, and it is *process death* that
+interrupts a transfer. The notification a foreground service must post doubles as progress
+UI (silent LOW-importance channel).
+
+- No new npm dependency — the notification is built with `NotificationCompat` in Kotlin, so
+  `expo-notifications` isn't needed.
+- The service spans the whole drain, not each job, so the notification doesn't flicker and
+  the process is never briefly unprotected during hand-off to a follow-up runner.
+- `START_NOT_STICKY`: downloads are driven from JS, so a service restarted without that JS
+  state would show progress for work that isn't happening.
+- `requireNativeModule` is resolved **lazily**, not at import time. It throws when the native
+  side is absent (under jest, and in any dev build predating this module), and an import-time
+  throw would take down the whole queue.
+- **iOS is an explicit no-op** (`isSupported()` → false): backgrounded JS is suspended there,
+  so the equivalent needs a background `URLSession` owning the transfer.
+- `app.json` needs `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` and
+  `POST_NOTIFICATIONS`. Without the last one (Android 13+) the notification is silently not
+  shown, but the service still runs and downloads are unaffected.
+
+⚠️ This module means **a new dev build is required** — autolinking a native module can't be
+picked up by an existing one.
+
+---
+
+## 14. Settings screen contents and per-download quality override
+
+Settings shows three sections: **Default resolution** (per platform), **Where files are
+saved**, and **Supported apps**.
+
+The save locations are **display-only by design**, not an unfinished control. Android's
+MediaStore roots an album by media type, so photos/videos live under `Pictures/` and audio
+under `Music/` — they cannot share one folder, and Foxy only chooses the album *name*
+(`ALBUM_NAME` in `download.ts`), never the parent directory. Both rows derive their text from
+that constant, so renaming the album updates the screen automatically. See the
+`saveToFoxyAlbum` comment for why two albums exist.
+
+**Supported apps** is a plain list kept next to `PLATFORM_ROWS` in `SettingsScreen.tsx`. When
+a platform is added, both arrays need the new entry — plus the user-facing copy in
+`Header.tsx` (default subtitle), `EmptyState.tsx` (steps + note), `LinkInput.tsx`
+(placeholder) and `extract.ts`'s "unrecognized link" message. Threads shipped without those
+four for a while, which is how the app ended up supporting a platform it never mentioned.
+
+### Per-download quality override
+
+Settings holds the per-platform default; the format sheet's "Video quality" row overrides it
+for one save. The override travels as `job.resolution` into `downloadToGallery(item,
+onProgress, override?)`, and is cleared when the sheet closes so it can't leak into the next
+save or into Settings. The row reads "Default · tap to change" or "Just this download" so the
+active mode is unambiguous.
+
+Audio gets no quality choice — the source serves one audio stream.
+
+**The format sheet stays open after an audio save, and closes after a video save.** That
+asymmetry is deliberate: a video has a card row that takes over showing progress once the
+sheet closes, whereas audio has no row of its own, so closing would leave the download with
+nowhere to report. The Audio row shows its own percentage and ✓ Saved state instead.
+
+**A finished job re-runs when the quality changes.** `enqueueDownload` ignores a re-queue of
+a completed job so "Save all" doesn't re-download everything, but it makes two exceptions:
+an explicit `force` (the user pressed Save deliberately) and a differing `resolution`, since
+saving the same video at another quality is a different download. The "✓ Saved" badge stays
+pressable for this reason — for videos it re-opens the format sheet, for photos it saves
+again. Without that, changing the resolution after a save was a dead end.
+
+**Download failures must be surfaced from the job, not from the call site.** Since downloads
+moved into the queue, `DownloadScreen` no longer awaits them, so a failing download only
+appears as `job.error`. The screen reads that into its ErrorNotice — when it didn't, a broken
+audio URL looked exactly like "nothing happens".
+
+---
+
+## 15. YouTube bot-check backoff
+
+`extractYouTube` retries a "confirm you're not a bot" response with a fresh `visitorData` and
+a **backoff** (800ms, then 2500ms), bounded to ~3.3s of extra latency. The check is IP-based
+rate limiting, so the previous instant retry usually hit the same wall. Non-bot-check
+failures (age/privacy walls) still fail immediately — retrying can't clear those.
+
+The wait is injectable (`extractYouTube(id, { sleep })`) so tests don't sleep for real.
+
+**The durable fix is a signed-in YouTube session**, which is now plumbable via
+`WebViewSessionResolver` (see §1/§10). Backoff only widens the window. Reproduction is easy:
+run a handful of extractions from one IP in quick succession.

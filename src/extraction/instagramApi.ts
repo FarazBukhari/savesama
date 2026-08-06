@@ -1,5 +1,6 @@
+import { pickDashAudioUrl } from './dashManifest';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
-import { ExtractionResult, MediaItem, SourcePlatform } from './types';
+import { ExtractionResult, MediaFormat, MediaItem, SourcePlatform } from './types';
 
 /** Instagram's public web app id, required on api/v1 requests. */
 export const IG_APP_ID = '936619743392459';
@@ -29,12 +30,12 @@ export function mapMediaInfo(
   if (carousel) {
     carousel.forEach((child, index) => {
       if (isRecord(child)) {
-        const item = nodeToItem(child, `${shortcode}-${index}`);
+        const item = nodeToItem(child, `${shortcode}-${index}`, platform);
         if (item) items.push(item);
       }
     });
   } else {
-    const item = nodeToItem(media, shortcode);
+    const item = nodeToItem(media, shortcode, platform);
     if (item) items.push(item);
   }
 
@@ -49,24 +50,42 @@ export function mapMediaInfo(
   };
 }
 
-function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null {
+function nodeToItem(
+  node: Record<string, unknown>,
+  id: string,
+  platform: SourcePlatform
+): MediaItem | null {
   const isVideo = node['media_type'] === MEDIA_TYPE_VIDEO || Array.isArray(node['video_versions']);
   const thumbnail = asString(getIn(node, ['image_versions2', 'candidates', 0, 'url']));
 
   if (isVideo) {
-    const videoUrl = asString(getIn(node, ['video_versions', 0, 'url']));
-    if (!videoUrl) return null;
+    // `video_versions` is an array of the same clip at multiple resolutions
+    // (Instagram serves them muxed, highest-first). Expose the whole ladder so
+    // the resolution planner can honour a lower-quality preference without any
+    // on-device transcoding in the common case.
+    const formats = buildVideoFormats(node);
+    if (formats.length === 0) return null;
+    // video_dash_manifest carries an audio-only AdaptationSet; its video
+    // representations are VP9 and deliberately unused (see dashManifest.ts).
+    const audioOnlyUrl = pickDashAudioUrl(node['video_dash_manifest']);
     return {
       id,
       type: 'video',
-      url: videoUrl,
+      url: formats[0].url,
       thumbnailUrl: thumbnail,
-      width: asNumber(getIn(node, ['video_versions', 0, 'width'])),
-      height: asNumber(getIn(node, ['video_versions', 0, 'height'])),
+      width: formats[0].width,
+      height: formats[0].height,
+      platform,
+      formats,
+      ...(audioOnlyUrl ? { audioOnlyUrl } : {}),
     };
   }
 
   if (!thumbnail) return null;
+  // Unlike video_versions, `candidates` IS a genuine ladder (e.g. 640x1138, 480x854,
+  // 320x569, 240x427), so a photo can honour a resolution preference by simply
+  // picking a smaller rendition — no on-device resizing needed.
+  const formats = buildImageFormats(node);
   return {
     id,
     type: 'image',
@@ -74,5 +93,67 @@ function nodeToItem(node: Record<string, unknown>, id: string): MediaItem | null
     thumbnailUrl: thumbnail,
     width: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'width'])),
     height: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'height'])),
+    platform,
+    ...(formats.length > 1 ? { formats } : {}),
   };
+}
+
+/** Aspect ratios within 2% count as the same framing. */
+const ASPECT_TOLERANCE = 0.02;
+
+/**
+ * Maps `image_versions2.candidates` into a quality ladder.
+ *
+ * ⚠️ The candidate list mixes two families: renditions of the full image
+ * (640x1138, 480x854, 320x569, 240x427) *and* square centre-crops
+ * (640x640, 480x480, 320x320, 240x240, 150x150). Ranking by size alone ties
+ * 480x854 against 480x480 for a 480 target, and picking the crop would silently
+ * save a cropped photo. So candidates are kept only when their aspect ratio
+ * matches the post's own — `original_width`/`original_height` when present, else
+ * the first (largest, always full-frame) candidate.
+ */
+function buildImageFormats(node: Record<string, unknown>): MediaFormat[] {
+  const candidates = asArray(getIn(node, ['image_versions2', 'candidates'])) ?? [];
+
+  const originalWidth = asNumber(node['original_width']);
+  const originalHeight = asNumber(node['original_height']);
+  let reference: number | null =
+    originalWidth && originalHeight ? originalWidth / originalHeight : null;
+
+  const formats: MediaFormat[] = [];
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue;
+    const url = asString(candidate['url']);
+    const width = asNumber(candidate['width']);
+    const height = asNumber(candidate['height']);
+    if (!url || !width || !height) continue;
+
+    const aspect = width / height;
+    // No original dimensions to compare against: the largest candidate is full-frame,
+    // so adopt its aspect as the reference.
+    if (reference == null) reference = aspect;
+    if (Math.abs(aspect - reference) / reference > ASPECT_TOLERANCE) continue;
+
+    formats.push({ url, width, height, bitrate: null, hasAudio: true });
+  }
+  return formats;
+}
+
+/** Maps Instagram's `video_versions` array (highest-first) into muxed formats. */
+function buildVideoFormats(node: Record<string, unknown>): MediaFormat[] {
+  const versions = asArray(node['video_versions']) ?? [];
+  const formats: MediaFormat[] = [];
+  for (const version of versions) {
+    if (!isRecord(version)) continue;
+    const url = asString(version['url']);
+    if (!url) continue;
+    formats.push({
+      url,
+      width: asNumber(version['width']),
+      height: asNumber(version['height']),
+      bitrate: null,
+      hasAudio: true,
+    });
+  }
+  return formats;
 }

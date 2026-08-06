@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,12 +9,19 @@ import { INSTAGRAM_SESSION, THREADS_SESSION } from './src/components/webViewSess
 import { WebViewSessionResolver } from './src/components/WebViewSessionResolver';
 import { DownloadScreen } from './src/screens/DownloadScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { loadPreferences } from './src/services/preferences';
 import { colors } from './src/theme';
 
 function Main() {
   const insets = useSafeAreaInsets();
 
   const [tab, setTab] = useState<Tab>('download');
+  // Warm the preferences cache once at launch so downloads read the saved
+  // resolution without waiting on disk. Falls back to defaults on any error.
+  useEffect(() => {
+    void loadPreferences();
+  }, []);
   // Mount the library lazily so we don't request full media-read permission at
   // launch — only once the user first opens the Saved tab. Kept mounted after
   // that to preserve scroll/state and avoid re-prompting.
@@ -46,6 +53,9 @@ function Main() {
           <LibraryScreen refreshToken={libraryRefresh} />
         </View>
       ) : null}
+      <View style={[styles.screen, tab !== 'settings' && styles.hidden]}>
+        <SettingsScreen />
+      </View>
 
       <AdBanner bottomInset={0} />
       <View style={[styles.tabBarInset, { paddingBottom: insets.bottom }]}>

@@ -95,6 +95,18 @@ describe('extractThreads', () => {
             thumbnailUrl: 'https://instagram.fna.fbcdn.net/v/t51.71878-15/thumb.jpg',
             width: 480,
             height: 600,
+            // The item must claim 'threads' so the download layer reads the Threads
+            // resolution preference, not Instagram's.
+            platform: 'threads',
+            formats: [
+              {
+                url: 'https://instagram.fna.fbcdn.net/o1/v/t16/f2/m84/clip.mp4',
+                width: 480,
+                height: 600,
+                bitrate: null,
+                hasAudio: true,
+              },
+            ],
           },
         ],
       });

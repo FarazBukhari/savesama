@@ -1,6 +1,6 @@
 import { fetchWithTimeout } from './http';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
-import { ExtractionError, ExtractionResult, MediaItem } from './types';
+import { ExtractionError, ExtractionResult, MediaFormat, MediaItem } from './types';
 
 /**
  * YouTube extraction uses the InnerTube `player` endpoint with the ANDROID_VR
@@ -87,15 +87,39 @@ export function resetYouTubeVisitorDataCache(): void {
   cachedVisitorData = null;
 }
 
-export async function extractYouTube(videoId: string): Promise<ExtractionResult> {
-  let player = await requestPlayer(videoId, false);
+/**
+ * Waits between bot-check retries. The check is IP-based rate limiting, so an
+ * immediate retry tends to hit the same wall — a short pause clears it far more
+ * often than retrying instantly does. Bounded to ~3.3s of added latency in the
+ * worst case so a genuinely blocked network still fails promptly.
+ */
+const BOT_CHECK_RETRY_DELAYS_MS = [800, 2500];
 
+export interface YouTubeExtractOptions {
+  /** Test seam: replaces the backoff wait so suites don't sleep for real. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function extractYouTube(
+  videoId: string,
+  options: YouTubeExtractOptions = {}
+): Promise<ExtractionResult> {
+  const sleep = options.sleep ?? defaultSleep;
+
+  let player = await requestPlayer(videoId, false);
   let result = mapPlayerResponse(player, videoId);
   if (result) return result;
 
-  // A bot-check usually means a missing/stale session token — refresh the
-  // visitorData once and retry before giving up.
-  if (isBotCheck(player)) {
+  // A bot-check usually means a missing/stale session token, or simply too many
+  // requests from this IP. Refresh the visitorData and retry with backoff before
+  // giving up; anything that isn't a bot check fails immediately.
+  for (const delay of BOT_CHECK_RETRY_DELAYS_MS) {
+    if (!isBotCheck(player)) break;
+    await sleep(delay);
     player = await requestPlayer(videoId, true);
     result = mapPlayerResponse(player, videoId);
     if (result) return result;
@@ -167,6 +191,11 @@ export function mapPlayerResponse(
   const url = asString(best['url']);
   if (!url) return null;
 
+  // Audio-only AAC stream: "Save as Audio" downloads this directly instead of
+  // pulling the whole video and stripping its audio track. Omitted rather than
+  // null when the video exposes no adaptive audio, so the fallback path applies.
+  const audioOnlyUrl = pickBestAdaptiveAudio(player);
+
   return {
     platform: 'youtube',
     shortcode: videoId,
@@ -178,11 +207,85 @@ export function mapPlayerResponse(
         thumbnailUrl: pickThumbnail(player, videoId),
         width: asNumber(best['width']),
         height: asNumber(best['height']),
+        platform: 'youtube',
+        formats: buildFormats(player),
+        ...(audioOnlyUrl ? { audioOnlyUrl } : {}),
       } satisfies MediaItem,
     ],
     username: asString(getIn(player, ['videoDetails', 'author'])),
     caption: asString(getIn(player, ['videoDetails', 'title'])),
   };
+}
+
+/**
+ * Builds the full quality ladder offered to the resolution planner:
+ *  - progressive MP4 streams (muxed audio+video, ≤720p) → `hasAudio: true`
+ *  - adaptive **H.264/MP4** video-only streams (1080p+) → `hasAudio: false`,
+ *    each paired with the best adaptive **AAC (M4A)** audio-only stream.
+ *
+ * We deliberately restrict adaptive picks to H.264 video + AAC audio so the
+ * on-device muxer can passthrough-remux them into MP4. YouTube's VP9/Opus/WebM
+ * variants cannot be muxed into an MP4 container, so they are excluded here.
+ */
+export function buildFormats(player: Record<string, unknown>): MediaFormat[] {
+  const formats: MediaFormat[] = progressiveFormats(player).map((format) => ({
+    url: asString(format['url']) as string,
+    width: asNumber(format['width']),
+    height: asNumber(format['height']),
+    bitrate: asNumber(format['bitrate']),
+    hasAudio: true,
+  }));
+
+  const audioUrl = pickBestAdaptiveAudio(player);
+  if (audioUrl) {
+    for (const format of adaptiveVideoFormats(player)) {
+      const videoUrl = asString(format['url']);
+      if (!videoUrl) continue;
+      formats.push({
+        url: videoUrl,
+        width: asNumber(format['width']),
+        height: asNumber(format['height']),
+        bitrate: asNumber(format['bitrate']),
+        hasAudio: false,
+        audioUrl,
+      });
+    }
+  }
+
+  return formats;
+}
+
+/** Adaptive H.264/MP4 video-only streams with a direct url (mux-compatible). */
+function adaptiveVideoFormats(player: Record<string, unknown>): Record<string, unknown>[] {
+  const formats = asArray(getIn(player, ['streamingData', 'adaptiveFormats'])) ?? [];
+  return formats.filter(isRecord).filter((format) => {
+    const mime = asString(format['mimeType']) ?? '';
+    return (
+      mime.startsWith('video/mp4') &&
+      /avc1|h264/i.test(mime) &&
+      asString(format['url']) !== null
+    );
+  });
+}
+
+/** Highest-bitrate adaptive AAC (M4A) audio-only stream url, or null. */
+function pickBestAdaptiveAudio(player: Record<string, unknown>): string | null {
+  const formats = asArray(getIn(player, ['streamingData', 'adaptiveFormats'])) ?? [];
+  let bestUrl: string | null = null;
+  let bestBitrate = -1;
+  for (const format of formats) {
+    if (!isRecord(format)) continue;
+    const mime = asString(format['mimeType']) ?? '';
+    if (!mime.startsWith('audio/mp4') || !/mp4a/i.test(mime)) continue;
+    const url = asString(format['url']);
+    if (!url) continue;
+    const bitrate = asNumber(format['bitrate']) ?? 0;
+    if (bitrate > bestBitrate) {
+      bestBitrate = bitrate;
+      bestUrl = url;
+    }
+  }
+  return bestUrl;
 }
 
 /**

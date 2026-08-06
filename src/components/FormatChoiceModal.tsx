@@ -1,15 +1,21 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing, typography } from '../theme';
+import { ResolutionPref, resolutionLabel } from '../services/preferences';
+import { colors, radius, shadows, spacing, typography } from '../theme';
 import { ItemDownloadState } from './MediaCard';
 
 interface FormatChoiceModalProps {
   visible: boolean;
   videoState: ItemDownloadState;
   audioState: ItemDownloadState;
+  /** Quality this save will use — the platform default, or a one-off override. */
+  resolution: ResolutionPref;
+  /** True when the chosen quality differs from the saved default. */
+  resolutionOverridden: boolean;
   onSaveVideo: () => void;
   onSaveAudio: () => void;
+  onChangeResolution: () => void;
   onClose: () => void;
 }
 
@@ -17,8 +23,11 @@ export function FormatChoiceModal({
   visible,
   videoState,
   audioState,
+  resolution,
+  resolutionOverridden,
   onSaveVideo,
   onSaveAudio,
+  onChangeResolution,
   onClose,
 }: FormatChoiceModalProps) {
   const insets = useSafeAreaInsets();
@@ -31,17 +40,36 @@ export function FormatChoiceModal({
           <Text style={styles.title}>Save as</Text>
 
           <FormatRow
+            glyph="🎬"
             label="Video"
             sublabel="MP4"
             state={videoState}
             onPress={onSaveVideo}
           />
           <FormatRow
+            glyph="🎧"
             label="Audio"
             sublabel="M4A · audio only"
             state={audioState}
             onPress={onSaveAudio}
           />
+
+          {/* Quality applies to the video save only, just for this download —
+              Settings keeps the per-platform default. */}
+          <Pressable
+            style={({ pressed }) => [styles.qualityRow, pressed && styles.rowPressed]}
+            onPress={onChangeResolution}
+            accessibilityRole="button"
+          >
+            <Text style={styles.qualityLabel}>Video quality</Text>
+            <View style={styles.qualityValueWrap}>
+              <Text style={styles.qualityValue}>{resolutionLabel(resolution)}</Text>
+              <Text style={styles.qualityHint}>
+                {resolutionOverridden ? 'Just this download' : 'Default · tap to change'}
+              </Text>
+            </View>
+            <Text style={styles.qualityChevron}>›</Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -49,11 +77,13 @@ export function FormatChoiceModal({
 }
 
 function FormatRow({
+  glyph,
   label,
   sublabel,
   state,
   onPress,
 }: {
+  glyph: string;
   label: string;
   sublabel: string;
   state: ItemDownloadState;
@@ -66,6 +96,9 @@ function FormatRow({
       style={({ pressed }) => [styles.row, pressed && !isDownloading && styles.rowPressed]}
       onPress={isDownloading ? undefined : onPress}
     >
+      <View style={styles.iconTile}>
+        <Text style={styles.iconGlyph}>{glyph}</Text>
+      </View>
       <View style={styles.rowInfo}>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowSublabel}>{sublabel}</Text>
@@ -86,7 +119,7 @@ function FormatChip({ state }: { state: ItemDownloadState }) {
   if (state.status === 'done') {
     return (
       <View style={[styles.chip, styles.chipDone]}>
-        <Text style={styles.chipLabelDone}>Saved</Text>
+        <Text style={styles.chipLabelDone}>✓ Saved</Text>
       </View>
     );
   }
@@ -103,20 +136,54 @@ function FormatChip({ state }: { state: ItemDownloadState }) {
 }
 
 const styles = StyleSheet.create({
+  qualityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.sunken,
+  },
+  qualityLabel: {
+    flex: 1,
+    fontSize: typography.body,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  qualityValueWrap: {
+    alignItems: 'flex-end',
+  },
+  qualityValue: {
+    fontSize: typography.subtitle,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  qualityHint: {
+    marginTop: 1,
+    fontSize: typography.small,
+    color: colors.textSecondary,
+  },
+  qualityChevron: {
+    marginLeft: spacing.sm,
+    fontSize: typography.subtitle,
+    color: colors.textSecondary,
+  },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.card,
-    borderTopLeftRadius: radius.lg + 4,
-    borderTopRightRadius: radius.lg + 4,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+    ...shadows.raised,
   },
   handle: {
-    width: 36,
+    width: 40,
     height: 4,
     borderRadius: radius.pill,
     backgroundColor: colors.border,
@@ -124,7 +191,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: {
-    fontSize: typography.body,
+    fontSize: typography.headline,
     fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.sm,
@@ -139,25 +206,37 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.65,
   },
+  iconTile: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.sunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  iconGlyph: {
+    fontSize: 20,
+  },
   rowInfo: {
     flex: 1,
     marginRight: spacing.md,
   },
   rowLabel: {
     fontSize: typography.body,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
   },
   rowSublabel: {
-    marginTop: spacing.xs,
+    marginTop: 2,
     fontSize: typography.small,
     color: colors.textSecondary,
   },
   progressTrack: {
     marginTop: spacing.sm,
-    height: 3,
+    height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.background,
+    backgroundColor: colors.sunken,
     overflow: 'hidden',
   },
   progressFill: {
@@ -167,7 +246,7 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     color: colors.accent,
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: typography.body,
     minWidth: 44,
     textAlign: 'right',
@@ -182,14 +261,15 @@ const styles = StyleSheet.create({
   },
   chipLabelDone: {
     color: colors.success,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: typography.small,
   },
   chipSave: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.accent,
+    ...shadows.glow,
   },
   chipLabelSave: {
-    color: colors.accent,
+    color: colors.textOnAccent,
     fontWeight: '700',
     fontSize: typography.small,
   },
