@@ -1,7 +1,7 @@
 import { Album, Asset, MediaType, getPermissionsAsync, requestPermissionsAsync } from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 
-import { ALBUM_NAME } from './download';
+import { KNOWN_ALBUM_NAMES } from './download';
 
 export class LibraryError extends Error {
   /** Friendly message safe to show in the UI. */
@@ -15,7 +15,7 @@ export class LibraryError extends Error {
 }
 
 /**
- * A media file Foxy has saved, with the fields the UI needs resolved up front.
+ * A media file SaveSama has saved, with the fields the UI needs resolved up front.
  *
  * We deliberately do NOT use the SDK 56 `Asset.getInfo()` helper: it requires a
  * width/height and throws "Height not found" for audio assets, which would drop
@@ -52,7 +52,7 @@ async function toSavedAsset(asset: Asset): Promise<SavedAsset> {
 }
 
 /**
- * Sort key approximating when Foxy saved the file. `creationTime` is unreliable
+ * Sort key approximating when the file was saved. `creationTime` is unreliable
  * across media types — extracted audio is "created" now, while a downloaded
  * photo/video can carry its original capture date — so prefer `modificationTime`
  * (when the file was written to the device) and fall back to `creationTime`.
@@ -63,7 +63,7 @@ function savedAt(asset: SavedAsset): number {
 
 /**
  * Requests full read access to the media library so the Saved tab can
- * enumerate Foxy's albums. The save flow only needs add/write access, but
+ * enumerate the app's albums. The save flow only needs add/write access, but
  * listing existing assets requires full access.
  */
 export async function ensureReadPermission(): Promise<void> {
@@ -73,17 +73,19 @@ export async function ensureReadPermission(): Promise<void> {
   if (!requested.granted) {
     throw new LibraryError(
       'media library read permission denied',
-      'Foxy needs permission to read your media to show saved files. Enable Photos and videos access in Settings.'
+      'SaveSama needs permission to read your media to show saved files. Enable Photos and videos access in Settings.'
     );
   }
 }
 
 /**
- * Returns every asset Foxy has saved, newest first. On Android the files live
- * in two same-named albums (`Pictures/Foxy Downloader` for photo/video and
- * `Audio/Foxy Downloader` for audio); on iOS there is a single album. Album
+ * Returns every asset the app has saved, newest first. On Android the files live
+ * in two same-named albums (`Pictures/SaveSama` for photo/video and
+ * `Audio/SaveSama` for audio); on iOS there is a single album. Album
  * titles aren't unique, so we fetch all albums and match every one titled
- * {@link ALBUM_NAME} rather than relying on `Album.get`, which returns just one.
+ * one of {@link KNOWN_ALBUM_NAMES} rather than relying on `Album.get`, which returns
+ * just one. The legacy titles are included so files saved before the app was
+ * renamed still appear here.
  */
 export async function listSavedAssets(): Promise<SavedAsset[]> {
   await ensureReadPermission();
@@ -91,17 +93,17 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
   // Every fan-out below uses `allSettled`, not `Promise.all`: `Album.getAll()`
   // returns every bucket on the device, and a single foreign album/asset whose
   // metadata can't be read would otherwise reject the whole load. We drop the
-  // rejects and keep going so Foxy's own files always surface.
+  // rejects and keep going so the app's own files always surface.
   const albums = await Album.getAll();
 
   const titled = await Promise.allSettled(
     albums.map(async (album) => ({ album, title: await album.getTitle() }))
   );
-  const foxyAlbums = titled
-    .filter((r) => r.status === 'fulfilled' && r.value.title === ALBUM_NAME)
+  const appAlbums = titled
+    .filter((r) => r.status === 'fulfilled' && KNOWN_ALBUM_NAMES.includes(r.value.title))
     .map((r) => (r as PromiseFulfilledResult<{ album: Album; title: string }>).value.album);
 
-  const assetGroups = await Promise.allSettled(foxyAlbums.map((album) => album.getAssets()));
+  const assetGroups = await Promise.allSettled(appAlbums.map((album) => album.getAssets()));
   const assets = assetGroups
     .filter((r): r is PromiseFulfilledResult<Asset[]> => r.status === 'fulfilled')
     .flatMap((r) => r.value);
@@ -123,7 +125,7 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
     // Break the skips down by stage and include the native error text so we can
     // see exactly what's failing (e.g. audio asset metadata reads).
     console.warn(`[library] skipped ${skipped} entr(ies)`, {
-      foxyAlbumsFound: foxyAlbums.length,
+      appAlbumsFound: appAlbums.length,
       assetsFound: assets.length,
       albumTitleErrors: titleErrors,
       albumGetAssetsErrors: assetsErrors,

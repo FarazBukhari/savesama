@@ -10,7 +10,7 @@ const ThemeContext = createContext<Theme>(darkTheme);
 /**
  * Resolves the active theme from the saved preference, falling back to the OS
  * setting when the user has left it on 'auto'. `useColorScheme()` returns null
- * before the platform reports a value, which we read as dark — Foxy's native
+ * before the platform reports a value, which we read as dark — the app's native
  * state — rather than flashing light and then correcting.
  *
  * Nothing renders until the saved preferences are on disk-read. Without that

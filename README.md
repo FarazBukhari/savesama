@@ -1,4 +1,4 @@
-# 🦊 Foxy Downloader
+# 🦊 SaveSama
 
 An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels from
 **Instagram**, posts from **Threads**, and videos from **YouTube** straight to your gallery.
@@ -19,16 +19,16 @@ tab.
 
 | Media | Location |
 | --- | --- |
-| Photos & videos | `Pictures/Foxy Downloader` |
-| Audio | `Music/Foxy Downloader` |
+| Photos & videos | `Pictures/SaveSama` |
+| Audio | `Music/SaveSama` |
 
 Not configurable: Android's MediaStore roots an album by media type, so photos/videos and
-audio can't share one folder — Foxy only names the album. Both paths are shown in Settings.
+audio can't share one folder — SaveSama only names the album. Both paths are shown in Settings.
 
 ## Features
 
 - **Share-sheet integration** — tap *Share* on any Instagram post, Threads post, or
-  YouTube video and pick *Foxy Downloader*; the app opens and fetches the media
+  YouTube video and pick *SaveSama*; the app opens and fetches the media
   automatically.
 - **Paste a link** — or copy a post/video link and hit *Paste* in the app.
 - **Auto-detects the platform** — paste an Instagram, Threads, or YouTube link and the app
@@ -148,7 +148,7 @@ npm test            # jest (URL parser + extraction parser tests)
 
 ## Build the preview APK (EAS)
 
-The project is already linked to EAS (`@farazbukhari/foxy-downloader`).
+The project is already linked to EAS (`@farazbukhari/savesama`).
 
 ```bash
 eas build --profile preview --platform android

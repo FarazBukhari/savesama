@@ -61,7 +61,7 @@ export function SettingsScreen() {
   const handleSignOut = (row: AccountRow) => {
     Alert.alert(
       `Sign out of ${row.label}?`,
-      'Foxy will stop being able to open posts that need an account until you sign in again.',
+      'SaveSama will stop being able to open posts that need an account until you sign in again.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -142,7 +142,7 @@ export function SettingsScreen() {
         ))}
         <Text style={styles.footnote}>
           Lower quality downloads faster and takes less space. If the size you picked isn't
-          offered, Foxy takes the next one down.
+          offered, SaveSama takes the next one down.
         </Text>
 
         <Text style={styles.overline}>Accounts</Text>
@@ -171,14 +171,14 @@ export function SettingsScreen() {
           );
         })}
         <Text style={styles.footnote}>
-          Foxy downloads as the account you sign in to, so anything you can view, you can save.
+          SaveSama downloads as the account you sign in to, so anything you can view, you can save.
           Signing in happens the first time a post needs it. YouTube needs no account.
         </Text>
 
         <Text style={styles.overline}>Where files are saved</Text>
         {/*
           Read-only on purpose: Android's MediaStore roots an album by media type, so
-          photos/videos and audio cannot share one folder. Foxy has no say in the
+          photos/videos and audio cannot share one folder. the app has no say in the
           parent directory — it only names the album.
         */}
         <View style={styles.row}>
