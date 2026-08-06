@@ -27,7 +27,7 @@ export function ErrorNotice({ message, title, action, tone = 'error' }: ErrorNot
     <View style={[styles.container, isPrompt && styles.prompt]} accessibilityRole="alert">
       <Feather
         name="alert-circle"
-        size={15}
+        size={18}
         color={isPrompt ? theme.colors.accent : theme.colors.error}
         style={styles.icon}
       />
@@ -64,7 +64,7 @@ const makeStyles = (theme: Theme) =>
       flex: 1,
     },
     title: {
-      fontSize: typography.subtitle,
+      fontSize: typography.body,
       fontWeight: '700',
       color: theme.colors.error,
     },
@@ -73,8 +73,8 @@ const makeStyles = (theme: Theme) =>
     },
     message: {
       color: theme.colors.textSecondary,
-      fontSize: typography.small + 1,
-      lineHeight: 19,
+      fontSize: typography.subtitle + 1,
+      lineHeight: 21,
     },
     messageUnderTitle: {
       marginTop: 3,

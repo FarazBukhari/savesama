@@ -6,22 +6,28 @@ import { spacing, Theme, typography } from '../theme';
 
 interface HeaderProps {
   title: string;
+  /** One line under the title. Skip it when the screen speaks for itself. */
+  subtitle?: string;
   /** Right-hand slot: a queue count, a view toggle, nothing. */
   right?: ReactNode;
 }
 
 /**
- * The screen's top bar. One hairline under it does the work a card shadow used
- * to — nothing on this screen floats.
+ * The screen title. It's set at display size and sits on open space rather
+ * than in a bar — at 16px in a hairline-ruled strip it read as a breadcrumb,
+ * and every screen opened looking like the middle of something.
  */
-export function Header({ title, right }: HeaderProps) {
+export function Header({ title, subtitle, right }: HeaderProps) {
   const styles = useThemedStyles(makeStyles);
 
   return (
-    <View style={styles.bar}>
-      <Text style={styles.title} numberOfLines={1}>
-        {title}
-      </Text>
+    <View style={styles.wrap}>
+      <View style={styles.copy}>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>
   );
@@ -29,23 +35,31 @@ export function Header({ title, right }: HeaderProps) {
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    bar: {
+    wrap: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      minHeight: 46,
-      paddingBottom: spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.border,
+      gap: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.lg,
+    },
+    copy: {
+      flex: 1,
+      minWidth: 0,
     },
     title: {
-      flexShrink: 1,
-      fontSize: typography.headline,
+      fontSize: typography.display,
       fontWeight: '800',
-      letterSpacing: -0.3,
+      letterSpacing: -1,
       color: theme.colors.text,
     },
+    subtitle: {
+      marginTop: spacing.xs,
+      fontSize: typography.subtitle + 1,
+      lineHeight: 21,
+      color: theme.colors.textSecondary,
+    },
     right: {
-      marginLeft: spacing.md,
+      flexShrink: 0,
     },
   });

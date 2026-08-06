@@ -1,11 +1,13 @@
 import Feather from '@expo/vector-icons/Feather';
 import { MediaType } from 'expo-media-library';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { SavedAsset } from '../services/library';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
-import { fonts, radius, spacing, Theme, typography } from '../theme';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
+import { PressableScale } from './PressableScale';
 import { formatDuration } from './SavedFileTile';
+import { kindLabel, prettyName } from './savedName';
 
 interface SavedFileRowProps {
   asset: SavedAsset;
@@ -16,8 +18,8 @@ interface SavedFileRowProps {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Short relative date. Anything older than a week falls back to a numeric date
- * so the column stays the same width and stays scannable.
+ * Short relative date. Anything past the last few days falls back to a numeric
+ * date — a bare weekday six days back reads as the *coming* one.
  */
 function formatWhen(timestamp: number | null): string {
   if (timestamp == null) return '—';
@@ -26,42 +28,37 @@ function formatWhen(timestamp: number | null): string {
   startOfToday.setHours(0, 0, 0, 0);
   const daysAgo = Math.floor((startOfToday.getTime() - date.getTime()) / DAY_MS) + 1;
   if (daysAgo <= 0) return 'Today';
-  if (daysAgo === 1) return 'Yest.';
-  // Only within the last few days: a bare weekday six days back reads as the
-  // *coming* one.
-  if (daysAgo < 5) return date.toLocaleDateString(undefined, { weekday: 'short' });
+  if (daysAgo === 1) return 'Yesterday';
+  if (daysAgo < 5) return date.toLocaleDateString(undefined, { weekday: 'long' });
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-function typeLabel(mediaType: MediaType): string {
-  if (mediaType === MediaType.AUDIO) return 'Audio';
-  if (mediaType === MediaType.VIDEO) return 'Video';
-  return 'Photo';
-}
-
 /**
- * List-view row. Shows what a grid tile can't — name, kind, length, when it was
- * saved. Byte size and resolution aren't in the media-library record, so they
- * aren't shown rather than guessed.
+ * List-view row. Byte size and resolution aren't in the media-library record,
+ * so they aren't shown rather than guessed.
  */
 export function SavedFileRow({ asset, onOpen, onDelete }: SavedFileRowProps) {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const isAudio = asset.mediaType === MediaType.AUDIO;
   const hasDuration = asset.duration != null && asset.duration > 0;
+  const { title, code } = prettyName(asset.filename, asset.mediaType);
 
-  const facts = [typeLabel(asset.mediaType)];
+  const facts = [formatWhen(asset.modificationTime ?? asset.creationTime)];
   if (hasDuration) facts.push(formatDuration(asset.duration as number));
+  if (code) facts.push(code);
 
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    <PressableScale
+      style={styles.row}
       onPress={() => onOpen(asset)}
       onLongPress={() => onDelete(asset)}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${kindLabel(asset.mediaType)}`}
     >
       {isAudio ? (
         <View style={[styles.thumb, styles.audioThumb]}>
-          <Feather name="music" size={16} color={theme.colors.textSecondary} />
+          <Feather name="music" size={20} color={theme.colors.textSecondary} />
         </View>
       ) : (
         <Image
@@ -74,13 +71,15 @@ export function SavedFileRow({ asset, onOpen, onDelete }: SavedFileRowProps) {
 
       <View style={styles.copy}>
         <Text style={styles.name} numberOfLines={1}>
-          {asset.filename ?? typeLabel(asset.mediaType)}
+          {title}
         </Text>
-        <Text style={styles.facts}>{facts.join(' · ')}</Text>
+        <Text style={styles.facts} numberOfLines={1}>
+          {facts.join('  ·  ')}
+        </Text>
       </View>
 
-      <Text style={styles.when}>{formatWhen(asset.modificationTime ?? asset.creationTime)}</Text>
-    </Pressable>
+      <Feather name="chevron-right" size={18} color={theme.colors.placeholder} />
+    </PressableScale>
   );
 }
 
@@ -89,18 +88,16 @@ const makeStyles = (theme: Theme) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md - 1,
-      paddingVertical: spacing.sm + 1,
+      gap: spacing.md,
+      minHeight: MIN_TAP + 16,
+      paddingVertical: spacing.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.border,
     },
-    pressed: {
-      backgroundColor: theme.colors.sunken,
-    },
     thumb: {
-      width: 44,
-      height: 44,
-      borderRadius: radius.sm,
+      width: 52,
+      height: 52,
+      borderRadius: radius.md,
       backgroundColor: theme.colors.sunken,
     },
     audioThumb: {
@@ -112,17 +109,12 @@ const makeStyles = (theme: Theme) =>
       minWidth: 0,
     },
     name: {
-      fontSize: typography.subtitle,
+      fontSize: typography.body,
       fontWeight: '700',
       color: theme.colors.text,
     },
     facts: {
       marginTop: 3,
-      fontSize: typography.figure,
-      fontFamily: fonts.mono,
-      color: theme.colors.textSecondary,
-    },
-    when: {
       fontSize: typography.figure,
       fontFamily: fonts.mono,
       color: theme.colors.textSecondary,

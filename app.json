@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.farazbukhari.foxydownloader"
+      "bundleIdentifier": "com.farazbukhari.foxydownloader",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
     },
     "android": {
       "package": "com.farazbukhari.foxydownloader",
@@ -49,7 +52,8 @@
         }
       ],
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      "expo-image"
     ],
     "extra": {
       "eas": {

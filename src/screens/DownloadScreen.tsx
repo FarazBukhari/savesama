@@ -18,8 +18,11 @@ import { useDownloadJobs } from '../hooks/useDownloadJobs';
 import { usePreferences } from '../hooks/usePreferences';
 import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
 import { ResolutionPref, resolutionForPlatform } from '../services/preferences';
+import Animated from 'react-native-reanimated';
+
+import { ENTER, EXIT, enterRow, REFLOW } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
-import { fonts, radius, spacing, Theme, typography } from '../theme';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
 const IDLE_STATE: ItemDownloadState = { status: 'idle', progress: 0 };
 
@@ -189,17 +192,19 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
       >
         <Header
           title="Foxy"
+          subtitle="Save video, photos and audio from Instagram, Threads and YouTube"
           right={
             failedCount > 0 ? (
-              <Text style={[styles.pip, styles.pipError]}>
+              <Animated.Text entering={ENTER} exiting={EXIT} style={[styles.pip, styles.pipError]}>
                 {failedCount} failed
-              </Text>
+              </Animated.Text>
             ) : activeCount > 0 ? (
-              <Text style={styles.pip}>{activeCount} active</Text>
+              <Animated.Text entering={ENTER} exiting={EXIT} style={styles.pip}>
+                {activeCount} active
+              </Animated.Text>
             ) : null
           }
         />
-        <View style={styles.formGap} />
         <LinkInput
           value={linkText}
           busy={busy}
@@ -213,14 +218,14 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
         ) : null}
 
         {busy ? (
-          <View style={styles.fetchingRow}>
+          <Animated.View entering={ENTER} exiting={EXIT} style={styles.fetchingRow}>
             <ActivityIndicator color={theme.colors.accent} size="small" />
             <Text style={styles.fetchingLabel}>Reading the post…</Text>
-          </View>
+          </Animated.View>
         ) : null}
 
         {result ? (
-          <View style={styles.results}>
+          <Animated.View entering={ENTER} layout={REFLOW} style={styles.results}>
             <View style={styles.resultsHeader}>
               <Text style={styles.overline}>
                 Found · {result.items.length} {result.items.length === 1 ? 'item' : 'items'}
@@ -237,20 +242,25 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
             </View>
             <View style={styles.group}>
               {result.items.map((item, index) => (
-                <MediaCard
-                  key={item.id}
-                  item={item}
-                  state={downloads[jobId(item, 'video')] ?? IDLE_STATE}
-                  onCancel={handleCancel}
-                  onDownload={handleSavePress}
-                  last={index === result.items.length - 1}
-                />
+                <Animated.View key={item.id} entering={enterRow(index)} layout={REFLOW}>
+                  <MediaCard
+                    item={item}
+                    state={downloads[jobId(item, 'video')] ?? IDLE_STATE}
+                    onCancel={handleCancel}
+                    onDownload={handleSavePress}
+                    last={index === result.items.length - 1}
+                  />
+                </Animated.View>
               ))}
             </View>
-          </View>
+          </Animated.View>
         ) : null}
 
-        {!busy && !result && !error ? <EmptyState /> : null}
+        {!busy && !result && !error ? (
+          <Animated.View entering={ENTER} exiting={EXIT}>
+            <EmptyState />
+          </Animated.View>
+        ) : null}
       </ScrollView>
 
       {modalItem ? (
@@ -299,12 +309,9 @@ const makeStyles = (theme: Theme) =>
       paddingHorizontal: spacing.lg,
       paddingBottom: spacing.xxl,
     },
-    formGap: {
-      height: spacing.lg,
-    },
     pip: {
       fontFamily: fonts.mono,
-      fontSize: typography.figure,
+      fontSize: typography.caption,
       color: theme.colors.accent,
       backgroundColor: theme.colors.accentSoft,
       borderRadius: radius.pill,
@@ -324,7 +331,7 @@ const makeStyles = (theme: Theme) =>
     },
     fetchingLabel: {
       color: theme.colors.textSecondary,
-      fontSize: typography.small + 1,
+      fontSize: typography.body,
     },
     results: {
       marginTop: spacing.xl,
@@ -337,23 +344,23 @@ const makeStyles = (theme: Theme) =>
     },
     overline: {
       flexShrink: 1,
-      fontSize: typography.figure,
+      fontSize: typography.caption,
       fontWeight: '700',
-      letterSpacing: 1.4,
+      letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: theme.colors.textSecondary,
     },
     saveAll: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: radius.sm,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs + 2,
+      backgroundColor: theme.colors.accent,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.lg,
+      justifyContent: 'center',
+      minHeight: MIN_TAP - 8,
     },
     saveAllLabel: {
-      color: theme.colors.text,
+      color: theme.colors.textOnAccent,
       fontWeight: '700',
-      fontSize: typography.small,
+      fontSize: typography.subtitle + 1,
     },
     group: {
       borderWidth: 1,

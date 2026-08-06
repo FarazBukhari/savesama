@@ -1,6 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Header } from '../components/Header';
@@ -15,8 +16,9 @@ import {
   resolutionLabel,
   savePreferences,
 } from '../services/preferences';
+import { ENTER, TINT_TRANSITION } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
-import { fonts, radius, spacing, Theme, typography } from '../theme';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
 type ResolutionKey = 'instagramResolution' | 'threadsResolution' | 'youtubeResolution';
 
@@ -89,25 +91,29 @@ export function SettingsScreen() {
                 <Pressable
                   key={choice.mode}
                   onPress={() => void savePreferences({ themeMode: choice.mode })}
-                  style={[
-                    styles.segmentItem,
-                    index > 0 && styles.segmentDivider,
-                    active && styles.segmentActive,
-                  ]}
                   accessibilityRole="button"
                   accessibilityLabel={`${choice.mode} theme`}
                   accessibilityState={{ selected: active }}
                 >
-                  <Feather
-                    name={choice.icon}
-                    size={14}
-                    color={active ? theme.colors.accent : theme.colors.textSecondary}
-                  />
-                  {choice.mode === 'auto' ? (
-                    <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
-                      Auto
-                    </Text>
-                  ) : null}
+                  <Animated.View
+                    style={[
+                      styles.segmentItem,
+                      index > 0 && styles.segmentDivider,
+                      active && styles.segmentActive,
+                      TINT_TRANSITION,
+                    ]}
+                  >
+                    <Feather
+                      name={choice.icon}
+                      size={18}
+                      color={active ? theme.colors.accent : theme.colors.textSecondary}
+                    />
+                    {choice.mode === 'auto' ? (
+                      <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+                        Auto
+                      </Text>
+                    ) : null}
+                  </Animated.View>
                 </Pressable>
               );
             })}
@@ -126,7 +132,7 @@ export function SettingsScreen() {
               <Text style={styles.rowHint}>{row.hint}</Text>
             </View>
             <Text style={styles.value}>{shortResolution(prefs[row.key])}</Text>
-            <Feather name="chevron-right" size={15} color={theme.colors.textSecondary} />
+            <Feather name="chevron-right" size={18} color={theme.colors.textSecondary} />
           </Pressable>
         ))}
         <Text style={styles.footnote}>
@@ -145,14 +151,16 @@ export function SettingsScreen() {
                 <Text style={styles.rowFigure}>{signedIn ? 'Signed in' : 'Not signed in'}</Text>
               </View>
               {signedIn ? (
+                <Animated.View entering={ENTER}>
                 <Pressable
                   style={({ pressed }) => [styles.button, pressed && styles.rowPressed]}
                   onPress={() => handleSignOut(row)}
                   accessibilityRole="button"
                 >
-                  <Feather name="log-out" size={13} color={theme.colors.text} />
+                  <Feather name="log-out" size={16} color={theme.colors.text} />
                   <Text style={styles.buttonLabel}>Sign out</Text>
                 </Pressable>
+                </Animated.View>
               ) : null}
             </View>
           );
@@ -212,9 +220,9 @@ const makeStyles = (theme: Theme) =>
       paddingBottom: spacing.xxl,
     },
     overline: {
-      fontSize: typography.figure,
+      fontSize: typography.caption,
       fontWeight: '700',
-      letterSpacing: 1.4,
+      letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: theme.colors.textSecondary,
       paddingTop: spacing.lg,
@@ -223,7 +231,8 @@ const makeStyles = (theme: Theme) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md - 1,
+      gap: spacing.md,
+      minHeight: MIN_TAP + 12,
       paddingVertical: spacing.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.border,
@@ -237,36 +246,36 @@ const makeStyles = (theme: Theme) =>
     },
     rowLabel: {
       flex: 1,
-      fontSize: typography.subtitle,
+      fontSize: typography.body,
       fontWeight: '600',
       color: theme.colors.text,
     },
     rowLabelGrow: {
       flex: 1,
-      fontSize: typography.subtitle,
+      fontSize: typography.body,
       fontWeight: '600',
       color: theme.colors.text,
     },
     rowHint: {
-      marginTop: 2,
-      fontSize: typography.small,
+      marginTop: 3,
+      fontSize: typography.subtitle,
       color: theme.colors.textSecondary,
     },
     rowFigure: {
-      marginTop: 2,
+      marginTop: 3,
       fontFamily: fonts.mono,
       fontSize: typography.figure,
       color: theme.colors.textSecondary,
     },
     value: {
       fontFamily: fonts.mono,
-      fontSize: typography.caption,
+      fontSize: typography.subtitle + 1,
       fontWeight: '700',
       color: theme.colors.accent,
     },
     dot: {
-      width: 6,
-      height: 6,
+      width: 8,
+      height: 8,
       borderRadius: radius.pill,
       backgroundColor: theme.colors.success,
     },
@@ -276,15 +285,16 @@ const makeStyles = (theme: Theme) =>
     button: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      justifyContent: 'center',
+      gap: spacing.sm,
+      minHeight: MIN_TAP - 8,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      borderRadius: radius.sm,
-      paddingHorizontal: spacing.md - 2,
-      paddingVertical: spacing.xs + 3,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md + 2,
     },
     buttonLabel: {
-      fontSize: typography.small,
+      fontSize: typography.subtitle + 1,
       fontWeight: '700',
       color: theme.colors.text,
     },
@@ -298,9 +308,11 @@ const makeStyles = (theme: Theme) =>
     segmentItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: spacing.md - 2,
-      paddingVertical: spacing.xs + 2,
+      justifyContent: 'center',
+      gap: spacing.sm - 2,
+      minWidth: MIN_TAP,
+      minHeight: MIN_TAP - 8,
+      paddingHorizontal: spacing.md,
     },
     segmentDivider: {
       borderLeftWidth: 1,
@@ -310,7 +322,7 @@ const makeStyles = (theme: Theme) =>
       backgroundColor: theme.colors.accentSoft,
     },
     segmentLabel: {
-      fontSize: typography.caption,
+      fontSize: typography.subtitle,
       fontWeight: '700',
       color: theme.colors.textSecondary,
     },
@@ -319,8 +331,8 @@ const makeStyles = (theme: Theme) =>
     },
     footnote: {
       marginTop: spacing.md,
-      fontSize: typography.small,
+      fontSize: typography.subtitle,
       color: theme.colors.textSecondary,
-      lineHeight: 18,
+      lineHeight: 21,
     },
   });

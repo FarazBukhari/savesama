@@ -3,6 +3,8 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdBanner } from './src/components/AdBanner';
@@ -77,13 +79,19 @@ function Main() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <Main />
-        <WebViewSessionResolver config={INSTAGRAM_SESSION} />
-        <WebViewSessionResolver config={THREADS_SESSION} />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    // Gesture Handler needs a root view above everything that uses its
+    // Pressable — which, via PressableScale, is every button in the app.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* Honour the OS "reduce motion" setting for every Reanimated animation. */}
+      <ReducedMotionConfig mode={ReduceMotion.System} />
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <Main />
+          <WebViewSessionResolver config={INSTAGRAM_SESSION} />
+          <WebViewSessionResolver config={THREADS_SESSION} />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
