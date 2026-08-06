@@ -3,6 +3,28 @@
 An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels from
 **Instagram**, posts from **Threads**, and videos from **YouTube** straight to your gallery.
 
+## Supported apps
+
+| App | What it saves |
+| --- | --- |
+| **Instagram** | Posts, reels, photos and carousels |
+| **Threads** | Video posts, photos and carousels |
+| **YouTube** | Videos and Shorts, up to 1080p |
+
+Instagram and Threads download as the account you sign in to, so anything your account can
+view, you can save. YouTube is anonymous. The same list is shown in the app's **Settings**
+tab.
+
+## Where files are saved
+
+| Media | Location |
+| --- | --- |
+| Photos & videos | `Pictures/Foxy Downloader` |
+| Audio | `Music/Foxy Downloader` |
+
+Not configurable: Android's MediaStore roots an album by media type, so photos/videos and
+audio can't share one folder — Foxy only names the album. Both paths are shown in Settings.
+
 ## Features
 
 - **Share-sheet integration** — tap *Share* on any Instagram post, Threads post, or

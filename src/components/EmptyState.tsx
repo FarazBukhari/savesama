@@ -3,7 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadows, spacing, typography } from '../theme';
 
 const STEPS = [
-  { glyph: '📤', text: 'Tap Share on any Instagram post or YouTube video and pick Foxy Downloader' },
+  {
+    glyph: '📤',
+    text: 'Tap Share on an Instagram post, Threads post or YouTube video and pick Foxy Downloader',
+  },
   { glyph: '📋', text: 'Or copy a link and hit Paste above' },
   { glyph: '💾', text: 'Preview the media, then save it straight to your gallery' },
 ] as const;
@@ -26,7 +29,7 @@ export function EmptyState() {
       ))}
 
       <Text style={styles.note}>
-        Works with public Instagram posts, reels & carousels and YouTube videos.
+        Works with Instagram posts, reels & carousels, Threads posts, and YouTube videos.
       </Text>
     </View>
   );
