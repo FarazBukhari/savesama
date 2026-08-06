@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    A foreground service keeps the app's process alive while downloads run, so
+    leaving the app (or the screen turning off) doesn't kill an 85MB transfer.
+    The downloading itself stays in JS — on Android the JS thread keeps running
+    while backgrounded, it is process death that interrupts it, which is exactly
+    what a foreground service prevents.
+  -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+  <!-- Android 13+: without this the progress notification is silently not shown.
+       The service still runs, so downloads are unaffected. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+    <service
+      android:name=".FoxyDownloadService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync" />
+  </application>
+</manifest>

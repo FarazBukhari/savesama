@@ -12,14 +12,33 @@ import { LinkInput } from '../components/LinkInput';
 import { ItemDownloadState, MediaCard } from '../components/MediaCard';
 import { extractMedia } from '../extraction/extract';
 import { ExtractionError, ExtractionResult, MediaItem } from '../extraction/types';
-import { DownloadError, downloadAudioToGallery, downloadToGallery } from '../services/download';
-import { colors, radius, spacing, typography } from '../theme';
-
-function stateKey(item: MediaItem, format: 'video' | 'audio' = 'video'): string {
-  return item.type === 'video' ? `${item.id}:${format}` : item.id;
-}
+import { DownloadError } from '../services/download';
+import { ResolutionChoiceModal } from '../components/ResolutionChoiceModal';
+import { useDownloadJobs } from '../hooks/useDownloadJobs';
+import { usePreferences } from '../hooks/usePreferences';
+import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
+import { ResolutionPref, resolutionForPlatform } from '../services/preferences';
+import { colors, radius, shadows, spacing, typography } from '../theme';
 
 const IDLE_STATE: ItemDownloadState = { status: 'idle', progress: 0 };
+
+/**
+ * Projects queue jobs onto the per-item state MediaCard renders. 'active' becomes
+ * 'downloading'; a cancelled job reads as idle so it can simply be re-queued.
+ */
+function jobsToStates(jobs: DownloadJob[]): Record<string, ItemDownloadState> {
+  const states: Record<string, ItemDownloadState> = {};
+  for (const job of jobs) {
+    const status: ItemDownloadState['status'] =
+      job.status === 'active'
+        ? 'downloading'
+        : job.status === 'cancelled'
+          ? 'idle'
+          : job.status;
+    states[job.id] = { status, progress: job.progress };
+  }
+  return states;
+}
 
 function friendlyMessage(error: unknown): string {
   if (error instanceof ExtractionError || error instanceof DownloadError) {
@@ -41,15 +60,33 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractionResult | null>(null);
-  const [downloads, setDownloads] = useState<Record<string, ItemDownloadState>>({});
   const [modalItem, setModalItem] = useState<MediaItem | null>(null);
+  // Download state lives in the queue module, not here, so a download outlives
+  // this screen's re-renders and tab switches.
+  const jobs = useDownloadJobs();
+  const downloads = jobsToStates(jobs);
+  const prefs = usePreferences();
+  // One-off quality for the item in the format sheet. Cleared when the sheet
+  // closes, so it never leaks into the next save or into Settings.
+  const [overrideResolution, setOverrideResolution] = useState<ResolutionPref | null>(null);
+  const [choosingResolution, setChoosingResolution] = useState(false);
+
+  // Download failures live on the job, not in this component's state — without
+  // this they were invisible, which is how a broken audio URL looked like "nothing
+  // happens".
+  const failedJob = jobs.find((job) => job.status === 'error');
+  const visibleError = error ?? failedJob?.error ?? null;
+
+  const defaultResolution = modalItem
+    ? resolutionForPlatform(prefs, modalItem.platform ?? 'instagram')
+    : 'max';
+  const effectiveResolution = overrideResolution ?? defaultResolution;
 
   const runExtraction = useCallback(async (text: string) => {
     Keyboard.dismiss();
     setBusy(true);
     setError(null);
     setResult(null);
-    setDownloads({});
     try {
       const extraction = await extractMedia(text);
       setResult(extraction);
@@ -85,29 +122,26 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
   }, [linkText, runExtraction]);
 
   const handleDownload = useCallback(
-    async (item: MediaItem, format: 'video' | 'audio' = 'video') => {
-      const key = stateKey(item, format);
-      setDownloads((previous) => ({
-        ...previous,
-        [key]: { status: 'downloading', progress: 0 },
-      }));
-      try {
-        const downloader = format === 'audio' ? downloadAudioToGallery : downloadToGallery;
-        await downloader(item, (fraction) => {
-          setDownloads((previous) => ({
-            ...previous,
-            [key]: { status: 'downloading', progress: fraction },
-          }));
-        });
-        setDownloads((previous) => ({ ...previous, [key]: { status: 'done', progress: 1 } }));
-        onSaved?.();
-      } catch (downloadError) {
-        setDownloads((previous) => ({ ...previous, [key]: { status: 'error', progress: 0 } }));
-        setError(friendlyMessage(downloadError));
-      }
+    (item: MediaItem, format: 'video' | 'audio' = 'video', resolution?: ResolutionPref) => {
+      setError(null);
+      // force: the user pressed Save deliberately, so a finished job re-runs (e.g.
+      // to save the same video again at a different quality).
+      enqueueDownload(item, format, { onSaved, resolution, force: true });
     },
     [onSaved]
   );
+
+  const handleCancel = useCallback((item: MediaItem) => {
+    // Cancels whichever of the two is live; the other call is a no-op.
+    cancelDownload(jobId(item, 'video'));
+    cancelDownload(jobId(item, 'audio'));
+  }, []);
+
+  const closeFormatSheet = useCallback(() => {
+    setModalItem(null);
+    setChoosingResolution(false);
+    setOverrideResolution(null);
+  }, []);
 
   const handleSavePress = useCallback(
     (item: MediaItem) => {
@@ -120,20 +154,21 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
     [handleDownload]
   );
 
-  const handleDownloadAll = useCallback(async () => {
+  const handleDownloadAll = useCallback(() => {
     if (!result) return;
     setError(null);
+    // Queue them all; the runner drains them one at a time. No force here: already
+    // saved items are skipped rather than downloaded twice.
     for (const item of result.items) {
-      const key = stateKey(item, 'video');
-      const state = downloads[key] ?? IDLE_STATE;
-      if (state.status === 'done' || state.status === 'downloading') continue;
-      await handleDownload(item, 'video');
+      const state = downloads[jobId(item, 'video')] ?? IDLE_STATE;
+      if (state.status === 'done' || state.status === 'downloading' || state.status === 'queued') continue;
+      enqueueDownload(item, 'video', { onSaved });
     }
-  }, [result, downloads, handleDownload]);
+  }, [result, downloads, onSaved]);
 
   const pendingCount = result
     ? result.items.filter(
-        (item) => (downloads[stateKey(item, 'video')] ?? IDLE_STATE).status !== 'done'
+        (item) => (downloads[jobId(item, 'video')] ?? IDLE_STATE).status !== 'done'
       ).length
     : 0;
 
@@ -153,7 +188,7 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
           onSubmit={handleSubmit}
         />
 
-        {error ? <ErrorNotice message={error} /> : null}
+        {visibleError ? <ErrorNotice message={visibleError} /> : null}
 
         {busy ? (
           <View style={styles.fetchingCard}>
@@ -185,7 +220,8 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
               <MediaCard
                 key={item.id}
                 item={item}
-                state={downloads[stateKey(item, 'video')] ?? IDLE_STATE}
+                state={downloads[jobId(item, 'video')] ?? IDLE_STATE}
+                onCancel={handleCancel}
                 onDownload={handleSavePress}
               />
             ))}
@@ -196,14 +232,37 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
       </ScrollView>
 
       {modalItem ? (
-        <FormatChoiceModal
-          visible
-          videoState={downloads[stateKey(modalItem, 'video')] ?? IDLE_STATE}
-          audioState={downloads[stateKey(modalItem, 'audio')] ?? IDLE_STATE}
-          onSaveVideo={() => void handleDownload(modalItem, 'video')}
-          onSaveAudio={() => void handleDownload(modalItem, 'audio')}
-          onClose={() => setModalItem(null)}
-        />
+        <>
+          <FormatChoiceModal
+            visible={!choosingResolution}
+            videoState={downloads[jobId(modalItem, 'video')] ?? IDLE_STATE}
+            audioState={downloads[jobId(modalItem, 'audio')] ?? IDLE_STATE}
+            resolution={effectiveResolution}
+            resolutionOverridden={overrideResolution !== null}
+            onSaveVideo={() => {
+              handleDownload(modalItem, 'video', overrideResolution ?? undefined);
+              closeFormatSheet();
+            }}
+            onSaveAudio={() => {
+              // Sheet stays open: unlike video, audio has no card row of its own, so
+              // closing here would leave the download with nowhere to show progress.
+              // The Audio row reports its own percentage and ✓ Saved state.
+              handleDownload(modalItem, 'audio');
+            }}
+            onChangeResolution={() => setChoosingResolution(true)}
+            onClose={closeFormatSheet}
+          />
+          <ResolutionChoiceModal
+            visible={choosingResolution}
+            title="Quality for this download"
+            value={effectiveResolution}
+            onSelect={(value) => {
+              setOverrideResolution(value);
+              setChoosingResolution(false);
+            }}
+            onClose={() => setChoosingResolution(false)}
+          />
+        </>
       ) : null}
     </>
   );
@@ -223,10 +282,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.xl,
     marginTop: spacing.md,
+    ...shadows.card,
   },
   fetchingLabel: {
     marginLeft: spacing.md,
@@ -240,14 +298,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   resultsTitle: {
-    fontSize: typography.body,
+    fontSize: typography.headline,
     fontWeight: '700',
     color: colors.text,
   },
   resultsCount: {
-    fontWeight: '400',
+    fontWeight: '500',
+    fontSize: typography.subtitle,
     color: colors.textSecondary,
   },
   downloadAll: {
@@ -255,6 +316,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    ...shadows.glow,
   },
   downloadAllLabel: {
     color: colors.textOnAccent,
