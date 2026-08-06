@@ -644,7 +644,25 @@ picked up by an existing one.
 
 ---
 
-## 14. Per-download quality override
+## 14. Settings screen contents and per-download quality override
+
+Settings shows three sections: **Default resolution** (per platform), **Where files are
+saved**, and **Supported apps**.
+
+The save locations are **display-only by design**, not an unfinished control. Android's
+MediaStore roots an album by media type, so photos/videos live under `Pictures/` and audio
+under `Music/` — they cannot share one folder, and Foxy only chooses the album *name*
+(`ALBUM_NAME` in `download.ts`), never the parent directory. Both rows derive their text from
+that constant, so renaming the album updates the screen automatically. See the
+`saveToFoxyAlbum` comment for why two albums exist.
+
+**Supported apps** is a plain list kept next to `PLATFORM_ROWS` in `SettingsScreen.tsx`. When
+a platform is added, both arrays need the new entry — plus the user-facing copy in
+`Header.tsx` (default subtitle), `EmptyState.tsx` (steps + note), `LinkInput.tsx`
+(placeholder) and `extract.ts`'s "unrecognized link" message. Threads shipped without those
+four for a while, which is how the app ended up supporting a platform it never mentioned.
+
+### Per-download quality override
 
 Settings holds the per-platform default; the format sheet's "Video quality" row overrides it
 for one save. The override travels as `job.resolution` into `downloadToGallery(item,
@@ -653,6 +671,11 @@ save or into Settings. The row reads "Default · tap to change" or "Just this do
 active mode is unambiguous.
 
 Audio gets no quality choice — the source serves one audio stream.
+
+**The format sheet stays open after an audio save, and closes after a video save.** That
+asymmetry is deliberate: a video has a card row that takes over showing progress once the
+sheet closes, whereas audio has no row of its own, so closing would leave the download with
+nowhere to report. The Audio row shows its own percentage and ✓ Saved state instead.
 
 **A finished job re-runs when the quality changes.** `enqueueDownload` ignores a re-queue of
 a completed job so "Save all" doesn't re-download everything, but it makes two exceptions:

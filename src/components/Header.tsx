@@ -12,7 +12,7 @@ interface HeaderProps {
 
 export function Header({
   title = 'Foxy Downloader',
-  subtitle = 'Save videos, photos & reels from Instagram and YouTube',
+  subtitle = 'Save videos, photos & reels from Instagram, Threads and YouTube',
   glyph = '🦊',
 }: HeaderProps) {
   return (
