@@ -35,3 +35,23 @@ export function unregisterFetcher(platform: SessionPlatform, current: MediaInfoF
 export function getFetcher(platform: SessionPlatform): MediaInfoFetcher | null {
   return fetchers.get(platform) ?? null;
 }
+
+/**
+ * Drops the platform's session. Registered by the mounted resolver, because only
+ * it owns the WebView that holds the cookie.
+ */
+export type SessionSignOut = () => void;
+
+const signOuts = new Map<SessionPlatform, SessionSignOut>();
+
+export function registerSignOut(platform: SessionPlatform, next: SessionSignOut): void {
+  signOuts.set(platform, next);
+}
+
+export function unregisterSignOut(platform: SessionPlatform, current: SessionSignOut): void {
+  if (signOuts.get(platform) === current) signOuts.delete(platform);
+}
+
+export function signOutOf(platform: SessionPlatform): void {
+  signOuts.get(platform)?.();
+}

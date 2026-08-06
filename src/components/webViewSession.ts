@@ -15,6 +15,12 @@ export interface SessionConfig {
   homeUrl: string;
   /** Page the login modal opens. */
   loginUrl: string;
+  /**
+   * Page the hidden WebView is sent to in order to drop the session. WebView has
+   * no cookie-clearing API, so signing out means asking the site to expire the
+   * cookie itself.
+   */
+  logoutUrl: string;
   origin: string;
   appId: string;
   /**
@@ -84,6 +90,7 @@ export const INSTAGRAM_SESSION: SessionConfig = {
   label: 'Instagram',
   homeUrl: 'https://www.instagram.com/',
   loginUrl: 'https://www.instagram.com/accounts/login/',
+  logoutUrl: 'https://www.instagram.com/accounts/logout/',
   origin: 'https://www.instagram.com',
   appId: IG_APP_ID,
   isAuthHop: () => false,
@@ -97,6 +104,7 @@ export const THREADS_SESSION: SessionConfig = {
   label: 'Threads',
   homeUrl: `${THREADS_ORIGIN}/`,
   loginUrl: `${THREADS_ORIGIN}/login`,
+  logoutUrl: `${THREADS_ORIGIN}/logout`,
   origin: THREADS_ORIGIN,
   appId: THREADS_APP_ID,
   isAuthHop: (url) => url.includes('instagram.com'),

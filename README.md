@@ -64,6 +64,14 @@ audio can't share one folder — Foxy only names the album. Both paths are shown
   Threads posts (`/@user/post/<code>`, `/post/<code>`, `/t/<code>`, `/share/<token>`);
   YouTube watch/`youtu.be`/Shorts video links.
 - **Threads text-only posts** have nothing to download and say so.
+- **Light and dark themes.** Settings → Appearance switches between them or follows the
+  phone. Dark is the fallback when the OS hasn't reported a preference yet.
+- **Saved opens as a grid, with a list view one tap away.** The choice persists. List rows
+  show name, kind, length and date; byte size and resolution aren't in the media-library
+  record, so they aren't shown.
+- **Sign out per platform.** Settings → Accounts drops the Instagram or Threads session.
+  The signed-in state shown there is a cached hint — see
+  [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §14.
 - **Selectable resolution (per platform).** Choose a default download quality for
   Instagram, Threads and YouTube on the **Settings** tab (360p up to 1080p, or "Max"), or
   override it for a single save from the format sheet. Photos pick a smaller rendition from
@@ -114,9 +122,10 @@ src/
     downloadQueue.ts        # Module-level queue; one job at a time, outlives screens
     rangedDownload.ts       # Parallel byte-range downloads + streamed join
     resolutionPlan.ts       # Picks the rendition/plan for a resolution preference
-    preferences.ts          # Per-platform resolution defaults, persisted
+    preferences.ts          # Resolution defaults, theme mode, library view, session hints
     library.ts              # Saved-files listing for the Saved tab
-  theme.ts                  # Colors, spacing, ad banner height
+  theme.ts                  # lightTheme / darkTheme + spacing, radius, type, ad banner height
+  ThemeProvider.tsx         # Resolves the active theme; useTheme / useThemedStyles
 ```
 
 ## Development
