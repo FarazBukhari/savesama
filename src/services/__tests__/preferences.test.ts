@@ -105,6 +105,7 @@ describe('preferences', () => {
 describe('resolutionForPlatform', () => {
   it('gives each platform its own preference', () => {
     const prefs = {
+      ...DEFAULT_PREFERENCES,
       instagramResolution: '480' as const,
       threadsResolution: '720' as const,
       youtubeResolution: '1080' as const,

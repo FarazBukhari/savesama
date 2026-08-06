@@ -11,17 +11,38 @@ import { SourcePlatform } from '../extraction/types';
  */
 export type ResolutionPref = 'max' | '1080' | '720' | '480' | '360';
 
+/** 'auto' follows the OS setting; the other two override it. */
+export type ThemeMode = 'light' | 'dark' | 'auto';
+
+/** How the Saved tab lays out. Grid is the default — you recognise a clip by its frame. */
+export type LibraryView = 'grid' | 'list';
+
 export interface Preferences {
   instagramResolution: ResolutionPref;
   threadsResolution: ResolutionPref;
   youtubeResolution: ResolutionPref;
+  themeMode: ThemeMode;
+  libraryView: LibraryView;
+  /**
+   * Last-known sign-in state per platform. A hint, not the truth: the session
+   * cookie lives in the WebView and we only learn about it when a request
+   * succeeds or the user signs in or out.
+   */
+  instagramSignedIn: boolean;
+  threadsSignedIn: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   instagramResolution: 'max',
   threadsResolution: 'max',
   youtubeResolution: 'max',
+  themeMode: 'auto',
+  libraryView: 'grid',
+  instagramSignedIn: false,
+  threadsSignedIn: false,
 };
+
+export const THEME_MODES: ThemeMode[] = ['light', 'dark', 'auto'];
 
 /** Ordered highest → lowest, for rendering the settings chooser. */
 export const RESOLUTION_OPTIONS: ResolutionPref[] = ['max', '1080', '720', '480', '360'];
@@ -73,7 +94,7 @@ export function resolutionForPlatform(
   }
 }
 
-const PREFERENCES_FILE = `${FileSystem.documentDirectory}foxy-preferences.json`;
+const PREFERENCES_FILE = `${FileSystem.documentDirectory}savesama-preferences.json`;
 
 let cache: Preferences = DEFAULT_PREFERENCES;
 /** Set once the user changes a value; a slower in-flight disk load must not clobber it. */
@@ -83,6 +104,14 @@ const listeners = new Set<(prefs: Preferences) => void>();
 
 function isResolutionPref(value: unknown): value is ResolutionPref {
   return typeof value === 'string' && (RESOLUTION_OPTIONS as string[]).includes(value);
+}
+
+function isThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === 'string' && (THEME_MODES as string[]).includes(value);
+}
+
+function isLibraryView(value: unknown): value is LibraryView {
+  return value === 'grid' || value === 'list';
 }
 
 /**
@@ -102,6 +131,12 @@ function normalize(raw: unknown): Preferences {
     youtubeResolution: isResolutionPref(record.youtubeResolution)
       ? record.youtubeResolution
       : DEFAULT_PREFERENCES.youtubeResolution,
+    themeMode: isThemeMode(record.themeMode) ? record.themeMode : DEFAULT_PREFERENCES.themeMode,
+    libraryView: isLibraryView(record.libraryView)
+      ? record.libraryView
+      : DEFAULT_PREFERENCES.libraryView,
+    instagramSignedIn: record.instagramSignedIn === true,
+    threadsSignedIn: record.threadsSignedIn === true,
   };
 }
 

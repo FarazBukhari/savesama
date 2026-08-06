@@ -7,9 +7,13 @@ import {
   MediaInfoFetcher,
   SessionFetchResult,
   registerFetcher,
+  registerSignOut,
   unregisterFetcher,
+  unregisterSignOut,
 } from '../services/mediaSession';
-import { colors, spacing, typography } from '../theme';
+import { savePreferences } from '../services/preferences';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { fonts, radius, spacing, Theme, typography } from '../theme';
 import { SessionConfig, buildFetchJs, isLoginRequired } from './webViewSession';
 
 const REQUEST_TIMEOUT_MS = 20000;
@@ -30,6 +34,8 @@ interface PendingRequest {
  * they share this component; everything that differs is in `config` (see webViewSession.ts).
  */
 export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const webViewRef = useRef<WebView>(null);
   const pending = useRef<Map<number, PendingRequest>>(new Map());
   const counter = useRef(0);
@@ -40,6 +46,12 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
   const sawAuthHop = useRef(false);
   const [loginVisible, setLoginVisible] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  // Set when the hidden WebView has been sent to the logout page, so the next
+  // load lands back on the home origin the injected fetch needs.
+  const signingOut = useRef(false);
+  // The hidden WebView's address is React state so sign-out can steer it even
+  // before its first load has finished.
+  const [hiddenUri, setHiddenUri] = useState(config.homeUrl);
 
   const runFetch = useCallback(
     (reqId: number) => {
@@ -80,6 +92,28 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
     return () => unregisterFetcher(config.platform, fetcher);
   }, [config.platform, fetcher]);
 
+  /**
+   * WebView exposes no cookie API, so signing out means driving the hidden
+   * WebView through the site's own logout page and letting it expire the
+   * cookie. The saved flag flips only once that page has loaded, and a later
+   * successful authed request flips it back — the flag never claims a state we
+   * haven't actually observed.
+   */
+  const signOut = useCallback(() => {
+    ready.current = false;
+    signingOut.current = true;
+    // Drive the navigation through `source` rather than injecting a
+    // `location.replace`: injection silently no-ops if the WebView hasn't
+    // finished its first load, which would leave the flag saying signed-out
+    // while the cookie is still alive.
+    setHiddenUri(config.logoutUrl);
+  }, [config.logoutUrl]);
+
+  useEffect(() => {
+    registerSignOut(config.platform, signOut);
+    return () => unregisterSignOut(config.platform, signOut);
+  }, [config.platform, signOut]);
+
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let msg: { reqId?: number; status?: number; body?: string };
@@ -105,9 +139,17 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
         return;
       }
 
-      settle(msg.reqId, { ok: status >= 200 && status < 300, status, body });
+      const ok = status >= 200 && status < 300;
+      // A successful authed request is the only real proof of a live session —
+      // the saved flag is otherwise just what we last saw the user do.
+      if (ok) {
+        void savePreferences(
+          config.platform === 'instagram' ? { instagramSignedIn: true } : { threadsSignedIn: true }
+        );
+      }
+      settle(msg.reqId, { ok, status, body });
     },
-    [settle]
+    [config.platform, settle]
   );
 
   const retryAwaiting = useCallback(() => {
@@ -142,6 +184,9 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
       // and cover the WebView with a spinner, so the feed never flashes during the
       // modal's slide-out animation.
       if (config.isLoggedIn(nav.url, sawAuthHop.current)) {
+        void savePreferences(
+          config.platform === 'instagram' ? { instagramSignedIn: true } : { threadsSignedIn: true }
+        );
         setSigningIn(true);
         setLoginVisible(false);
         retryAwaiting();
@@ -159,12 +204,23 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
   }, [settle]);
 
   const onLoadEnd = useCallback(() => {
+    // The logout page has loaded and dropped the cookie; send the WebView home
+    // so the next injected fetch runs from the origin it expects.
+    if (signingOut.current) {
+      signingOut.current = false;
+      // Only now is the cookie actually gone, so this is when the flag flips.
+      void savePreferences(
+        config.platform === 'instagram' ? { instagramSignedIn: false } : { threadsSignedIn: false }
+      );
+      setHiddenUri(config.homeUrl);
+      return;
+    }
     ready.current = true;
     setSigningIn(false);
     const queued = queue.current;
     queue.current = [];
     queued.forEach(runFetch);
-  }, [runFetch]);
+  }, [config.homeUrl, config.platform, runFetch]);
 
   return (
     <>
@@ -172,7 +228,7 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
       <View style={styles.hidden} pointerEvents="none">
         <WebView
           ref={webViewRef}
-          source={{ uri: config.homeUrl }}
+          source={{ uri: hiddenUri }}
           onMessage={onMessage}
           onLoadEnd={onLoadEnd}
           onNavigationStateChange={config.watchHiddenNavigation ? onNavChange : undefined}
@@ -191,7 +247,13 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
               <Text style={styles.modalTitle}>Sign in to {config.label}</Text>
               <Text style={styles.modalSubtitle}>Required to download · saved for next time</Text>
             </View>
-            <Pressable onPress={onCancelLogin} hitSlop={12} style={styles.modalCancel}>
+            <Pressable
+              onPress={onCancelLogin}
+              hitSlop={12}
+              style={styles.modalCancel}
+              accessibilityRole="button"
+              accessibilityLabel={`Cancel signing in to ${config.label}`}
+            >
               <Text style={styles.modalClose}>Cancel</Text>
             </Pressable>
           </View>
@@ -209,7 +271,7 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
           ) : null}
           {signingIn ? (
             <View style={styles.signingOverlay}>
-              <ActivityIndicator size="large" color={colors.accent} />
+              <ActivityIndicator size="large" color={theme.colors.accent} />
               <Text style={styles.signingLabel}>Signing you in…</Text>
             </View>
           ) : null}
@@ -219,7 +281,8 @@ export function WebViewSessionResolver({ config }: { config: SessionConfig }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
   hidden: {
     position: 'absolute',
     width: 1,
@@ -230,7 +293,7 @@ const styles = StyleSheet.create({
   },
   modalRoot: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -240,8 +303,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl,
     paddingBottom: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
   },
   modalHeaderText: {
     flex: 1,
@@ -250,12 +313,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: typography.title,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text,
   },
   modalSubtitle: {
     marginTop: 2,
     fontSize: typography.small,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
   modalCancel: {
     paddingVertical: spacing.xs,
@@ -264,7 +327,7 @@ const styles = StyleSheet.create({
   modalClose: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.accent,
+    color: theme.colors.accent,
   },
   loginWeb: {
     flex: 1,
@@ -278,11 +341,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   signingLabel: {
     fontSize: typography.body,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
 });

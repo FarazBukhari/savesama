@@ -1,4 +1,4 @@
-# Foxy Downloader — Maintenance & Operations Notes
+# SaveSama — Maintenance & Operations Notes
 
 Practical, breakage-prone, and operational knowledge for working on this app.
 Keep this current as things change.
@@ -128,7 +128,7 @@ needs no auth, and as of §11 it downloads only the audio stream rather than the
 
 ## 3. Build & release (EAS)
 
-- The project is linked to EAS as **`@farazbukhari/foxy-downloader`**
+- The project is linked to EAS as **`@farazbukhari/savesama`**
   (projectId `716a367e-a260-4e84-8e2f-73b8f730762d`, in `app.json` → `extra.eas`).
 - Preview APK (sideload on any Android phone):
 
@@ -186,7 +186,7 @@ restricted `types` scope.)
 npm run typecheck          # tsc --noEmit
 npm test                   # jest (51 tests)
 npx expo-doctor            # 21/21 checks
-npx expo export --platform android --output-dir /tmp/foxy-check && rm -rf /tmp/foxy-check
+npx expo export --platform android --output-dir /tmp/savesama-check && rm -rf /tmp/savesama-check
 ```
 
 ---
@@ -217,18 +217,18 @@ npm on Apr 1 2025**. EAS builds then failed with
 resolves anywhere. There is no maintained, reachable binary to point Gradle at.
 
 **What we do instead:** a tiny **local Expo module** at
-[`modules/foxy-audio-extractor`](../modules/foxy-audio-extractor) that remuxes the audio
+[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor) that remuxes the audio
 track using only OS-native muxers — no third-party binary, no APK bloat, no re-encode:
 
-- **Android** ([`FoxyAudioExtractorModule.kt`](../modules/foxy-audio-extractor/android/src/main/java/expo/modules/foxyaudioextractor/FoxyAudioExtractorModule.kt)):
+- **Android** ([`SaveSamaAudioExtractorModule.kt`](../modules/savesama-audio-extractor/android/src/main/java/expo/modules/savesamaaudioextractor/SaveSamaAudioExtractorModule.kt)):
   `MediaExtractor` selects the first `audio/*` track and copies its samples into a new
   MP4/M4A container via `MediaMuxer`.
-- **iOS** ([`FoxyAudioExtractorModule.swift`](../modules/foxy-audio-extractor/ios/FoxyAudioExtractorModule.swift)):
+- **iOS** ([`SaveSamaAudioExtractorModule.swift`](../modules/savesama-audio-extractor/ios/SaveSamaAudioExtractorModule.swift)):
   `AVAssetExportSession` with `AVAssetExportPresetPassthrough` and `outputFileType = .m4a`
   over an audio-only `AVMutableComposition`.
 
 JS calls `extractAudio(srcUri, destUri)` from
-[`modules/foxy-audio-extractor`](../modules/foxy-audio-extractor/index.ts); it's invoked in
+[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor/index.ts); it's invoked in
 Phase 2 of `downloadAudioToGallery` ([`src/services/download.ts`](../src/services/download.ts)).
 
 **Gotchas:**
@@ -325,7 +325,7 @@ ANDROID_VR POST and the bot/login error branches).
 
 1080p and above are only offered as **separate** video-only + audio-only adaptive streams,
 so the app downloads both and combines them with an on-device **muxer** (video + audio →
-MP4, no re-encode). This lives in `foxy-audio-extractor` (§7) as `muxVideoAudio` (Android
+MP4, no re-encode). This lives in `savesama-audio-extractor` (§7) as `muxVideoAudio` (Android
 `MediaMuxer` with both a `video/*` and `audio/*` track; iOS `AVMutableComposition` + a
 passthrough export). `youtube.ts` `buildFormats` only ever pairs an **H.264/MP4 video-only**
 stream with the **AAC/M4A (itag 140) audio-only** stream so the passthrough mux is valid;
@@ -336,7 +336,7 @@ VP9/Opus/WebM are excluded. See §9 for how the resolution preference drives it.
 ## 9. Resolution selection & the Settings screen
 
 Users pick a **default download resolution per platform** (Instagram / YouTube) on the
-**Settings** tab. Preferences persist to `${documentDirectory}foxy-preferences.json` via
+**Settings** tab. Preferences persist to `${documentDirectory}savesama-preferences.json` via
 `src/services/preferences.ts` (a module singleton + `useSyncExternalStore` hook,
 `src/hooks/usePreferences.ts`). `loadPreferences()` is **idempotent** (one disk read,
 cached promise) and is both warmed at launch in `App.tsx` and awaited by
@@ -618,7 +618,7 @@ re-renders, and "Save all" queues everything at once instead of awaiting a loop.
 - Job identity is `item.id` for photos and `item.id:<format>` for videos, so a video's audio
   and video saves are independent jobs.
 
-[`foxy-download-service`](../modules/foxy-download-service) is an Android **foreground
+[`savesama-download-service`](../modules/savesama-download-service) is an Android **foreground
 service** that keeps the process alive while the queue drains. It downloads nothing: on
 Android the RN JS thread keeps running while backgrounded, and it is *process death* that
 interrupts a transfer. The notification a foreground service must post doubles as progress
@@ -646,21 +646,38 @@ picked up by an existing one.
 
 ## 14. Settings screen contents and per-download quality override
 
-Settings shows three sections: **Default resolution** (per platform), **Where files are
-saved**, and **Supported apps**.
+Settings shows four sections: **Appearance** (theme mode), **Default resolution** (per
+platform), **Accounts** (per-platform sign out), and **Where files are saved**.
 
 The save locations are **display-only by design**, not an unfinished control. Android's
 MediaStore roots an album by media type, so photos/videos live under `Pictures/` and audio
-under `Music/` — they cannot share one folder, and Foxy only chooses the album *name*
+under `Music/` — they cannot share one folder, and SaveSama only chooses the album *name*
 (`ALBUM_NAME` in `download.ts`), never the parent directory. Both rows derive their text from
 that constant, so renaming the album updates the screen automatically. See the
-`saveToFoxyAlbum` comment for why two albums exist.
+`saveToAppAlbum` comment for why two albums exist.
 
-**Supported apps** is a plain list kept next to `PLATFORM_ROWS` in `SettingsScreen.tsx`. When
-a platform is added, both arrays need the new entry — plus the user-facing copy in
-`Header.tsx` (default subtitle), `EmptyState.tsx` (steps + note), `LinkInput.tsx`
-(placeholder) and `extract.ts`'s "unrecognized link" message. Threads shipped without those
-four for a while, which is how the app ended up supporting a platform it never mentioned.
+**Accounts** lists the two platforms that need a session. The signed-in state shown there is
+a *hint*, not the truth: the cookie lives inside the hidden WebView and there is no API to
+read it, so `instagramSignedIn` / `threadsSignedIn` in preferences are written when a login
+completes and cleared on sign out. The next authed request is the real test — if the hint is
+stale, the login modal simply appears as it always did.
+
+**Sign out drives the site's own logout page.** `react-native-webview` exposes no
+cookie-clearing API, so `WebViewSessionResolver` registers a `signOut` handler with
+`mediaSession`, which points the hidden WebView's `source` at `config.logoutUrl` and, on the
+following `onLoadEnd`, back at `config.homeUrl` so the injected fetch stays same-origin. It
+steers through `source` rather than injecting `location.replace` because injection silently
+no-ops before the WebView's first load has finished. Adding a platform means adding its
+logout URL to the `SessionConfig`.
+
+> `THREADS_SESSION.logoutUrl` (`/logout`) has not been confirmed against a real device. If
+> signing out of Threads leaves the session alive, that URL is the thing to check first.
+
+When a platform is added, `PLATFORM_ROWS` and `ACCOUNT_ROWS` in `SettingsScreen.tsx` both
+need an entry — plus the user-facing copy in `EmptyState.tsx` (steps + note),
+`LinkInput.tsx` (placeholder) and `extract.ts`'s "unrecognized link" message. Threads
+shipped without those for a while, which is how the app ended up supporting a platform it
+never mentioned.
 
 ### Per-download quality override
 
@@ -703,3 +720,80 @@ The wait is injectable (`extractYouTube(id, { sleep })`) so tests don't sleep fo
 **The durable fix is a signed-in YouTube session**, which is now plumbable via
 `WebViewSessionResolver` (see §1/§10). Backoff only widens the window. Reproduction is easy:
 run a handful of extractions from one IP in quick succession.
+
+
+---
+
+## 16. Theming
+
+`theme.ts` exports `lightTheme` and `darkTheme` filling one `Theme` interface, plus the
+theme-independent scales (`spacing`, `radius`, `typography`, `fonts`, `AD_BANNER_HEIGHT`)
+which stay plain module exports — a component that only needs spacing shouldn't need a hook.
+
+`ThemeProvider` resolves which one is active from `preferences.themeMode`, falling back to
+`useColorScheme()` when that's `'auto'`. Components read it two ways:
+
+```ts
+const theme = useTheme();                       // for inline values and icon colors
+const styles = useThemedStyles(makeStyles);     // for StyleSheets
+```
+
+`makeStyles` **must** be declared at module scope. `useThemedStyles` memoises on
+`[makeStyles, theme]`, so a factory defined inside the component changes identity every
+render and the memo never hits.
+
+Two rules the palette encodes:
+
+- **Depth is a hairline, not a shadow.** `theme.shadows` has one recipe, `raised`, and only
+  modals and sheets use it. Everything else separates with `borderColor: theme.colors.border`
+  at `StyleSheet.hairlineWidth`. Shadows read wrong on a dark ground and needed two sets of
+  values; a hairline needs one token.
+- **The accent changes hue between themes.** Dark uses `#FF7A3D`; light drops to `#D04E19`
+  because the brighter orange only reaches 3.1:1 on white, which fails for the small bold
+  figures it sits on. Anything referencing the accent must go through the token, never a
+  literal.
+
+**Machine output is monospace.** URLs, resolutions, durations, file counts and dates use
+`fonts.mono` (`Menlo` on iOS, `monospace` on Android). Human-written copy stays in the system
+UI face. It's the fastest way to tell, at a glance, what SaveSama found versus what SaveSama said.
+
+Icons are Feather from `@expo/vector-icons`. The font loads asynchronously, so `App.tsx`
+gates the first render on `useFonts(Feather.font)` — without it every icon is a blank box
+for the first frames.
+
+
+---
+
+## 17. The rename (Foxy Downloader → SaveSama)
+
+The app was called *Foxy Downloader* until it was renamed, before it ever
+shipped. Because there were no installs to carry forward, the rename was a
+clean break rather than a migration — **nothing kept a legacy identifier**:
+
+| Renamed | To |
+|---|---|
+| App name / slug / scheme | `SaveSama` / `savesama` |
+| Package + bundle id | `com.foxysama.savesama` |
+| Gallery album | `SaveSama` |
+| Saved-file prefix | `savesama_` |
+| Preferences file | `savesama-preferences.json` |
+| Local native modules | `modules/savesama-*`, `expo.modules.savesama*`, `SaveSama*Module` |
+| Notification channel | `savesama_downloads` |
+
+**If the app is ever renamed again after a real release, none of this can be
+repeated as-is.** Four of those are user-data bindings, and changing them on a
+live install silently destroys state:
+
+- **The album title.** `listSavedAssets()` finds files by matching the album's
+  *title*. Rename it and every previously saved file disappears from the Saved
+  tab — the files stay on disk, the app just stops looking where they are.
+- **The saved-file prefix.** `SAVED_FILENAME` in `savedName.ts` parses it back
+  into a readable row title; unmatched files fall back to the raw filename.
+- **`savesama-preferences.json`.** A new path reads as a missing file, which
+  resets every preference to its default.
+- **The package id.** A different id is a different app: sideloaded users get a
+  second icon rather than an upgrade.
+
+The fix in each case is to accept both the old and new values rather than
+replace — match a list of album titles, alternate the prefix regex, and read
+the old preferences path when the new one is absent.
