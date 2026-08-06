@@ -1,6 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
+import { useState } from 'react';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { colors, radius, spacing, typography } from '../theme';
+import { TINT_TRANSITION } from '../motion';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
 export type Tab = 'download' | 'saved' | 'settings';
 
@@ -9,15 +14,53 @@ interface TabBarProps {
   onChange: (tab: Tab) => void;
 }
 
-const TABS: { key: Tab; label: string; glyph: string }[] = [
-  { key: 'download', label: 'Download', glyph: '⬇' },
-  { key: 'saved', label: 'Saved', glyph: '🗂' },
-  { key: 'settings', label: 'Settings', glyph: '⚙' },
+type FeatherName = keyof typeof Feather.glyphMap;
+
+const TABS: { key: Tab; label: string; icon: FeatherName }[] = [
+  { key: 'download', label: 'Get', icon: 'download' },
+  { key: 'saved', label: 'Saved', icon: 'grid' },
+  { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
+const INDICATOR_TRANSITION = {
+  transitionProperty: 'transform',
+  transitionDuration: 260,
+  transitionTimingFunction: 'ease-out',
+} as const;
+
+/**
+ * Docked, not floating: the bottom edge already carries the ad band, and a
+ * floating pill would hover over it and clip the last row of the Saved grid.
+ *
+ * The active marker is one bar that slides between tabs rather than three that
+ * blink on and off — the movement is what tells you which way you went.
+ */
 export function TabBar({ active, onChange }: TabBarProps) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const [barWidth, setBarWidth] = useState(0);
+
+  const activeIndex = TABS.findIndex((tab) => tab.key === active);
+  const tabWidth = barWidth / TABS.length;
+
+  const onLayout = (event: LayoutChangeEvent) => setBarWidth(event.nativeEvent.layout.width);
+
   return (
-    <View style={styles.bar}>
+    <View style={styles.bar} onLayout={onLayout}>
+      {barWidth > 0 ? (
+        <Animated.View
+          style={[
+            styles.indicator,
+            {
+              width: tabWidth,
+              transform: [{ translateX: Math.max(activeIndex, 0) * tabWidth }],
+            },
+            INDICATOR_TRANSITION,
+          ]}
+          pointerEvents="none"
+        />
+      ) : null}
+
       {TABS.map((tab) => {
         const isActive = tab.key === active;
         return (
@@ -28,12 +71,16 @@ export function TabBar({ active, onChange }: TabBarProps) {
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
           >
-            {({ pressed }) => (
-              <View style={[styles.pill, isActive && styles.pillActive, pressed && styles.pressed]}>
-                <Text style={[styles.glyph, isActive && styles.activeGlyph]}>{tab.glyph}</Text>
-                <Text style={[styles.label, isActive && styles.activeText]}>{tab.label}</Text>
-              </View>
-            )}
+            <Feather
+              name={tab.icon}
+              size={22}
+              color={isActive ? theme.colors.accent : theme.colors.textSecondary}
+            />
+            <Animated.Text
+              style={[styles.label, isActive && styles.labelActive, TINT_TRANSITION]}
+            >
+              {tab.label}
+            </Animated.Text>
           </Pressable>
         );
       })}
@@ -41,49 +88,38 @@ export function TabBar({ active, onChange }: TabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm - 2,
-    paddingBottom: spacing.sm - 2,
-  },
-  item: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  pill: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.lg,
-    minWidth: 84,
-  },
-  pillActive: {
-    backgroundColor: colors.accentSoft,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  glyph: {
-    fontSize: 19,
-    color: colors.textSecondary,
-  },
-  activeGlyph: {
-    color: colors.accent,
-  },
-  label: {
-    marginTop: 2,
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  activeText: {
-    color: colors.accent,
-    fontWeight: '700',
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    bar: {
+      flexDirection: 'row',
+      backgroundColor: theme.colors.card,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+    },
+    indicator: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      height: 2,
+      backgroundColor: theme.colors.accent,
+      borderBottomLeftRadius: radius.pill,
+      borderBottomRightRadius: radius.pill,
+    },
+    item: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs + 1,
+      minHeight: MIN_TAP + 8,
+      paddingTop: spacing.sm + 2,
+      paddingBottom: spacing.md,
+    },
+    label: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: theme.colors.textSecondary,
+    },
+    labelActive: {
+      color: theme.colors.accent,
+    },
+  });

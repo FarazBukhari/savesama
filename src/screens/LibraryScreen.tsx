@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import Feather from '@expo/vector-icons/Feather';
+import { MediaType } from 'expo-media-library';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorNotice } from '../components/ErrorNotice';
 import { Header } from '../components/Header';
+import { SavedFileRow } from '../components/SavedFileRow';
 import { SavedFileTile } from '../components/SavedFileTile';
+import { usePreferences } from '../hooks/usePreferences';
 import {
   LibraryError,
   SavedAsset,
@@ -21,13 +27,37 @@ import {
   listSavedAssets,
   openAsset,
 } from '../services/library';
-import { colors, radius, shadows, spacing, typography } from '../theme';
+import { LibraryView, savePreferences } from '../services/preferences';
+import { ENTER, enterRow, EXIT, REFLOW, TINT_TRANSITION } from '../motion';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
-const COLUMNS = 3;
-const GAP = spacing.sm;
-const H_PADDING = spacing.lg;
+/** Rows past this are already on screen or arrive by scrolling; see renderItem. */
+const FIRST_SCREENFUL = 8;
+
+const COLUMNS = 2;
+const GAP = spacing.sm - 2;
+/** Grid runs closer to the edge than the list — the media is the page. */
+const GRID_PADDING = spacing.sm;
+const LIST_PADDING = spacing.lg;
 const TILE_SIZE =
-  (Dimensions.get('window').width - 2 * H_PADDING - (COLUMNS - 1) * GAP) / COLUMNS;
+  (Dimensions.get('window').width - 2 * GRID_PADDING - (COLUMNS - 1) * GAP) / COLUMNS;
+
+type Filter = 'all' | 'video' | 'photo' | 'audio';
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'video', label: 'Video' },
+  { key: 'photo', label: 'Photo' },
+  { key: 'audio', label: 'Audio' },
+];
+
+function matchesFilter(asset: SavedAsset, filter: Filter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'audio') return asset.mediaType === MediaType.AUDIO;
+  if (filter === 'video') return asset.mediaType === MediaType.VIDEO;
+  return asset.mediaType !== MediaType.AUDIO && asset.mediaType !== MediaType.VIDEO;
+}
 
 function friendlyMessage(error: unknown): string {
   // Always log so the real cause is visible in Metro / a development build.
@@ -46,11 +76,15 @@ interface LibraryScreenProps {
 
 export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { libraryView } = usePreferences();
 
   const [assets, setAssets] = useState<SavedAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const hasLoaded = useRef(false);
 
   const load = useCallback(async (mode: 'initial' | 'refresh') => {
@@ -69,11 +103,11 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
   }, []);
 
   useEffect(() => {
-    // First mount shows the full-screen spinner; later refreshes (tab re-focus,
-    // a new download) refresh quietly without blanking the existing grid.
+    // The first pass is a full load; every later token bump (a tab switch, or
+    // a new download) refreshes quietly without blanking the existing grid.
     void load(hasLoaded.current ? 'refresh' : 'initial');
     hasLoaded.current = true;
-  }, [load, refreshToken]);
+  }, [refreshToken, load]);
 
   const handleOpen = useCallback(async (asset: SavedAsset) => {
     try {
@@ -83,141 +117,275 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
     }
   }, []);
 
-  const handleDelete = useCallback(
-    (asset: SavedAsset) => {
-      Alert.alert('Delete file', 'Remove this file from your device?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteSavedAsset(asset.id);
-              setAssets((previous) => previous.filter((a) => a.id !== asset.id));
-            } catch (deleteError) {
-              Alert.alert('Cannot delete file', friendlyMessage(deleteError));
-            }
-          },
+  const handleDelete = useCallback((asset: SavedAsset) => {
+    Alert.alert('Delete file', 'Remove this file from your device?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteSavedAsset(asset.id);
+            setAssets((previous) => previous.filter((a) => a.id !== asset.id));
+          } catch (deleteError) {
+            Alert.alert('Cannot delete file', friendlyMessage(deleteError));
+          }
         },
-      ]);
-    },
-    []
+      },
+    ]);
+  }, []);
+
+  const visible = useMemo(
+    () => assets.filter((asset) => matchesFilter(asset, filter)),
+    [assets, filter]
   );
 
   if (loading) {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={theme.colors.accent} />
       </View>
     );
   }
 
+  const isGrid = libraryView === 'grid';
+  const padding = isGrid ? GRID_PADDING : LIST_PADDING;
+
   return (
-    <FlatList
-      data={assets}
+    <Animated.FlatList
+      // numColumns can't change on a mounted FlatList — remounting on the view
+      // toggle is the supported way, and without it the switch throws.
+      key={libraryView}
+      // Item layout animations only work on a single-column list; passing this
+      // with numColumns > 1 is unsupported, so the grid goes without.
+      itemLayoutAnimation={isGrid ? undefined : REFLOW}
+      data={visible}
       keyExtractor={(asset) => asset.id}
-      numColumns={COLUMNS}
+      numColumns={isGrid ? COLUMNS : 1}
       style={styles.list}
       contentContainerStyle={[
+        { paddingHorizontal: padding, paddingTop: insets.top + spacing.md },
         styles.content,
-        { paddingTop: insets.top + spacing.lg },
-        assets.length === 0 && styles.contentEmpty,
+        visible.length === 0 && styles.contentEmpty,
       ]}
-      columnWrapperStyle={styles.row}
+      columnWrapperStyle={isGrid ? styles.row : undefined}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => void load('refresh')}
-          tintColor={colors.accent}
+          tintColor={theme.colors.accent}
         />
       }
       ListHeaderComponent={
-        <View style={styles.header}>
+        <View style={{ paddingHorizontal: isGrid ? LIST_PADDING - GRID_PADDING : 0 }}>
           <Header
-            title="Saved files"
-            subtitle="Everything you've saved with Foxy"
-            glyph="🗂"
+            title="Saved"
+            subtitle={assets.length > 0 ? undefined : 'Everything you keep lands here'}
+            right={
+              <ViewToggle
+                value={libraryView}
+                onChange={(next) => void savePreferences({ libraryView: next })}
+              />
+            }
           />
-          {error ? <ErrorNotice message={error} /> : null}
+          <View style={styles.filters}>
+            {FILTERS.map((option) => {
+              const active = option.key === filter;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setFilter(option.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Animated.View
+                    style={[styles.chip, active && styles.chipActive, TINT_TRANSITION]}
+                  >
+                    <Animated.Text
+                      style={[styles.chipLabel, active && styles.chipLabelActive, TINT_TRANSITION]}
+                    >
+                      {option.label}
+                    </Animated.Text>
+                  </Animated.View>
+                </Pressable>
+              );
+            })}
+          </View>
+          {assets.length > 0 ? (
+            <Animated.Text entering={ENTER} exiting={EXIT} style={styles.count}>
+              {visible.length} {visible.length === 1 ? 'FILE' : 'FILES'}
+              {filter === 'all' ? '' : ` OF ${assets.length}`}
+            </Animated.Text>
+          ) : null}
+          {error ? <ErrorNotice title="Couldn't read your library" message={error} /> : null}
         </View>
       }
       ListEmptyComponent={
         error ? null : (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyHero}>
-              <Text style={styles.emptyHeroGlyph}>🗂</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No saved files yet</Text>
-            <Text style={styles.emptyBody}>
-              Files you download will show up here. Long-press a file to delete it.
+          <Animated.View entering={ENTER} style={styles.empty}>
+            <Feather name="inbox" size={34} color={theme.colors.placeholder} />
+            <Text style={styles.emptyTitle}>
+              {filter === 'all' ? 'Nothing saved yet' : 'Nothing of that kind yet'}
             </Text>
-          </View>
+            <Text style={styles.emptyBody}>
+              {filter === 'all'
+                ? 'Files you save land here. Long-press one to delete it.'
+                : 'Try another filter, or save something new from the Get tab.'}
+            </Text>
+          </Animated.View>
         )
       }
-      renderItem={({ item }) => (
-        <SavedFileTile
-          asset={item}
-          size={TILE_SIZE}
-          onOpen={(asset) => void handleOpen(asset)}
-          onDelete={handleDelete}
-        />
+      renderItem={({ item, index }) => (
+        // Only the first screenful animates in. FlatList mounts rows as they
+        // scroll into view, so an unconditional `entering` makes every row fade
+        // up mid-scroll — which reads as jank, not choreography.
+        <Animated.View entering={index < FIRST_SCREENFUL ? enterRow(index) : undefined}>
+          {isGrid ? (
+            <SavedFileTile
+              asset={item}
+              size={TILE_SIZE}
+              onOpen={(asset) => void handleOpen(asset)}
+              onDelete={handleDelete}
+            />
+          ) : (
+            <SavedFileRow
+              asset={item}
+              onOpen={(asset) => void handleOpen(asset)}
+              onDelete={handleDelete}
+            />
+          )}
+        </Animated.View>
       )}
     />
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: H_PADDING,
-    paddingBottom: spacing.xxl,
-  },
-  contentEmpty: {
-    flexGrow: 1,
-  },
-  row: {
-    justifyContent: 'space-between',
-    marginBottom: GAP,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    marginBottom: spacing.sm,
-  },
-  emptyCard: {
-    padding: spacing.xl,
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    ...shadows.card,
-  },
-  emptyHero: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.xl,
-    backgroundColor: colors.sunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  emptyHeroGlyph: {
-    fontSize: 30,
-  },
-  emptyTitle: {
-    fontSize: typography.headline,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  emptyBody: {
-    marginTop: spacing.sm,
-    fontSize: typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 21,
-  },
-});
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: LibraryView;
+  onChange: (next: LibraryView) => void;
+}) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
+  return (
+    <View style={styles.segment}>
+      {(['grid', 'list'] as const).map((option, index) => {
+        const active = option === value;
+        return (
+          <Pressable
+            key={option}
+            onPress={() => onChange(option)}
+            style={[styles.segmentItem, index > 0 && styles.segmentDivider, active && styles.segmentActive]}
+            accessibilityRole="button"
+            accessibilityLabel={option === 'grid' ? 'Grid view' : 'List view'}
+            accessibilityState={{ selected: active }}
+          >
+            <Feather
+              name={option}
+              size={18}
+              color={active ? theme.colors.accent : theme.colors.textSecondary}
+            />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    list: {
+      flex: 1,
+    },
+    content: {
+      paddingBottom: spacing.xxl,
+    },
+    contentEmpty: {
+      flexGrow: 1,
+    },
+    row: {
+      gap: GAP,
+      marginBottom: GAP,
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filters: {
+      flexDirection: 'row',
+      gap: spacing.sm - 1,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
+    },
+    chip: {
+      justifyContent: 'center',
+      minHeight: MIN_TAP - 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.lg,
+    },
+    chipActive: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    chipLabel: {
+      fontSize: typography.subtitle + 1,
+      fontWeight: '700',
+      color: theme.colors.textSecondary,
+    },
+    chipLabelActive: {
+      color: theme.colors.textOnAccent,
+    },
+    count: {
+      fontFamily: fonts.mono,
+      fontSize: typography.caption,
+      letterSpacing: 0.6,
+      color: theme.colors.textSecondary,
+      paddingBottom: spacing.sm,
+    },
+    segment: {
+      flexDirection: 'row',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
+    },
+    segmentItem: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: MIN_TAP,
+      height: MIN_TAP - 8,
+    },
+    segmentDivider: {
+      borderLeftWidth: 1,
+      borderLeftColor: theme.colors.border,
+    },
+    segmentActive: {
+      backgroundColor: theme.colors.accentSoft,
+    },
+    empty: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.xxl,
+    },
+    emptyTitle: {
+      fontSize: typography.headline,
+      marginTop: spacing.sm,
+      fontWeight: '700',
+      color: theme.colors.text,
+    },
+    emptyBody: {
+      fontSize: typography.body,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 19,
+    },
+  });

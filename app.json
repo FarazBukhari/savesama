@@ -1,20 +1,23 @@
 {
   "expo": {
-    "name": "Foxy Downloader",
-    "slug": "foxy-downloader",
+    "name": "SaveSama",
+    "slug": "savesama",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "foxydownloader",
-    "userInterfaceStyle": "light",
+    "scheme": "savesama",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.farazbukhari.foxydownloader"
+      "bundleIdentifier": "com.foxysama.savesama",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
     },
     "android": {
-      "package": "com.farazbukhari.foxydownloader",
+      "package": "com.foxysama.savesama",
       "adaptiveIcon": {
-        "backgroundColor": "#FF6A3D",
+        "backgroundColor": "#171210",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
@@ -39,7 +42,7 @@
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "Allow Foxy Downloader to save photos and videos to your gallery.",
+          "savePhotosPermission": "Allow SaveSama to save photos and videos to your gallery.",
           "isAccessMediaLocationEnabled": false,
           "granularPermissions": [
             "photo",
@@ -48,7 +51,9 @@
           ]
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-font",
+      "expo-image"
     ],
     "extra": {
       "eas": {

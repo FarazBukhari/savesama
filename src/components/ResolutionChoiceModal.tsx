@@ -1,14 +1,16 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { isTranscodeSupported } from '../../modules/foxy-audio-extractor';
+import { isTranscodeSupported } from '../../modules/savesama-audio-extractor';
 import {
   RESOLUTION_OPTIONS,
   ResolutionPref,
   resolutionLabel,
   resolutionSublabel,
 } from '../services/preferences';
-import { colors, radius, shadows, spacing, typography } from '../theme';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { fonts, radius, spacing, Theme, typography } from '../theme';
 
 /** Short badge shown in each row's leading tile. */
 function resolutionBadge(pref: ResolutionPref): string {
@@ -42,6 +44,7 @@ export function ResolutionChoiceModal({
   onClose,
 }: ResolutionChoiceModalProps) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(makeStyles);
   // Capped presets can only promise on-device downscaling where the native
   // transcoder exists (both platforms now) — elsewhere they pick the closest
   // available rendition.
@@ -49,8 +52,16 @@ export function ResolutionChoiceModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <Pressable
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+          accessible={false}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>{title}</Text>
 
@@ -86,6 +97,9 @@ function ResolutionRow({
   selected: boolean;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -101,38 +115,39 @@ function ResolutionRow({
         <Text style={styles.rowSublabel}>{sublabel}</Text>
       </View>
       <View style={[styles.radio, selected && styles.radioSelected]}>
-        {selected ? <Text style={styles.radioCheck}>✓</Text> : null}
+        {selected ? <Feather name="check" size={13} color={theme.colors.textOnAccent} /> : null}
       </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: colors.scrim,
+    backgroundColor: theme.colors.scrim,
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: colors.card,
+    backgroundColor: theme.colors.card,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    ...shadows.raised,
+    ...theme.shadows.raised,
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.border,
+    backgroundColor: theme.colors.border,
     alignSelf: 'center',
     marginBottom: spacing.lg,
   },
   title: {
     fontSize: typography.headline,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text,
     marginBottom: spacing.sm,
   },
   row: {
@@ -140,7 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: theme.colors.border,
   },
   rowPressed: {
     opacity: 0.65,
@@ -149,22 +164,23 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.sunken,
+    backgroundColor: theme.colors.sunken,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
   badgeTileSelected: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: theme.colors.accentSoft,
   },
   badgeLabel: {
+    fontFamily: fonts.mono,
     fontSize: typography.caption,
     fontWeight: '800',
     letterSpacing: 0.5,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
   badgeLabelSelected: {
-    color: colors.accent,
+    color: theme.colors.accent,
   },
   rowInfo: {
     flex: 1,
@@ -173,33 +189,28 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: typography.body,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text,
   },
   rowLabelSelected: {
     fontWeight: '700',
-    color: colors.accent,
+    color: theme.colors.accent,
   },
   rowSublabel: {
     marginTop: 2,
     fontSize: typography.small,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
   radio: {
     width: 24,
     height: 24,
     borderRadius: radius.pill,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: theme.colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
-  },
-  radioCheck: {
-    color: colors.textOnAccent,
-    fontSize: typography.caption,
-    fontWeight: '800',
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent,
   },
 });

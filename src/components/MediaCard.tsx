@@ -1,7 +1,11 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { MediaItem } from '../extraction/types';
-import { colors, radius, shadows, spacing, typography } from '../theme';
+import { WIDTH_TRANSITION } from '../motion';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 import { PressableScale } from './PressableScale';
 
 export type DownloadStatus = 'idle' | 'queued' | 'downloading' | 'done' | 'error';
@@ -17,48 +21,71 @@ interface MediaCardProps {
   onDownload: (item: MediaItem) => void;
   /** Removes a still-queued download. Absent for cards that can't be cancelled. */
   onCancel?: (item: MediaItem) => void;
+  /** Last row in its group — drops the divider. */
+  last?: boolean;
 }
 
-export function MediaCard({ item, state, onDownload, onCancel }: MediaCardProps) {
+/**
+ * One row of a resolved post.
+ *
+ * The action is a single circular button rather than a filled pill. Eight
+ * carousel items meant eight orange slabs stacked down the screen, which read
+ * as eight alarms — the filled treatment now belongs only to "Save all".
+ */
+export function MediaCard({ item, state, onDownload, onCancel, last }: MediaCardProps) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const isVideo = item.type === 'video';
+  const busy = state.status === 'downloading' || state.status === 'queued';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.thumbWrapper}>
-        {item.thumbnailUrl ? (
-          <Image source={{ uri: item.thumbnailUrl }} style={styles.thumb} resizeMode="cover" />
-        ) : (
-          <View style={[styles.thumb, styles.thumbFallback]} />
-        )}
-        {isVideo ? (
-          <View style={styles.playOverlay}>
-            <View style={styles.playChip}>
-              <Text style={styles.playGlyph}>▶</Text>
-            </View>
-          </View>
-        ) : null}
-      </View>
+    <View style={[styles.row, last && styles.rowLast]}>
+      {item.thumbnailUrl ? (
+        <Image source={{ uri: item.thumbnailUrl }} style={styles.thumb} resizeMode="cover" />
+      ) : (
+        <View style={[styles.thumb, styles.thumbFallback]}>
+          <Feather
+            name={isVideo ? 'play' : 'image'}
+            size={18}
+            color={theme.colors.textSecondary}
+          />
+        </View>
+      )}
 
       <View style={styles.info}>
         <Text style={styles.typeLabel}>{isVideo ? 'Video' : 'Photo'}</Text>
-        {item.width && item.height ? (
-          <View style={styles.dimensionChip}>
-            <Text style={styles.dimensionLabel}>
-              {item.width} × {item.height}
-            </Text>
-          </View>
-        ) : null}
+
         {state.status === 'downloading' ? (
-          <View style={styles.progressTrack}>
-            <View
-              style={[styles.progressFill, { width: `${Math.round(state.progress * 100)}%` }]}
-            />
+          <View style={styles.progressRow}>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.round(state.progress * 100)}%` },
+                  WIDTH_TRANSITION,
+                ]}
+              />
+            </View>
+            <Text style={styles.progressLabel}>{Math.round(state.progress * 100)}%</Text>
           </View>
-        ) : null}
+        ) : (
+          <Text style={styles.facts}>
+            {state.status === 'queued'
+              ? 'Waiting'
+              : state.status === 'error'
+                ? 'Failed'
+                : item.width && item.height
+                  ? `${item.width}×${item.height}`
+                  : ''}
+          </Text>
+        )}
       </View>
 
-      <DownloadAction
+      <RowAction
         state={state}
+        busy={busy}
+        styles={styles}
+        theme={theme}
         onPress={() => onDownload(item)}
         onCancelPress={onCancel ? () => onCancel(item) : undefined}
       />
@@ -66,192 +93,149 @@ export function MediaCard({ item, state, onDownload, onCancel }: MediaCardProps)
   );
 }
 
-function DownloadAction({
+type Styles = ReturnType<typeof makeStyles>;
+
+function RowAction({
   state,
+  busy,
+  styles,
+  theme,
   onPress,
   onCancelPress,
 }: {
   state: ItemDownloadState;
+  busy: boolean;
+  styles: Styles;
+  theme: Theme;
   onPress: () => void;
   onCancelPress?: () => void;
 }) {
   // Queued behind another download: the runner takes one job at a time. Tapping
   // removes it from the queue (the in-flight job can't be cancelled — see
   // downloadQueue.ts).
-  if (state.status === 'queued') {
-    if (onCancelPress) {
-      return (
-        <PressableScale style={styles.actionArea} onPress={onCancelPress} accessibilityRole="button">
-          <Text style={styles.queuedLabel}>Queued · tap to cancel</Text>
-        </PressableScale>
-      );
-    }
+  if (busy) {
+    if (!onCancelPress) return <View style={styles.action} />;
     return (
-      <View style={styles.actionArea}>
-        <Text style={styles.queuedLabel}>Queued</Text>
-      </View>
+      <PressableScale
+        style={styles.action}
+        onPress={onCancelPress}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel download"
+      >
+        <Feather name="x" size={20} color={theme.colors.textSecondary} />
+      </PressableScale>
     );
   }
-  if (state.status === 'downloading') {
-    // Tapping cancels: the transfer aborts immediately, and a native mux/transcode
-    // already running stops mattering because the result is never saved.
-    if (onCancelPress) {
-      return (
-        <PressableScale style={styles.actionArea} onPress={onCancelPress} accessibilityRole="button">
-          <Text style={styles.progressLabel}>{Math.round(state.progress * 100)}%</Text>
-          <Text style={styles.cancelHint}>Cancel</Text>
-        </PressableScale>
-      );
-    }
-    return (
-      <View style={styles.actionArea}>
-        <Text style={styles.progressLabel}>{Math.round(state.progress * 100)}%</Text>
-      </View>
-    );
-  }
+
   if (state.status === 'done') {
     // Stays pressable: videos re-open the format modal, photos save again. Either
     // way the user needs a route back after changing the resolution.
     return (
       <PressableScale
-        style={[styles.actionArea, styles.doneBadge]}
+        style={[styles.action, styles.actionDone]}
         onPress={onPress}
         accessibilityRole="button"
+        accessibilityLabel="Saved — save again"
       >
-        <Text style={styles.doneLabel}>✓ Saved</Text>
+        <Feather name="check" size={20} color={theme.colors.success} />
       </PressableScale>
     );
   }
+
+  const isRetry = state.status === 'error';
   return (
-    <PressableScale style={styles.saveButton} onPress={onPress} accessibilityRole="button">
-      <Text style={styles.saveLabel}>{state.status === 'error' ? 'Retry' : 'Save'}</Text>
+    <PressableScale
+      style={[styles.action, styles.actionIdle, isRetry && styles.actionRetry]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={isRetry ? 'Retry download' : 'Save'}
+    >
+      <Feather
+        name={isRetry ? 'rotate-cw' : 'arrow-down'}
+        size={20}
+        color={isRetry ? theme.colors.error : theme.colors.accent}
+      />
     </PressableScale>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    ...shadows.card,
-  },
-  thumbWrapper: {
-    position: 'relative',
-  },
-  thumb: {
-    width: 92,
-    height: 92,
-    borderRadius: radius.md,
-    backgroundColor: colors.sunken,
-  },
-  thumbFallback: {
-    backgroundColor: colors.videoBadge,
-  },
-  playOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playChip: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playGlyph: {
-    color: colors.textOnAccent,
-    fontSize: 14,
-    marginLeft: 2,
-  },
-  info: {
-    flex: 1,
-    marginLeft: spacing.md,
-    marginRight: spacing.sm,
-  },
-  typeLabel: {
-    fontSize: typography.headline,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  dimensionChip: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.xs + 2,
-    backgroundColor: colors.sunken,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  dimensionLabel: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  progressTrack: {
-    marginTop: spacing.sm,
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.sunken,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: radius.pill,
-  },
-  actionArea: {
-    minWidth: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-  },
-  cancelHint: {
-    marginTop: 1,
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  queuedLabel: {
-    fontSize: typography.small,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  progressLabel: {
-    color: colors.accent,
-    fontWeight: '800',
-    fontSize: typography.body,
-  },
-  doneBadge: {
-    backgroundColor: colors.successSoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-  },
-  doneLabel: {
-    color: colors.success,
-    fontWeight: '700',
-    fontSize: typography.small,
-  },
-  saveButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    minWidth: 76,
-    alignItems: 'center',
-    ...shadows.glow,
-  },
-  saveLabel: {
-    color: colors.textOnAccent,
-    fontWeight: '700',
-    fontSize: typography.body,
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    rowLast: {
+      borderBottomWidth: 0,
+    },
+    thumb: {
+      width: 56,
+      height: 56,
+      borderRadius: radius.md,
+      backgroundColor: theme.colors.sunken,
+    },
+    thumbFallback: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    info: {
+      flex: 1,
+      minWidth: 0,
+    },
+    typeLabel: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: theme.colors.text,
+    },
+    facts: {
+      marginTop: 3,
+      fontSize: typography.figure,
+      fontFamily: fonts.mono,
+      color: theme.colors.textSecondary,
+    },
+    progressRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      marginTop: spacing.sm,
+    },
+    progressTrack: {
+      flex: 1,
+      height: 5,
+      borderRadius: radius.pill,
+      backgroundColor: theme.colors.sunken,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: theme.colors.accent,
+      borderRadius: radius.pill,
+    },
+    progressLabel: {
+      color: theme.colors.accent,
+      fontWeight: '700',
+      fontFamily: fonts.mono,
+      fontSize: typography.figure,
+    },
+    action: {
+      width: MIN_TAP,
+      height: MIN_TAP,
+      borderRadius: radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actionIdle: {
+      backgroundColor: theme.colors.accentSoft,
+    },
+    actionRetry: {
+      backgroundColor: theme.colors.errorSoft,
+    },
+    actionDone: {
+      backgroundColor: theme.colors.successSoft,
+    },
+  });

@@ -1,9 +1,13 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ResolutionPref, resolutionLabel } from '../services/preferences';
-import { colors, radius, shadows, spacing, typography } from '../theme';
+import { useTheme, useThemedStyles } from '../ThemeProvider';
+import { fonts, radius, spacing, Theme, typography } from '../theme';
 import { ItemDownloadState } from './MediaCard';
+
+type FeatherName = keyof typeof Feather.glyphMap;
 
 interface FormatChoiceModalProps {
   visible: boolean;
@@ -31,23 +35,35 @@ export function FormatChoiceModal({
   onClose,
 }: FormatChoiceModalProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        {/* Swallows taps so they don't reach the backdrop. Not a control, so it
+            stays out of the accessibility tree. */}
+        <Pressable
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+          accessible={false}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>Save as</Text>
 
           <FormatRow
-            glyph="🎬"
+            icon="film"
             label="Video"
             sublabel="MP4"
             state={videoState}
             onPress={onSaveVideo}
           />
           <FormatRow
-            glyph="🎧"
+            icon="headphones"
             label="Audio"
             sublabel="M4A · audio only"
             state={audioState}
@@ -77,27 +93,32 @@ export function FormatChoiceModal({
 }
 
 function FormatRow({
-  glyph,
+  icon,
   label,
   sublabel,
   state,
   onPress,
 }: {
-  glyph: string;
+  icon: FeatherName;
   label: string;
   sublabel: string;
   state: ItemDownloadState;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const isDownloading = state.status === 'downloading';
 
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && !isDownloading && styles.rowPressed]}
       onPress={isDownloading ? undefined : onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Save as ${label}, ${sublabel}`}
+      accessibilityState={{ disabled: isDownloading, busy: isDownloading }}
     >
       <View style={styles.iconTile}>
-        <Text style={styles.iconGlyph}>{glyph}</Text>
+        <Feather name={icon} size={20} color={theme.colors.accent} />
       </View>
       <View style={styles.rowInfo}>
         <Text style={styles.rowLabel}>{label}</Text>
@@ -116,6 +137,7 @@ function FormatRow({
 }
 
 function FormatChip({ state }: { state: ItemDownloadState }) {
+  const styles = useThemedStyles(makeStyles);
   if (state.status === 'done') {
     return (
       <View style={[styles.chip, styles.chipDone]}>
@@ -135,7 +157,8 @@ function FormatChip({ state }: { state: ItemDownloadState }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
   qualityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -143,13 +166,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: colors.sunken,
+    backgroundColor: theme.colors.sunken,
   },
   qualityLabel: {
     flex: 1,
     fontSize: typography.body,
     fontWeight: '600',
-    color: colors.text,
+    color: theme.colors.text,
   },
   qualityValueWrap: {
     alignItems: 'flex-end',
@@ -157,43 +180,43 @@ const styles = StyleSheet.create({
   qualityValue: {
     fontSize: typography.subtitle,
     fontWeight: '700',
-    color: colors.accent,
+    color: theme.colors.accent,
   },
   qualityHint: {
     marginTop: 1,
     fontSize: typography.small,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
   qualityChevron: {
     marginLeft: spacing.sm,
     fontSize: typography.subtitle,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
   backdrop: {
     flex: 1,
-    backgroundColor: colors.scrim,
+    backgroundColor: theme.colors.scrim,
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: colors.card,
+    backgroundColor: theme.colors.card,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    ...shadows.raised,
+    ...theme.shadows.raised,
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.border,
+    backgroundColor: theme.colors.border,
     alignSelf: 'center',
     marginBottom: spacing.lg,
   },
   title: {
     fontSize: typography.headline,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text,
     marginBottom: spacing.sm,
   },
   row: {
@@ -201,7 +224,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: theme.colors.border,
   },
   rowPressed: {
     opacity: 0.65,
@@ -210,13 +233,10 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.sunken,
+    backgroundColor: theme.colors.sunken,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
-  },
-  iconGlyph: {
-    fontSize: 20,
   },
   rowInfo: {
     flex: 1,
@@ -225,27 +245,27 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: typography.body,
     fontWeight: '700',
-    color: colors.text,
+    color: theme.colors.text,
   },
   rowSublabel: {
     marginTop: 2,
     fontSize: typography.small,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
   },
   progressTrack: {
     marginTop: spacing.sm,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.sunken,
+    backgroundColor: theme.colors.sunken,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: colors.accent,
+    backgroundColor: theme.colors.accent,
     borderRadius: radius.pill,
   },
   progressLabel: {
-    color: colors.accent,
+    color: theme.colors.accent,
     fontWeight: '800',
     fontSize: typography.body,
     minWidth: 44,
@@ -257,19 +277,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs + 2,
   },
   chipDone: {
-    backgroundColor: colors.successSoft,
+    backgroundColor: theme.colors.successSoft,
   },
   chipLabelDone: {
-    color: colors.success,
+    color: theme.colors.success,
     fontWeight: '700',
     fontSize: typography.small,
   },
   chipSave: {
-    backgroundColor: colors.accent,
-    ...shadows.glow,
+    backgroundColor: theme.colors.accent,
   },
   chipLabelSave: {
-    color: colors.textOnAccent,
+    color: theme.colors.textOnAccent,
     fontWeight: '700',
     fontSize: typography.small,
   },

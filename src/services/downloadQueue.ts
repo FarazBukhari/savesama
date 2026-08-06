@@ -16,7 +16,7 @@ import {
   startDownloadService,
   stopDownloadService,
   updateDownloadService,
-} from '../../modules/foxy-download-service';
+} from '../../modules/savesama-download-service';
 import { MediaItem } from '../extraction/types';
 import { CancelToken, createCancelToken, isCancelledError } from './cancellation';
 import { downloadAudioToGallery, downloadToGallery } from './download';

@@ -1,4 +1,4 @@
-# 🦊 Foxy Downloader
+# 🦊 SaveSama
 
 An Android app (Expo SDK 56 + TypeScript) that saves photos, videos, and reels from
 **Instagram**, posts from **Threads**, and videos from **YouTube** straight to your gallery.
@@ -19,16 +19,16 @@ tab.
 
 | Media | Location |
 | --- | --- |
-| Photos & videos | `Pictures/Foxy Downloader` |
-| Audio | `Music/Foxy Downloader` |
+| Photos & videos | `Pictures/SaveSama` |
+| Audio | `Music/SaveSama` |
 
 Not configurable: Android's MediaStore roots an album by media type, so photos/videos and
-audio can't share one folder — Foxy only names the album. Both paths are shown in Settings.
+audio can't share one folder — SaveSama only names the album. Both paths are shown in Settings.
 
 ## Features
 
 - **Share-sheet integration** — tap *Share* on any Instagram post, Threads post, or
-  YouTube video and pick *Foxy Downloader*; the app opens and fetches the media
+  YouTube video and pick *SaveSama*; the app opens and fetches the media
   automatically.
 - **Paste a link** — or copy a post/video link and hit *Paste* in the app.
 - **Auto-detects the platform** — paste an Instagram, Threads, or YouTube link and the app
@@ -64,6 +64,14 @@ audio can't share one folder — Foxy only names the album. Both paths are shown
   Threads posts (`/@user/post/<code>`, `/post/<code>`, `/t/<code>`, `/share/<token>`);
   YouTube watch/`youtu.be`/Shorts video links.
 - **Threads text-only posts** have nothing to download and say so.
+- **Light and dark themes.** Settings → Appearance switches between them or follows the
+  phone. Dark is the fallback when the OS hasn't reported a preference yet.
+- **Saved opens as a grid, with a list view one tap away.** The choice persists. List rows
+  show name, kind, length and date; byte size and resolution aren't in the media-library
+  record, so they aren't shown.
+- **Sign out per platform.** Settings → Accounts drops the Instagram or Threads session.
+  The signed-in state shown there is a cached hint — see
+  [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §14.
 - **Selectable resolution (per platform).** Choose a default download quality for
   Instagram, Threads and YouTube on the **Settings** tab (360p up to 1080p, or "Max"), or
   override it for a single save from the format sheet. Photos pick a smaller rendition from
@@ -114,9 +122,10 @@ src/
     downloadQueue.ts        # Module-level queue; one job at a time, outlives screens
     rangedDownload.ts       # Parallel byte-range downloads + streamed join
     resolutionPlan.ts       # Picks the rendition/plan for a resolution preference
-    preferences.ts          # Per-platform resolution defaults, persisted
+    preferences.ts          # Resolution defaults, theme mode, library view, session hints
     library.ts              # Saved-files listing for the Saved tab
-  theme.ts                  # Colors, spacing, ad banner height
+  theme.ts                  # lightTheme / darkTheme + spacing, radius, type, ad banner height
+  ThemeProvider.tsx         # Resolves the active theme; useTheme / useThemedStyles
 ```
 
 ## Development
@@ -128,9 +137,9 @@ npm test            # jest (URL parser + extraction parser tests)
 ```
 
 > Note: `expo-share-intent`, `react-native-webview` and the two local native modules
-> (`foxy-audio-extractor`, `foxy-download-service`) all require a native build — the app does
+> (`savesama-audio-extractor`, `savesama-download-service`) all require a native build — the app does
 > **not** run in Expo Go. Use a development build (`eas build --profile development`) or the
-> preview APK. Adding `foxy-download-service` means an **existing dev build won't pick it up**;
+> preview APK. Adding `savesama-download-service` means an **existing dev build won't pick it up**;
 > rebuild.
 
 > 🔧 **Maintaining this app?** See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) — what to
@@ -139,7 +148,7 @@ npm test            # jest (URL parser + extraction parser tests)
 
 ## Build the preview APK (EAS)
 
-The project is already linked to EAS (`@farazbukhari/foxy-downloader`).
+The project is already linked to EAS (`@farazbukhari/savesama`).
 
 ```bash
 eas build --profile preview --platform android

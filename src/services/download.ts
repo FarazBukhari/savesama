@@ -6,7 +6,7 @@ import {
   isTranscodeSupported,
   muxVideoAudio,
   transcodeVideo,
-} from '../../modules/foxy-audio-extractor';
+} from '../../modules/savesama-audio-extractor';
 import { MediaItem } from '../extraction/types';
 import { CancelToken, isCancelledError } from './cancellation';
 import { ResolutionPref, loadPreferences, resolutionForPlatform } from './preferences';
@@ -31,8 +31,8 @@ export class DownloadError extends Error {
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] as const;
 
-/** Dedicated album for everything Foxy saves, so downloads don't land in Camera. */
-export const ALBUM_NAME = 'Foxy Downloader';
+/** Dedicated album for everything the app saves, so downloads don't land in Camera. */
+export const ALBUM_NAME = 'SaveSama';
 
 /**
  * Saves a local file into the app's dedicated album instead of the default
@@ -43,10 +43,10 @@ export const ALBUM_NAME = 'Foxy Downloader';
  * place a file outside the root allowed for its type. A single shared album
  * therefore can't hold every media type: adding audio to the photo/video
  * album throws. To handle that, we add to the existing album when the type
- * fits, and otherwise spin up the correctly-rooted Foxy folder for that type
+ * fits, and otherwise spin up the correctly-rooted album for that type
  * (`Album.create` derives the root from the asset's own media type).
  */
-async function saveToFoxyAlbum(uri: string): Promise<void> {
+async function saveToAppAlbum(uri: string): Promise<void> {
   const existing = await MediaLibrary.Album.get(ALBUM_NAME);
   if (existing) {
     try {
@@ -57,12 +57,12 @@ async function saveToFoxyAlbum(uri: string): Promise<void> {
     } catch {
       // The existing album can't hold this media type (e.g. audio can't live
       // in a Pictures-rooted album on Android) — fall through and give it its
-      // own correctly-rooted Foxy folder below.
+      // own correctly-rooted album below.
     }
   }
 
   // Save the asset first so the download is never lost, then group it into a
-  // Foxy folder rooted for its media type. Grouping is best-effort: if it
+  // an album rooted for its media type. Grouping is best-effort: if it
   // fails the asset still remains saved in the library.
   const asset = await MediaLibrary.Asset.create(uri);
   try {
@@ -88,14 +88,21 @@ async function ensureMediaPermission(): Promise<void> {
   if (!requested.granted) {
     throw new DownloadError(
       'media library permission denied',
-      'Foxy needs permission to save media. Enable Photos and videos access in Settings.'
+      'SaveSama needs permission to save media. Enable Photos and videos access in Settings.'
     );
   }
 }
 
+/**
+ * Prefix on every file the app writes. Saved files keep their cache name, so
+ * this is what a user sees in their gallery — and what `prettyName` parses back
+ * into a readable title.
+ */
+export const FILE_PREFIX = 'savesama_';
+
 function cacheUri(item: MediaItem, suffix: string): string {
   const safeId = item.id.replace(/[^A-Za-z0-9_-]/g, '');
-  return `${FileSystem.cacheDirectory}foxy_${safeId}_${Date.now()}_${suffix}`;
+  return `${FileSystem.cacheDirectory}${FILE_PREFIX}${safeId}_${Date.now()}_${suffix}`;
 }
 
 async function deleteQuietly(fileUri: string): Promise<void> {
@@ -283,8 +290,8 @@ async function downloadDirect(
     token?.throwIfCancelled();
     // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
     // (it now throws at runtime). Use the new class-based API instead, routing
-    // the asset into Foxy's own album rather than the default Camera folder.
-    await saveToFoxyAlbum(result.uri);
+    // the asset into the app's own album rather than the default Camera folder.
+    await saveToAppAlbum(result.uri);
   } catch (error) {
     if (isCancelledError(error)) throw error;
     throw new DownloadError(
@@ -373,7 +380,7 @@ async function downloadMuxed(
 
     token?.throwIfCancelled();
     try {
-      await saveToFoxyAlbum(outUri);
+      await saveToAppAlbum(outUri);
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -448,7 +455,7 @@ async function downloadTranscoded(
 
     token?.throwIfCancelled();
     try {
-      await saveToFoxyAlbum(fileToSave);
+      await saveToAppAlbum(fileToSave);
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -516,7 +523,7 @@ export async function downloadAudioToGallery(
   // Phase 3: save M4A to media library (90 → 100%)
   try {
     token?.throwIfCancelled();
-    await saveToFoxyAlbum(audioUri);
+    await saveToAppAlbum(audioUri);
   } catch (error) {
     if (isCancelledError(error)) throw error;
     throw new DownloadError(
@@ -568,7 +575,7 @@ async function downloadAudioStream(
 
     try {
       token?.throwIfCancelled();
-      await saveToFoxyAlbum(fileToSave);
+      await saveToAppAlbum(fileToSave);
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
