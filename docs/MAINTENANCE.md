@@ -186,7 +186,7 @@ restricted `types` scope.)
 npm run typecheck          # tsc --noEmit
 npm test                   # jest (51 tests)
 npx expo-doctor            # 21/21 checks
-npx expo export --platform android --output-dir /tmp/foxy-check && rm -rf /tmp/foxy-check
+npx expo export --platform android --output-dir /tmp/savesama-check && rm -rf /tmp/savesama-check
 ```
 
 ---
@@ -217,18 +217,18 @@ npm on Apr 1 2025**. EAS builds then failed with
 resolves anywhere. There is no maintained, reachable binary to point Gradle at.
 
 **What we do instead:** a tiny **local Expo module** at
-[`modules/foxy-audio-extractor`](../modules/foxy-audio-extractor) that remuxes the audio
+[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor) that remuxes the audio
 track using only OS-native muxers — no third-party binary, no APK bloat, no re-encode:
 
-- **Android** ([`FoxyAudioExtractorModule.kt`](../modules/foxy-audio-extractor/android/src/main/java/expo/modules/foxyaudioextractor/FoxyAudioExtractorModule.kt)):
+- **Android** ([`SaveSamaAudioExtractorModule.kt`](../modules/savesama-audio-extractor/android/src/main/java/expo/modules/savesamaaudioextractor/SaveSamaAudioExtractorModule.kt)):
   `MediaExtractor` selects the first `audio/*` track and copies its samples into a new
   MP4/M4A container via `MediaMuxer`.
-- **iOS** ([`FoxyAudioExtractorModule.swift`](../modules/foxy-audio-extractor/ios/FoxyAudioExtractorModule.swift)):
+- **iOS** ([`SaveSamaAudioExtractorModule.swift`](../modules/savesama-audio-extractor/ios/SaveSamaAudioExtractorModule.swift)):
   `AVAssetExportSession` with `AVAssetExportPresetPassthrough` and `outputFileType = .m4a`
   over an audio-only `AVMutableComposition`.
 
 JS calls `extractAudio(srcUri, destUri)` from
-[`modules/foxy-audio-extractor`](../modules/foxy-audio-extractor/index.ts); it's invoked in
+[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor/index.ts); it's invoked in
 Phase 2 of `downloadAudioToGallery` ([`src/services/download.ts`](../src/services/download.ts)).
 
 **Gotchas:**
@@ -325,7 +325,7 @@ ANDROID_VR POST and the bot/login error branches).
 
 1080p and above are only offered as **separate** video-only + audio-only adaptive streams,
 so the app downloads both and combines them with an on-device **muxer** (video + audio →
-MP4, no re-encode). This lives in `foxy-audio-extractor` (§7) as `muxVideoAudio` (Android
+MP4, no re-encode). This lives in `savesama-audio-extractor` (§7) as `muxVideoAudio` (Android
 `MediaMuxer` with both a `video/*` and `audio/*` track; iOS `AVMutableComposition` + a
 passthrough export). `youtube.ts` `buildFormats` only ever pairs an **H.264/MP4 video-only**
 stream with the **AAC/M4A (itag 140) audio-only** stream so the passthrough mux is valid;
@@ -336,7 +336,7 @@ VP9/Opus/WebM are excluded. See §9 for how the resolution preference drives it.
 ## 9. Resolution selection & the Settings screen
 
 Users pick a **default download resolution per platform** (Instagram / YouTube) on the
-**Settings** tab. Preferences persist to `${documentDirectory}foxy-preferences.json` via
+**Settings** tab. Preferences persist to `${documentDirectory}savesama-preferences.json` via
 `src/services/preferences.ts` (a module singleton + `useSyncExternalStore` hook,
 `src/hooks/usePreferences.ts`). `loadPreferences()` is **idempotent** (one disk read,
 cached promise) and is both warmed at launch in `App.tsx` and awaited by
@@ -618,7 +618,7 @@ re-renders, and "Save all" queues everything at once instead of awaiting a loop.
 - Job identity is `item.id` for photos and `item.id:<format>` for videos, so a video's audio
   and video saves are independent jobs.
 
-[`foxy-download-service`](../modules/foxy-download-service) is an Android **foreground
+[`savesama-download-service`](../modules/savesama-download-service) is an Android **foreground
 service** that keeps the process alive while the queue drains. It downloads nothing: on
 Android the RN JS thread keeps running while backgrounded, and it is *process death* that
 interrupts a transfer. The notification a foreground service must post doubles as progress
@@ -766,27 +766,34 @@ for the first frames.
 
 ## 17. The rename (Foxy Downloader → SaveSama)
 
-The app shipped as *Foxy Downloader* before it was renamed. Three things were
-deliberately **not** renamed with it, because each one would have silently
-destroyed user data:
+The app was called *Foxy Downloader* until it was renamed, before it ever
+shipped. Because there were no installs to carry forward, the rename was a
+clean break rather than a migration — **nothing kept a legacy identifier**:
 
-| Kept | Why |
+| Renamed | To |
 |---|---|
-| `foxy-preferences.json` | An internal path. Renaming it resets every saved preference on upgrade. |
-| `modules/foxy-*` | Local native modules — the Kotlin/Swift class names and Expo module names are load-bearing. |
-| `LEGACY_ALBUM_NAMES` | See below. |
+| App name / slug / scheme | `SaveSama` / `savesama` |
+| Package + bundle id | `com.foxysama.savesama` |
+| Gallery album | `SaveSama` |
+| Saved-file prefix | `savesama_` |
+| Preferences file | `savesama-preferences.json` |
+| Local native modules | `modules/savesama-*`, `expo.modules.savesama*`, `SaveSama*Module` |
+| Notification channel | `savesama_downloads` |
 
-**Saved files survive the rename.** Two compatibility shims do that work:
+**If the app is ever renamed again after a real release, none of this can be
+repeated as-is.** Four of those are user-data bindings, and changing them on a
+live install silently destroys state:
 
-- `KNOWN_ALBUM_NAMES` in `download.ts` is `[ALBUM_NAME, ...LEGACY_ALBUM_NAMES]`,
-  and `listSavedAssets()` collects from every album with one of those titles.
-  Without it, the Saved tab would go empty on upgrade — the files stay on disk,
-  but the app looks for an album called `SaveSama` and the old ones are titled
-  `Foxy Downloader`.
-- `SAVED_FILENAME` in `savedName.ts` matches both the `savesama_` and `foxy_`
-  prefixes, so pre-rename files still resolve to a readable title instead of
-  falling back to the raw filename.
+- **The album title.** `listSavedAssets()` finds files by matching the album's
+  *title*. Rename it and every previously saved file disappears from the Saved
+  tab — the files stay on disk, the app just stops looking where they are.
+- **The saved-file prefix.** `SAVED_FILENAME` in `savedName.ts` parses it back
+  into a readable row title; unmatched files fall back to the raw filename.
+- **`savesama-preferences.json`.** A new path reads as a missing file, which
+  resets every preference to its default.
+- **The package id.** A different id is a different app: sideloaded users get a
+  second icon rather than an upgrade.
 
-New files are only ever written under the current name. If a future rename
-happens, append to `LEGACY_ALBUM_NAMES` and add the old prefix to that regex —
-don't replace them.
+The fix in each case is to accept both the old and new values rather than
+replace — match a list of album titles, alternate the prefix regex, and read
+the old preferences path when the new one is absent.

@@ -137,9 +137,9 @@ npm test            # jest (URL parser + extraction parser tests)
 ```
 
 > Note: `expo-share-intent`, `react-native-webview` and the two local native modules
-> (`foxy-audio-extractor`, `foxy-download-service`) all require a native build — the app does
+> (`savesama-audio-extractor`, `savesama-download-service`) all require a native build — the app does
 > **not** run in Expo Go. Use a development build (`eas build --profile development`) or the
-> preview APK. Adding `foxy-download-service` means an **existing dev build won't pick it up**;
+> preview APK. Adding `savesama-download-service` means an **existing dev build won't pick it up**;
 > rebuild.
 
 > 🔧 **Maintaining this app?** See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) — what to

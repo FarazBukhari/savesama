@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["SaveSamaDownloadServiceModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.savesamadownloadservice.SaveSamaDownloadServiceModule"]
+  }
+}

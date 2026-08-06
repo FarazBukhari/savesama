@@ -1,7 +1,7 @@
 import { Album, Asset, MediaType, getPermissionsAsync, requestPermissionsAsync } from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 
-import { KNOWN_ALBUM_NAMES } from './download';
+import { ALBUM_NAME } from './download';
 
 export class LibraryError extends Error {
   /** Friendly message safe to show in the UI. */
@@ -83,9 +83,7 @@ export async function ensureReadPermission(): Promise<void> {
  * in two same-named albums (`Pictures/SaveSama` for photo/video and
  * `Audio/SaveSama` for audio); on iOS there is a single album. Album
  * titles aren't unique, so we fetch all albums and match every one titled
- * one of {@link KNOWN_ALBUM_NAMES} rather than relying on `Album.get`, which returns
- * just one. The legacy titles are included so files saved before the app was
- * renamed still appear here.
+ * {@link ALBUM_NAME} rather than relying on `Album.get`, which returns just one.
  */
 export async function listSavedAssets(): Promise<SavedAsset[]> {
   await ensureReadPermission();
@@ -100,7 +98,7 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
     albums.map(async (album) => ({ album, title: await album.getTitle() }))
   );
   const appAlbums = titled
-    .filter((r) => r.status === 'fulfilled' && KNOWN_ALBUM_NAMES.includes(r.value.title))
+    .filter((r) => r.status === 'fulfilled' && r.value.title === ALBUM_NAME)
     .map((r) => (r as PromiseFulfilledResult<{ album: Album; title: string }>).value.album);
 
   const assetGroups = await Promise.allSettled(appAlbums.map((album) => album.getAssets()));
