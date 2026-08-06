@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { isTranscodeSupported } from '../../modules/foxy-audio-extractor';
+import { isTranscodeSupported } from '../../modules/savesama-audio-extractor';
 import {
   RESOLUTION_OPTIONS,
   ResolutionPref,

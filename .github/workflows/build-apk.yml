@@ -65,7 +65,7 @@ jobs:
         run: npm ci
 
       - name: Compute APK name
-        run: echo "APK_BASENAME=foxy-downloader-${PROFILE}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+        run: echo "APK_BASENAME=savesama-${PROFILE}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       # Native code compiles once per ABI, and Reanimated's CMake alone cost
       # 4.1 min on x86 and 3.7 min on x86_64 in run 31095714782 — both

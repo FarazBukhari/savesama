@@ -94,9 +94,7 @@ export function resolutionForPlatform(
   }
 }
 
-// Deliberately keeps its pre-rename filename: this path is internal, and
-// renaming it would silently reset every saved preference on upgrade.
-const PREFERENCES_FILE = `${FileSystem.documentDirectory}foxy-preferences.json`;
+const PREFERENCES_FILE = `${FileSystem.documentDirectory}savesama-preferences.json`;
 
 let cache: Preferences = DEFAULT_PREFERENCES;
 /** Set once the user changes a value; a slower in-flight disk load must not clobber it. */

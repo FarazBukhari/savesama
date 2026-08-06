@@ -6,7 +6,7 @@ import {
   isTranscodeSupported,
   muxVideoAudio,
   transcodeVideo,
-} from '../../modules/foxy-audio-extractor';
+} from '../../modules/savesama-audio-extractor';
 import { MediaItem } from '../extraction/types';
 import { CancelToken, isCancelledError } from './cancellation';
 import { ResolutionPref, loadPreferences, resolutionForPlatform } from './preferences';
@@ -33,18 +33,6 @@ const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] as const;
 
 /** Dedicated album for everything the app saves, so downloads don't land in Camera. */
 export const ALBUM_NAME = 'SaveSama';
-
-/**
- * Albums this app used to write to. The Saved tab still lists their contents,
- * so renaming the app doesn't make a user's existing downloads disappear from
- * it — the files were never moved, only the album we look for changed.
- *
- * Nothing new is ever written here; this is read-only history.
- */
-export const LEGACY_ALBUM_NAMES = ['Foxy Downloader'] as const;
-
-/** Every album title the Saved tab should collect from. */
-export const KNOWN_ALBUM_NAMES: readonly string[] = [ALBUM_NAME, ...LEGACY_ALBUM_NAMES];
 
 /**
  * Saves a local file into the app's dedicated album instead of the default

@@ -5,11 +5,8 @@ import { MediaType } from 'expo-media-library';
  * That's a good filename and a terrible label — a list of
  * `savesama_DboX9Zakaiz-11_1785936336888_dl.jpg` tells you nothing about which
  * clip is which. This turns it back into something a person can read.
- *
- * `foxy_` is still accepted: files saved before the app was renamed are still
- * on the device and still listed in the Saved tab.
  */
-const SAVED_FILENAME = /^(?:savesama|foxy)_(.+?)(?:-(\d+))?_\d{10,}_dl\.[A-Za-z0-9]+$/;
+const SAVED_FILENAME = /^savesama_(.+?)(?:-(\d+))?_\d{10,}_dl\.[A-Za-z0-9]+$/;
 
 export interface SavedName {
   /** Primary line: what the thing is, and which one of the post it came from. */

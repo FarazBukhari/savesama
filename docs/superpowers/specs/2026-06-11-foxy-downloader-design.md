@@ -1,4 +1,4 @@
-# Foxy Downloader — Design
+# SaveSama — Design
 
 **Date:** 2026-06-11
 **Status:** Approved (user), implemented
@@ -16,7 +16,7 @@ ad banner slot (no ad SDK yet).
 | --- | --- | --- |
 | Platform | Android only | Preview APK installs directly; iOS needs a paid Apple Developer account. iOS share-extension config is retained by expo-share-intent for a future iOS build. |
 | Extraction | On-device | No backend or API keys; app fetches public post data itself. Accepted trade-off: public posts only, occasional breakage when Instagram changes internals. |
-| App name | Foxy Downloader | Shows under the icon and in the share sheet. |
+| App name | SaveSama | Shows under the icon and in the share sheet. |
 | EAS build | Configured but not triggered | User triggers `eas build --profile preview --platform android` themselves. |
 
 ## Architecture
