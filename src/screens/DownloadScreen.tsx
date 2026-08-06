@@ -235,6 +235,8 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
                 <Pressable
                   style={({ pressed }) => [styles.saveAll, pressed && styles.pressed]}
                   onPress={() => void handleDownloadAll()}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Save all ${pendingCount} remaining items`}
                 >
                   <Text style={styles.saveAllLabel}>Save all</Text>
                 </Pressable>

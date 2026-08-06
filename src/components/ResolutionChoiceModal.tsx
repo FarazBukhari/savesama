@@ -52,8 +52,16 @@ export function ResolutionChoiceModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <Pressable
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+          accessible={false}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>{title}</Text>
 

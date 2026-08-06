@@ -32,6 +32,9 @@ import { ENTER, enterRow, EXIT, REFLOW, TINT_TRANSITION } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
 import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
+/** Rows past this are already on screen or arrive by scrolling; see renderItem. */
+const FIRST_SCREENFUL = 8;
+
 const COLUMNS = 2;
 const GAP = spacing.sm - 2;
 /** Grid runs closer to the edge than the list — the media is the page. */
@@ -233,7 +236,10 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
         )
       }
       renderItem={({ item, index }) => (
-        <Animated.View entering={enterRow(index)}>
+        // Only the first screenful animates in. FlatList mounts rows as they
+        // scroll into view, so an unconditional `entering` makes every row fade
+        // up mid-scroll — which reads as jank, not choreography.
+        <Animated.View entering={index < FIRST_SCREENFUL ? enterRow(index) : undefined}>
           {isGrid ? (
             <SavedFileTile
               asset={item}
