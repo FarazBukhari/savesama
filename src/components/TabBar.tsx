@@ -1,8 +1,11 @@
 import Feather from '@expo/vector-icons/Feather';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { TINT_TRANSITION } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
-import { spacing, Theme, typography } from '../theme';
+import { MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
 export type Tab = 'download' | 'saved' | 'settings';
 
@@ -19,37 +22,65 @@ const TABS: { key: Tab; label: string; icon: FeatherName }[] = [
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
+const INDICATOR_TRANSITION = {
+  transitionProperty: 'transform',
+  transitionDuration: 260,
+  transitionTimingFunction: 'ease-out',
+} as const;
+
 /**
  * Docked, not floating: the bottom edge already carries the ad band, and a
  * floating pill would hover over it and clip the last row of the Saved grid.
- * The active tab is marked by a rule along its top edge, not a filled pill.
+ *
+ * The active marker is one bar that slides between tabs rather than three that
+ * blink on and off — the movement is what tells you which way you went.
  */
 export function TabBar({ active, onChange }: TabBarProps) {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const [barWidth, setBarWidth] = useState(0);
+
+  const activeIndex = TABS.findIndex((tab) => tab.key === active);
+  const tabWidth = barWidth / TABS.length;
+
+  const onLayout = (event: LayoutChangeEvent) => setBarWidth(event.nativeEvent.layout.width);
 
   return (
-    <View style={styles.bar}>
+    <View style={styles.bar} onLayout={onLayout}>
+      {barWidth > 0 ? (
+        <Animated.View
+          style={[
+            styles.indicator,
+            {
+              width: tabWidth,
+              transform: [{ translateX: Math.max(activeIndex, 0) * tabWidth }],
+            },
+            INDICATOR_TRANSITION,
+          ]}
+          pointerEvents="none"
+        />
+      ) : null}
+
       {TABS.map((tab) => {
         const isActive = tab.key === active;
         return (
           <Pressable
             key={tab.key}
-            style={({ pressed }) => [
-              styles.item,
-              isActive && styles.itemActive,
-              pressed && styles.pressed,
-            ]}
+            style={styles.item}
             onPress={() => onChange(tab.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
           >
             <Feather
               name={tab.icon}
-              size={19}
+              size={22}
               color={isActive ? theme.colors.accent : theme.colors.textSecondary}
             />
-            <Text style={[styles.label, isActive && styles.labelActive]}>{tab.label}</Text>
+            <Animated.Text
+              style={[styles.label, isActive && styles.labelActive, TINT_TRANSITION]}
+            >
+              {tab.label}
+            </Animated.Text>
           </Pressable>
         );
       })}
@@ -65,25 +96,26 @@ const makeStyles = (theme: Theme) =>
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.border,
     },
+    indicator: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      height: 2,
+      backgroundColor: theme.colors.accent,
+      borderBottomLeftRadius: radius.pill,
+      borderBottomRightRadius: radius.pill,
+    },
     item: {
       flex: 1,
       alignItems: 'center',
-      gap: spacing.xs,
-      paddingTop: spacing.sm,
+      justifyContent: 'center',
+      gap: spacing.xs + 1,
+      minHeight: MIN_TAP + 8,
+      paddingTop: spacing.sm + 2,
       paddingBottom: spacing.md,
-      borderTopWidth: 2,
-      borderTopColor: 'transparent',
-      // Pull the 2px marker up over the bar's hairline so they don't stack.
-      marginTop: -StyleSheet.hairlineWidth,
-    },
-    itemActive: {
-      borderTopColor: theme.colors.accent,
-    },
-    pressed: {
-      backgroundColor: theme.colors.sunken,
     },
     label: {
-      fontSize: typography.small - 2,
+      fontSize: typography.caption,
       fontWeight: '700',
       color: theme.colors.textSecondary,
     },

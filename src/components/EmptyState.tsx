@@ -25,7 +25,7 @@ export function EmptyState() {
       {STEPS.map((step) => (
         <View key={step.text} style={styles.row}>
           <View style={styles.tile}>
-            <Feather name={step.icon} size={15} color={theme.colors.accent} />
+            <Feather name={step.icon} size={18} color={theme.colors.accent} />
           </View>
           <Text style={styles.step}>{step.text}</Text>
         </View>
@@ -43,9 +43,9 @@ const makeStyles = (theme: Theme) =>
       marginTop: spacing.xl,
     },
     label: {
-      fontSize: typography.figure,
+      fontSize: typography.caption,
       fontWeight: '700',
-      letterSpacing: 1.4,
+      letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: theme.colors.textSecondary,
       marginBottom: spacing.sm,
@@ -59,8 +59,8 @@ const makeStyles = (theme: Theme) =>
       borderBottomColor: theme.colors.border,
     },
     tile: {
-      width: 34,
-      height: 34,
+      width: 40,
+      height: 40,
       borderRadius: radius.sm,
       backgroundColor: theme.colors.accentSoft,
       alignItems: 'center',
@@ -68,14 +68,14 @@ const makeStyles = (theme: Theme) =>
     },
     step: {
       flex: 1,
-      color: theme.colors.textSecondary,
-      fontSize: typography.small + 1,
-      lineHeight: 19,
+      color: theme.colors.text,
+      fontSize: typography.body,
+      lineHeight: 23,
     },
     note: {
-      marginTop: spacing.md,
-      color: theme.colors.placeholder,
-      fontSize: typography.small,
-      lineHeight: 18,
+      marginTop: spacing.lg,
+      color: theme.colors.textSecondary,
+      fontSize: typography.subtitle,
+      lineHeight: 21,
     },
   });

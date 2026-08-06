@@ -1,9 +1,11 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { ENTER, EXIT, TINT_TRANSITION } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
-import { fonts, radius, spacing, Theme, typography } from '../theme';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 import { PressableScale } from './PressableScale';
 
 interface LinkInputProps {
@@ -14,10 +16,6 @@ interface LinkInputProps {
   onSubmit: () => void;
 }
 
-/**
- * The link the user pasted is machine output, so it's set in the mono face —
- * that's what makes a truncated URL scannable at a glance.
- */
 export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: LinkInputProps) {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -26,11 +24,12 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
 
   return (
     <View>
-      <Text style={styles.label}>Source link</Text>
-      <View style={[styles.field, focused && styles.fieldFocused]}>
+      <Animated.View
+        style={[styles.field, focused && styles.fieldFocused, TINT_TRANSITION]}
+      >
         <Feather
           name="link"
-          size={15}
+          size={18}
           color={focused ? theme.colors.accent : theme.colors.textSecondary}
         />
         <TextInput
@@ -40,7 +39,7 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
           onSubmitEditing={onSubmit}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="instagram.com/reel/…"
+          placeholder="Paste a link"
           placeholderTextColor={theme.colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
@@ -49,22 +48,31 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
           editable={!busy}
         />
         {value.length > 0 && !busy ? (
-          <Pressable
-            onPress={() => onChangeText('')}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Clear link"
-          >
-            <Feather name="x" size={15} color={theme.colors.textSecondary} />
-          </Pressable>
+          <Animated.View entering={ENTER} exiting={EXIT}>
+            <Pressable
+              onPress={() => onChangeText('')}
+              hitSlop={16}
+              accessibilityRole="button"
+              accessibilityLabel="Clear link"
+            >
+              <Feather name="x-circle" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
+          </Animated.View>
         ) : null}
-      </View>
+      </Animated.View>
 
       <View style={styles.actions}>
-        <PressableScale style={styles.pasteButton} onPress={onPaste} disabled={busy}>
-          <Feather name="clipboard" size={14} color={theme.colors.text} />
+        <PressableScale
+          style={styles.pasteButton}
+          onPress={onPaste}
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel="Paste from clipboard"
+        >
+          <Feather name="clipboard" size={17} color={theme.colors.text} />
           <Text style={styles.pasteLabel}>Paste</Text>
         </PressableScale>
+
         <PressableScale
           style={[styles.submitButton, !canSubmit && styles.submitDisabled]}
           onPress={onSubmit}
@@ -72,16 +80,22 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
           accessibilityRole="button"
         >
           {busy ? (
-            <>
-              <ActivityIndicator color={theme.colors.textOnAccent} size="small" />
-              <Text style={styles.submitLabel}>Fetching…</Text>
-            </>
+            <ActivityIndicator color={theme.colors.textOnAccent} size="small" />
           ) : (
-            <>
-              <Feather name="download" size={15} color={theme.colors.textOnAccent} />
-              <Text style={styles.submitLabel}>Get media</Text>
-            </>
+            <Feather
+              name="arrow-down-circle"
+              size={19}
+              // A faded accent fill with white text was unreadable when
+              // disabled; the disabled state now goes neutral instead.
+              color={canSubmit ? theme.colors.textOnAccent : theme.colors.textSecondary}
+            />
           )}
+          <Text
+            style={[styles.submitLabel, !canSubmit && styles.submitLabelDisabled]}
+            numberOfLines={1}
+          >
+            {busy ? 'Reading…' : 'Get media'}
+          </Text>
         </PressableScale>
       </View>
     </View>
@@ -90,23 +104,16 @@ export function LinkInput({ value, busy, onChangeText, onPaste, onSubmit }: Link
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    label: {
-      fontSize: typography.figure,
-      fontWeight: '700',
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-      color: theme.colors.textSecondary,
-      marginBottom: spacing.sm,
-    },
     field: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md - 2,
+      gap: spacing.md,
+      minHeight: 56,
       backgroundColor: theme.colors.card,
-      borderRadius: radius.md,
-      borderWidth: 1,
+      borderRadius: radius.lg,
+      borderWidth: 1.5,
       borderColor: theme.colors.border,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.lg,
     },
     fieldFocused: {
       borderColor: theme.colors.accent,
@@ -114,47 +121,53 @@ const makeStyles = (theme: Theme) =>
     input: {
       flex: 1,
       paddingVertical: spacing.md,
-      fontSize: typography.subtitle,
+      fontSize: typography.body,
       fontFamily: fonts.mono,
       color: theme.colors.text,
     },
     actions: {
       flexDirection: 'row',
-      gap: spacing.sm + 1,
-      marginTop: spacing.sm + 1,
+      gap: spacing.md - 2,
+      marginTop: spacing.md,
     },
     pasteButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.sm,
-      width: 104,
-      height: 44,
-      borderRadius: radius.md,
-      borderWidth: 1,
+      gap: spacing.sm + 2,
+      // Not flex: the label is short and fixed, so it keeps its width while
+      // the primary action takes the rest of the row.
+      paddingHorizontal: spacing.lg,
+      minHeight: MIN_TAP + 8,
+      borderRadius: radius.lg,
+      borderWidth: 1.5,
       borderColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     pasteLabel: {
       color: theme.colors.text,
       fontWeight: '700',
-      fontSize: typography.subtitle + 1,
+      fontSize: typography.body,
     },
     submitButton: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.sm,
-      height: 44,
-      borderRadius: radius.md,
+      gap: spacing.sm + 2,
+      minHeight: MIN_TAP + 8,
+      borderRadius: radius.lg,
       backgroundColor: theme.colors.accent,
     },
     submitDisabled: {
-      opacity: 0.4,
+      backgroundColor: theme.colors.sunken,
     },
     submitLabel: {
       color: theme.colors.textOnAccent,
       fontWeight: '700',
-      fontSize: typography.subtitle + 1,
+      fontSize: typography.body,
+    },
+    submitLabelDisabled: {
+      color: theme.colors.textSecondary,
     },
   });

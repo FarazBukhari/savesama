@@ -62,15 +62,15 @@ export interface Theme {
 export const darkTheme: Theme = {
   mode: 'dark',
   colors: {
-    background: '#100E0D',
-    card: '#1A1716',
-    sunken: '#232020',
-    border: '#2C2826',
+    background: '#0B0A09',
+    card: '#171514',
+    sunken: '#221F1D',
+    border: '#2F2A27',
     accent: '#FF7A3D',
     accentPressed: '#E8632A',
     accentSoft: 'rgba(255, 122, 61, 0.13)',
-    text: '#F4F1ED',
-    textSecondary: '#8C837A',
+    text: '#F6F3EF',
+    textSecondary: '#9C9289',
     textOnAccent: '#140C06',
     success: '#4FCB95',
     successSoft: 'rgba(79, 203, 149, 0.12)',
@@ -95,17 +95,19 @@ export const darkTheme: Theme = {
 export const lightTheme: Theme = {
   mode: 'light',
   colors: {
-    background: '#F7F5F2',
+    // The ground sits a step below the card on purpose. When both were near
+    // white the whole screen read as one flat value with nothing on it.
+    background: '#EDEAE4',
     card: '#FFFFFF',
-    sunken: '#EFEBE6',
-    border: '#E3DED7',
+    sunken: '#E4DFD7',
+    border: '#D7D0C6',
     // Deliberately darker than the dark-mode accent: #FF7A3D only reaches 3.1:1
     // on white, which fails for the small bold figures it's used on.
-    accent: '#D04E19',
-    accentPressed: '#B54314',
+    accent: '#C9481A',
+    accentPressed: '#AA3C14',
     accentSoft: 'rgba(208, 78, 25, 0.10)',
-    text: '#16120F',
-    textSecondary: '#736A61',
+    text: '#141110',
+    textSecondary: '#635B53',
     textOnAccent: '#FFFFFF',
     success: '#2E7D5B',
     successSoft: 'rgba(46, 125, 91, 0.10)',
@@ -149,20 +151,32 @@ export const radius = {
   pill: 999,
 } as const;
 
+/**
+ * Sits on the 4pt grid and respects the mobile floor: body text never below
+ * 16, secondary never below 14, and nothing at all below 12. The previous
+ * scale ran 13/12/10 and read as fine print on a real device.
+ */
 export const typography = {
-  /** Screen titles in the top bar. */
-  display: 26,
-  title: 22,
-  /** Card/section headings and primary row labels. */
-  headline: 16,
-  subtitle: 13,
-  body: 15,
-  small: 12,
-  /** Overlines and tiny badges — pair with uppercase + letterSpacing. */
-  caption: 11,
-  /** Machine figures: byte counts, rates, resolutions. */
-  figure: 10,
+  /** Screen titles. */
+  display: 32,
+  title: 24,
+  /** Section headings and primary row labels. */
+  headline: 20,
+  body: 16,
+  subtitle: 14,
+  small: 14,
+  /** Overlines and badges — pair with uppercase + letterSpacing. */
+  caption: 12,
+  /** Machine figures: dimensions, counts, rates. */
+  figure: 13,
 } as const;
+
+/**
+ * Minimum hit area for anything tappable: 48dp covers Android's floor and
+ * clears iOS's 44pt. Use `hitSlop` when the painted control is smaller than
+ * the target — never shrink the target to match the paint.
+ */
+export const MIN_TAP = 48;
 
 export const fonts = {
   /** Machine output only. Human-written copy stays in the system UI face. */

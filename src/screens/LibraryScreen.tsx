@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorNotice } from '../components/ErrorNotice';
@@ -27,8 +28,9 @@ import {
   openAsset,
 } from '../services/library';
 import { LibraryView, savePreferences } from '../services/preferences';
+import { ENTER, enterRow, EXIT, REFLOW, TINT_TRANSITION } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
-import { fonts, radius, spacing, Theme, typography } from '../theme';
+import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 
 const COLUMNS = 2;
 const GAP = spacing.sm - 2;
@@ -147,10 +149,13 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
   const padding = isGrid ? GRID_PADDING : LIST_PADDING;
 
   return (
-    <FlatList
+    <Animated.FlatList
       // numColumns can't change on a mounted FlatList — remounting on the view
       // toggle is the supported way, and without it the switch throws.
       key={libraryView}
+      // Item layout animations only work on a single-column list; passing this
+      // with numColumns > 1 is unsupported, so the grid goes without.
+      itemLayoutAnimation={isGrid ? undefined : REFLOW}
       data={visible}
       keyExtractor={(asset) => asset.id}
       numColumns={isGrid ? COLUMNS : 1}
@@ -172,6 +177,7 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
         <View style={{ paddingHorizontal: isGrid ? LIST_PADDING - GRID_PADDING : 0 }}>
           <Header
             title="Saved"
+            subtitle={assets.length > 0 ? undefined : 'Everything you keep lands here'}
             right={
               <ViewToggle
                 value={libraryView}
@@ -186,30 +192,35 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
                 <Pressable
                   key={option.key}
                   onPress={() => setFilter(option.key)}
-                  style={[styles.chip, active && styles.chipActive]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                 >
-                  <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                    {option.label}
-                  </Text>
+                  <Animated.View
+                    style={[styles.chip, active && styles.chipActive, TINT_TRANSITION]}
+                  >
+                    <Animated.Text
+                      style={[styles.chipLabel, active && styles.chipLabelActive, TINT_TRANSITION]}
+                    >
+                      {option.label}
+                    </Animated.Text>
+                  </Animated.View>
                 </Pressable>
               );
             })}
           </View>
           {assets.length > 0 ? (
-            <Text style={styles.count}>
+            <Animated.Text entering={ENTER} exiting={EXIT} style={styles.count}>
               {visible.length} {visible.length === 1 ? 'FILE' : 'FILES'}
               {filter === 'all' ? '' : ` OF ${assets.length}`}
-            </Text>
+            </Animated.Text>
           ) : null}
           {error ? <ErrorNotice title="Couldn't read your library" message={error} /> : null}
         </View>
       }
       ListEmptyComponent={
         error ? null : (
-          <View style={styles.empty}>
-            <Feather name="inbox" size={22} color={theme.colors.textSecondary} />
+          <Animated.View entering={ENTER} style={styles.empty}>
+            <Feather name="inbox" size={34} color={theme.colors.placeholder} />
             <Text style={styles.emptyTitle}>
               {filter === 'all' ? 'Nothing saved yet' : 'Nothing of that kind yet'}
             </Text>
@@ -218,25 +229,27 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
                 ? 'Files you save land here. Long-press one to delete it.'
                 : 'Try another filter, or save something new from the Get tab.'}
             </Text>
-          </View>
+          </Animated.View>
         )
       }
-      renderItem={({ item }) =>
-        isGrid ? (
-          <SavedFileTile
-            asset={item}
-            size={TILE_SIZE}
-            onOpen={(asset) => void handleOpen(asset)}
-            onDelete={handleDelete}
-          />
-        ) : (
-          <SavedFileRow
-            asset={item}
-            onOpen={(asset) => void handleOpen(asset)}
-            onDelete={handleDelete}
-          />
-        )
-      }
+      renderItem={({ item, index }) => (
+        <Animated.View entering={enterRow(index)}>
+          {isGrid ? (
+            <SavedFileTile
+              asset={item}
+              size={TILE_SIZE}
+              onOpen={(asset) => void handleOpen(asset)}
+              onDelete={handleDelete}
+            />
+          ) : (
+            <SavedFileRow
+              asset={item}
+              onOpen={(asset) => void handleOpen(asset)}
+              onDelete={handleDelete}
+            />
+          )}
+        </Animated.View>
+      )}
     />
   );
 }
@@ -266,7 +279,7 @@ function ViewToggle({
           >
             <Feather
               name={option}
-              size={14}
+              size={18}
               color={active ? theme.colors.accent : theme.colors.textSecondary}
             />
           </Pressable>
@@ -303,18 +316,19 @@ const makeStyles = (theme: Theme) =>
       paddingBottom: spacing.md,
     },
     chip: {
+      justifyContent: 'center',
+      minHeight: MIN_TAP - 8,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: radius.pill,
-      paddingHorizontal: spacing.md - 1,
-      paddingVertical: spacing.xs + 1,
+      paddingHorizontal: spacing.lg,
     },
     chipActive: {
       backgroundColor: theme.colors.accent,
       borderColor: theme.colors.accent,
     },
     chipLabel: {
-      fontSize: typography.caption,
+      fontSize: typography.subtitle + 1,
       fontWeight: '700',
       color: theme.colors.textSecondary,
     },
@@ -323,7 +337,7 @@ const makeStyles = (theme: Theme) =>
     },
     count: {
       fontFamily: fonts.mono,
-      fontSize: typography.figure - 0.5,
+      fontSize: typography.caption,
       letterSpacing: 0.6,
       color: theme.colors.textSecondary,
       paddingBottom: spacing.sm,
@@ -336,8 +350,10 @@ const makeStyles = (theme: Theme) =>
       overflow: 'hidden',
     },
     segmentItem: {
-      paddingHorizontal: spacing.md - 2,
-      paddingVertical: spacing.xs + 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: MIN_TAP,
+      height: MIN_TAP - 8,
     },
     segmentDivider: {
       borderLeftWidth: 1,
@@ -356,11 +372,12 @@ const makeStyles = (theme: Theme) =>
     },
     emptyTitle: {
       fontSize: typography.headline,
+      marginTop: spacing.sm,
       fontWeight: '700',
       color: theme.colors.text,
     },
     emptyBody: {
-      fontSize: typography.small + 1,
+      fontSize: typography.body,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       lineHeight: 19,

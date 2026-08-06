@@ -1,10 +1,12 @@
 import Feather from '@expo/vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MediaType } from 'expo-media-library';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { SavedAsset } from '../services/library';
 import { useThemedStyles } from '../ThemeProvider';
 import { fonts, radius, spacing, Theme, typography } from '../theme';
+import { PressableScale } from './PressableScale';
 
 interface SavedFileTileProps {
   asset: SavedAsset;
@@ -28,14 +30,15 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
   const hasDuration = asset.duration != null && asset.duration > 0;
 
   return (
-    <Pressable
-      style={({ pressed }) => [{ width: size, height: size }, pressed && styles.pressed]}
+    <PressableScale
+      style={[styles.tile, { width: size, height: size }]}
       onPress={() => onOpen(asset)}
       onLongPress={() => onDelete(asset)}
+      accessibilityRole="imagebutton"
     >
       {isAudio ? (
         <View style={[styles.thumb, styles.audioThumb]}>
-          <Feather name="music" size={26} color="#FFFFFF" />
+          <Feather name="music" size={28} color="#FFFFFF" />
         </View>
       ) : (
         <Image
@@ -49,46 +52,66 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
         />
       )}
 
-      <View style={styles.chip}>
-        <Feather name={isAudio ? 'music' : isVideo ? 'play' : 'image'} size={9} color="#FFFFFF" />
+      {/*
+        Media is user-supplied, so a badge sitting straight on the artwork is
+        legible or not depending on the photo. The scrim makes it always
+        legible without dimming the whole tile.
+      */}
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.55)']}
+        style={styles.scrim}
+        pointerEvents="none"
+      />
+
+      <View style={styles.badges} pointerEvents="none">
+        <Feather
+          name={isAudio ? 'music' : isVideo ? 'play' : 'image'}
+          size={13}
+          color="#FFFFFF"
+        />
         {(isVideo || isAudio) && hasDuration ? (
-          <Text style={styles.chipLabel}>{formatDuration(asset.duration as number)}</Text>
+          <Text style={styles.duration}>{formatDuration(asset.duration as number)}</Text>
         ) : null}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    pressed: {
-      opacity: 0.7,
+    tile: {
+      borderRadius: radius.lg,
+      overflow: 'hidden',
+      backgroundColor: theme.colors.sunken,
     },
     thumb: {
-      flex: 1,
-      borderRadius: radius.md,
-      backgroundColor: theme.colors.sunken,
+      width: '100%',
+      height: '100%',
     },
     audioThumb: {
       backgroundColor: theme.colors.videoBadge,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    chip: {
+    scrim: {
       position: 'absolute',
-      right: spacing.sm - 2,
-      bottom: spacing.sm - 2,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '38%',
+    },
+    badges: {
+      position: 'absolute',
+      left: spacing.sm + 2,
+      right: spacing.sm + 2,
+      bottom: spacing.sm + 2,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-      backgroundColor: theme.colors.videoBadge,
-      borderRadius: radius.sm - 3,
-      paddingHorizontal: 5,
-      paddingVertical: 2,
+      gap: spacing.xs + 2,
     },
-    chipLabel: {
+    duration: {
       color: '#FFFFFF',
-      fontSize: typography.figure - 1,
+      fontSize: typography.caption,
       fontFamily: fonts.mono,
       fontWeight: '700',
     },
