@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../components/Header';
 import { ResolutionChoiceModal } from '../components/ResolutionChoiceModal';
 import { usePreferences } from '../hooks/usePreferences';
+import { ALBUM_NAME } from '../services/download';
 import {
   Preferences,
   ResolutionPref,
@@ -39,6 +40,18 @@ const PLATFORM_ROWS: PlatformRow[] = [
     glyph: '▶️',
     hint: 'Videos and Shorts',
   },
+];
+
+interface SupportedApp {
+  name: string;
+  glyph: string;
+  detail: string;
+}
+
+const SUPPORTED_APPS: SupportedApp[] = [
+  { name: 'Instagram', glyph: '📸', detail: 'Posts, reels, photos and carousels' },
+  { name: 'Threads', glyph: '🧵', detail: 'Video posts, photos and carousels' },
+  { name: 'YouTube', glyph: '▶️', detail: 'Videos and Shorts, up to 1080p' },
 ];
 
 export function SettingsScreen() {
@@ -94,6 +107,59 @@ export function SettingsScreen() {
         <Text style={styles.footnote}>
           Lower resolutions download faster and use less storage. When a video isn’t offered
           below your chosen size, Foxy shrinks it on-device where supported.
+        </Text>
+
+        <Text style={styles.sectionLabel}>Where files are saved</Text>
+        <View style={styles.card}>
+          {/*
+            Read-only on purpose: Android's MediaStore roots an album by media type, so
+            photos/videos and audio cannot share one folder. Foxy has no say in the
+            parent directory — it only names the album.
+          */}
+          <View style={styles.row}>
+            <View style={styles.iconTile}>
+              <Text style={styles.iconGlyph}>🖼️</Text>
+            </View>
+            <View style={styles.rowInfo}>
+              <Text style={styles.rowLabel}>Photos & videos</Text>
+              <Text style={styles.pathValue}>Pictures/{ALBUM_NAME}</Text>
+            </View>
+          </View>
+          <View style={[styles.row, styles.rowDivider]}>
+            <View style={styles.iconTile}>
+              <Text style={styles.iconGlyph}>🎧</Text>
+            </View>
+            <View style={styles.rowInfo}>
+              <Text style={styles.rowLabel}>Audio</Text>
+              <Text style={styles.pathValue}>Music/{ALBUM_NAME}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.footnote}>
+          Saved files appear in your gallery straight away. Android keeps audio in a separate
+          root from photos and videos, so Foxy uses one album in each — these locations can’t
+          be changed.
+        </Text>
+
+        <Text style={styles.sectionLabel}>Supported apps</Text>
+        <View style={styles.card}>
+          {SUPPORTED_APPS.map((app, index) => (
+            <View key={app.name} style={[styles.row, index > 0 && styles.rowDivider]}>
+              <View style={styles.iconTile}>
+                <Text style={styles.iconGlyph}>{app.glyph}</Text>
+              </View>
+              <View style={styles.rowInfo}>
+                <Text style={styles.rowLabel}>{app.name}</Text>
+                <Text style={styles.rowHint}>{app.detail}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <Text style={styles.footnote}>
+          Paste a link or use the share sheet from any of these. Instagram and Threads
+          download as the account you sign in to, so anything you can view, you can save.
         </Text>
       </ScrollView>
 
@@ -165,6 +231,12 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: '700',
     color: colors.text,
+  },
+  pathValue: {
+    marginTop: 2,
+    fontSize: typography.small,
+    fontWeight: '600',
+    color: colors.accent,
   },
   rowHint: {
     marginTop: 2,

@@ -244,8 +244,10 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
               closeFormatSheet();
             }}
             onSaveAudio={() => {
+              // Sheet stays open: unlike video, audio has no card row of its own, so
+              // closing here would leave the download with nowhere to show progress.
+              // The Audio row reports its own percentage and ✓ Saved state.
               handleDownload(modalItem, 'audio');
-              closeFormatSheet();
             }}
             onChangeResolution={() => setChoosingResolution(true)}
             onClose={closeFormatSheet}
