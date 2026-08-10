@@ -17,9 +17,17 @@ need to adjust lives in two files:
 **Read this first: the primary path is authenticated, not anonymous.** Since `b7b2b3a`,
 `extractInstagram` tries [`WebViewSessionResolver`](../src/components/WebViewSessionResolver.tsx)'s
 WebView fetch (`api/v1/media/<pk>/info/` with the user's own session) *before* any
-anonymous strategy. So on a real device the recipe below is only the fallback, and it runs
-at all only when no resolver is mounted (web build, jest, the `scripts/e2e-extract.ts`
-tester). See §10 for the same mechanism on Threads.
+anonymous strategy. Downloads therefore run as the signed-in user, against media that
+user's own account is already permitted to view. See §10 for the same mechanism on Threads.
+
+⚠️ **The anonymous fallback does run on device — an earlier version of this note claimed
+it couldn't.** [`App.tsx`](../App.tsx) mounts a resolver for both platforms
+unconditionally, so `getFetcher('instagram')` is always populated outside tests. But
+`extractViaAuthenticatedFetch` returns `null` on any non-2xx body
+([`instagram.ts:65`](../src/extraction/instagram.ts)), and `extractInstagram` then falls
+straight through to `fetchViaGraphQl` and `fetchViaEmbed`. So the recipe below is reached
+whenever an authenticated fetch fails for a reason other than a cancelled login — not only
+in the web build, jest, and `scripts/e2e-extract.ts`.
 
 Anonymous status as of **August 2026** (re-probed against live Instagram):
 
