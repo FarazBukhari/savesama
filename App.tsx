@@ -7,7 +7,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AdBanner } from './src/components/AdBanner';
 import { Tab, TabBar } from './src/components/TabBar';
 import { INSTAGRAM_SESSION, THREADS_SESSION } from './src/components/webViewSession';
 import { WebViewSessionResolver } from './src/components/WebViewSessionResolver';
@@ -69,7 +68,6 @@ function Main() {
         <SettingsScreen />
       </View>
 
-      <AdBanner bottomInset={0} />
       <View style={{ backgroundColor: theme.colors.card, paddingBottom: insets.bottom }}>
         <TabBar active={tab} onChange={handleTabChange} />
       </View>

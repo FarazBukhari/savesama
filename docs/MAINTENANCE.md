@@ -129,7 +129,8 @@ needs no auth, and as of §11 it downloads only the audio stream rather than the
 ## 3. Build & release (EAS)
 
 - The project is linked to EAS as **`@farazbukhari/savesama`**
-  (projectId `716a367e-a260-4e84-8e2f-73b8f730762d`, in `app.json` → `extra.eas`).
+  (projectId `56b9a925-7dc3-4721-bb0d-0cebbe602a50`, in `app.json` → `extra.eas`, and the
+  same id in `updates.url` — these two must match or OTA resolves against the wrong project).
 - Preview APK (sideload on any Android phone):
 
   ```bash
@@ -184,24 +185,35 @@ restricted `types` scope.)
 
 ```bash
 npm run typecheck          # tsc --noEmit
-npm test                   # jest (51 tests)
+npm test                   # jest (184 tests)
 npx expo-doctor            # 21/21 checks
 npx expo export --platform android --output-dir /tmp/savesama-check && rm -rf /tmp/savesama-check
 ```
 
 ---
 
-## 6. Ads (when ready)
+## 6. Ads — deliberately none
 
-`AdBanner` ([`src/components/AdBanner.tsx`](../src/components/AdBanner.tsx)) reserves a
-60dp slot at the bottom, safe-area aware, so adding ads won't shift the layout. To wire
-up AdMob:
+There was an `AdBanner` placeholder reserving 60dp at the bottom of the screen, sized for
+an AdMob adaptive banner. It was removed rather than filled, because the plan behind it
+does not survive contact with the policies:
 
-1. `npx expo install react-native-google-mobile-ads` and add its config plugin to
-   `app.json`.
-2. Replace the placeholder `<View>` inside `AdBanner` with
-   `<BannerAd size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} ... />`.
-3. Keep the outer container so spacing stays identical.
+- **Google Publisher Policies** (which govern AdMob) prohibit "software … that enable[s]
+  unauthorized streaming, sharing, copying, or downloading of copyrighted content …
+  including … works by independent artists." That describes this app, and it is not
+  YouTube-specific — Instagram and Threads posts are copyrighted by their posters, so
+  dropping YouTube support would not change the analysis.
+- Enforcement is **account-level**, not app-level: an AdMob strike lands on the Google
+  account, taking the Play developer account and payments profile with it.
+- Ad size, count, and placement are irrelevant. The clause is about what the app does.
+
+The same reasoning rules out Google Play as a distribution channel (see
+§ [Build & release](#3-build--release-eas)). F-Droid has no equivalent copyright clause
+and would accept the app, but the AdMob SDK is proprietary and fails F-Droid's free
+software requirement — so every channel that would host SaveSama is one where ads are
+unavailable.
+
+If revenue is wanted, it has to come from donations or a paid tier, not ads.
 
 ---
 
@@ -727,7 +739,7 @@ run a handful of extractions from one IP in quick succession.
 ## 16. Theming
 
 `theme.ts` exports `lightTheme` and `darkTheme` filling one `Theme` interface, plus the
-theme-independent scales (`spacing`, `radius`, `typography`, `fonts`, `AD_BANNER_HEIGHT`)
+theme-independent scales (`spacing`, `radius`, `typography`, `fonts`)
 which stay plain module exports — a component that only needs spacing shouldn't need a hook.
 
 `ThemeProvider` resolves which one is active from `preferences.themeMode`, falling back to

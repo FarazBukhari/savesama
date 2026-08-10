@@ -54,9 +54,6 @@ audio can't share one folder — SaveSama only names the album. Both paths are s
   `player` endpoint (ANDROID_VR client); everything is parsed on the device.
 - **Seamless downloads** — progress bars, then saved directly to the device gallery
   via the media library.
-- **Reserved ad slot** — the bottom banner space ([src/components/AdBanner.tsx](src/components/AdBanner.tsx))
-  is a fixed-height placeholder sized for an AdMob adaptive banner. No ad SDK is
-  installed yet; swap the placeholder's inner view for the ad component when ready.
 
 ## Limitations
 
@@ -103,7 +100,7 @@ audio can't share one folder — SaveSama only names the album. Both paths are s
 App.tsx                     # Tabs, share-intent wiring, state, layout; mounts one
                             # WebViewSessionResolver per authenticated platform
 src/
-  components/               # Header, LinkInput, MediaCard, ErrorNotice, EmptyState, AdBanner
+  components/               # Header, LinkInput, MediaCard, ErrorNotice, EmptyState
     WebViewSessionResolver.tsx  # Hidden session WebView + login modal (both platforms)
     webViewSession.ts       # Per-platform config + login predicates (pure, tested)
   extraction/
@@ -124,7 +121,7 @@ src/
     resolutionPlan.ts       # Picks the rendition/plan for a resolution preference
     preferences.ts          # Resolution defaults, theme mode, library view, session hints
     library.ts              # Saved-files listing for the Saved tab
-  theme.ts                  # lightTheme / darkTheme + spacing, radius, type, ad banner height
+  theme.ts                  # lightTheme / darkTheme + spacing, radius, type scales
   ThemeProvider.tsx         # Resolves the active theme; useTheme / useThemedStyles
 ```
 
@@ -163,10 +160,11 @@ When the build finishes, open the build page link (or scan the QR code) on your
 Android phone and install the APK. Android will ask you to allow installs from
 unknown sources the first time.
 
-## Ads (later)
+## Distribution
 
-`AdBanner` reserves a 60dp slot at the bottom of the screen. To integrate AdMob:
-
-1. `npx expo install react-native-google-mobile-ads` and add its config plugin.
-2. Replace the placeholder `<View>` inside `AdBanner` with `<BannerAd size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} ... />`.
-3. Keep the outer container so the layout doesn't shift.
+Sideload only, via GitHub Releases. SaveSama is not on Google Play and will not be:
+Play's [Intellectual Property policy](https://support.google.com/googleplay/android-developer/answer/9888072)
+prohibits apps that download copyrighted content from third-party services without
+authorization, and the [Google Publisher Policies](https://support.google.com/admob/answer/10502938)
+behind AdMob prohibit serving ads in one. Both rule out an ad-funded store build, so the
+app carries no ad SDK.
