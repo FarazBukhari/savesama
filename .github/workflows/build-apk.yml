@@ -11,10 +11,17 @@ on:
   #
   # Kept dispatchable because building on a runner is still useful for bisecting a
   # native break without spending EAS build credits. If it fails on disk again, free
-  # space first (/usr/share/dotnet, /opt/ghc, CodeQL and prebuilt Docker images are
-  # ~30 GB between them) — and note the `reactNativeArchitectures` project property
-  # does NOT reduce the ABIs built here; both a gradle.properties value and a
-  # command-line -P were ignored, so that lever is unresolved.
+  # space first: /usr/share/dotnet, /opt/ghc, CodeQL and the prebuilt Docker images
+  # are ~30 GB between them.
+  #
+  # On `reactNativeArchitectures`: it controls which ABIs get PACKAGED, not which get
+  # COMPILED. The Aug 6 runner APK carried arm64-v8a alone (38 MB) while its log shows
+  # CMake building all four, so the env var worked for packaging and did nothing for
+  # the compile that actually exhausted the disk. An earlier version of this comment
+  # claimed the setting never worked at all — it did, just not for disk.
+  #
+  # Cloud builds get the same packaging filter from the preview profile's `env` in
+  # eas.json; without it EAS ships all four ABIs (93 MB, half of it emulator-only).
   workflow_dispatch:
     inputs:
       profile:
