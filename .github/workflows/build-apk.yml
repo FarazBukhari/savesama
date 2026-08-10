@@ -1,10 +1,20 @@
 name: Build APK
 
 on:
-  # Automatic builds only for main (direct pushes and merged PRs). Other branches
-  # build on demand via the Actions tab / `gh workflow run`.
-  push:
-    branches: [main]
+  # Manual only. Release builds moved to EAS cloud (`eas build -p android --profile
+  # preview`), which is the natural pairing with EAS Update and doesn't run into the
+  # runner's disk ceiling: runs 31361056023 and 31362358521 both exhausted the disk
+  # during packaging, the first in :app:packageRelease and the second zipping
+  # reanimated's AAR. The native dependency graph was unchanged from the last green
+  # run (identical OTA fingerprint 168fc088…), so the cause was the runner
+  # environment, not this repo.
+  #
+  # Kept dispatchable because building on a runner is still useful for bisecting a
+  # native break without spending EAS build credits. If it fails on disk again, free
+  # space first (/usr/share/dotnet, /opt/ghc, CodeQL and prebuilt Docker images are
+  # ~30 GB between them) — and note the `reactNativeArchitectures` project property
+  # does NOT reduce the ABIs built here; both a gradle.properties value and a
+  # command-line -P were ignored, so that lever is unresolved.
   workflow_dispatch:
     inputs:
       profile:
