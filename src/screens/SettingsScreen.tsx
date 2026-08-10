@@ -1,4 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
+import Constants from 'expo-constants';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -44,6 +45,12 @@ const ACCOUNT_ROWS: AccountRow[] = [
   { platform: 'instagram', label: 'Instagram', flag: 'instagramSignedIn' },
   { platform: 'threads', label: 'Threads', flag: 'threadsSignedIn' },
 ];
+
+/*
+  Read from the app config rather than written out here, so the number in Settings
+  can never drift from the one in app.json.
+*/
+const APP_VERSION = Constants.expoConfig?.version ?? '—';
 
 const THEME_CHOICES: { mode: ThemeMode; icon: 'sun' | 'moon' | 'smartphone' }[] = [
   { mode: 'light', icon: 'sun' },
@@ -193,6 +200,12 @@ export function SettingsScreen() {
           Saved files show up in your gallery straight away. Android keeps audio in a separate
           root from photos and videos, so these two locations can't be merged.
         </Text>
+
+        <Text style={styles.overline}>About</Text>
+        <View style={styles.row}>
+          <Text style={styles.rowLabelGrow}>Version</Text>
+          <Text style={styles.rowFigure}>{APP_VERSION}</Text>
+        </View>
       </ScrollView>
 
       {editing ? (

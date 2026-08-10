@@ -189,6 +189,3 @@ export const fonts = {
   /** Machine output only. Human-written copy stays in the system UI face. */
   mono: Platform.select({ ios: 'Menlo', default: 'monospace' }),
 } as const;
-
-/** Reserved height for the ad banner (AdMob adaptive banners are 50–60dp). */
-export const AD_BANNER_HEIGHT = 60;
