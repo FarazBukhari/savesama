@@ -67,22 +67,16 @@ jobs:
       - name: Compute APK name
         run: echo "APK_BASENAME=savesama-${PROFILE}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
-      # Native code compiles once per ABI, and Reanimated's CMake alone cost
-      # 4.1 min on x86 and 3.7 min on x86_64 in run 31095714782 — both
-      # emulator-only architectures nobody installs this APK on. Test builds get
-      # arm64 only; production still ships all four.
+      # ABI selection lives in eas.json's preview profile, not here. This step used
+      # to export ORG_GRADLE_PROJECT_reactNativeArchitectures, which does not work:
+      # `eas build --local` runs `expo prebuild`, which writes reactNativeArchitectures
+      # into the generated android/gradle.properties, and that file wins over the env
+      # var. Run 31361056023 had the env var set to arm64-v8a and still compiled all
+      # four ABIs, then died with "No space left on device" in :app:packageRelease.
       #
-      # Gradle reads ORG_GRADLE_PROJECT_<name> from the environment as the
-      # project property <name>, which is what React Native's Gradle plugin
-      # looks up. Verify it took by grepping a build log for `[x86]` tasks.
-      - name: Select target ABIs
-        run: |
-          if [ "$PROFILE" = "production" ]; then
-            echo "ORG_GRADLE_PROJECT_reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64" >> "$GITHUB_ENV"
-          else
-            echo "ORG_GRADLE_PROJECT_reactNativeArchitectures=arm64-v8a" >> "$GITHUB_ENV"
-          fi
-
+      # The fix is a command-line -P (highest-precedence project property) via the
+      # profile's android.gradleCommand. Verify it took by grepping a build log for
+      # `[x86]` tasks — there should be none.
       - name: Build APK
         run: eas build --platform android --profile "$PROFILE" --local --non-interactive --output "${{ github.workspace }}/${APK_BASENAME}.apk"
 
