@@ -52,6 +52,8 @@ describe('mapMediaInfo', () => {
               hasAudio: true,
             },
           ],
+          username: 'alice',
+          postCode: 'ABC',
         },
       ],
     });
@@ -98,6 +100,8 @@ describe('mapMediaInfo', () => {
         width: 1080,
         height: 1080,
         platform: 'instagram',
+        username: 'bob',
+        postCode: 'IMG',
       },
     ]);
     expect(result?.caption).toBeNull();
@@ -127,6 +131,11 @@ describe('mapMediaInfo', () => {
     expect(result?.items.map((i) => ({ id: i.id, type: i.type, url: i.url }))).toEqual([
       { id: 'CAR-0', type: 'image', url: 'https://cdn/1.jpg' },
       { id: 'CAR-1', type: 'video', url: 'https://cdn/2.mp4' },
+    ]);
+    // Every child knows its poster and place, so saved files can be named after them.
+    expect(result?.items.map((i) => [i.username, i.postCode, i.position])).toEqual([
+      ['carol', 'CAR', 1],
+      ['carol', 'CAR', 2],
     ]);
   });
 
@@ -246,11 +255,28 @@ describe('mapMediaInfo — DASH audio stream', () => {
 
   it('keeps video coming from video_versions, not the VP9 DASH ladder', () => {
     // The DASH manifest advertises the full 1088x1936 original, but it is VP9 —
-    // unmuxable on iOS and unevenly supported by Android's MediaMuxer — so video
-    // must still come from the muxed video_versions entry.
+    // unmuxable on iOS and unevenly supported by Android's MediaMuxer — so the
+    // default video still comes from the muxed video_versions entry.
     const item = mapMediaInfo(withManifest(MANIFEST), 'ABC')?.items[0];
     expect(item?.url).toBe('https://cdn/v.mp4');
     expect(item?.formats?.map((f) => f.url)).toEqual(['https://cdn/v.mp4']);
+  });
+
+  it('exposes the larger DASH original separately for the opt-in original-quality path', () => {
+    const item = mapMediaInfo(withManifest(MANIFEST), 'ABC')?.items[0];
+    expect(item?.originalVideo).toEqual({
+      url: 'https://cdn/dash-video.mp4',
+      width: 1088,
+      height: 1936,
+      codecs: 'vp09.00.40.08',
+      bandwidth: 2612000,
+    });
+  });
+
+  it('omits originalVideo when the manifest is no bigger than the muxed rendition', () => {
+    const same = MANIFEST.replace('width="1088" height="1936"', 'width="716" height="1274"');
+    const item = mapMediaInfo(withManifest(same), 'ABC')?.items[0];
+    expect(item?.originalVideo).toBeUndefined();
   });
 
   it('omits audioOnlyUrl when the post carries no manifest (is_dash_eligible = 0)', () => {

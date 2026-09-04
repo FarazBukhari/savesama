@@ -15,6 +15,15 @@ android {
 }
 
 dependencies {
+  // FFmpeg is the primary engine for every remux/mux/transcode in this module; the
+  // MediaExtractor/MediaMuxer/Media3 code below it is the fallback when a command
+  // fails. Arthenica retired ffmpeg-kit and pulled its Maven artifacts (Apr 2025);
+  // this is a community rebuild of ffmpeg-kit 6.x (FFmpeg 6.0, full-gpl feature set,
+  // MediaCodec encoders, libvpx) on Maven Central with 16 KB page-aligned .so files,
+  // which Android 15+ devices need. Newer FFmpeg cores (FFmpegKitNext, 9.x) are
+  // source-only — see docs/MAINTENANCE.md §7 for the upgrade path.
+  implementation "com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1"
+
   // Media3 Transformer powers `transcodeVideo`'s downscale. Hand-rolling
   // decode → GL scale → encode → MediaMuxer is where rotation metadata and
   // timestamp handling go wrong (portrait video coming out sideways is the

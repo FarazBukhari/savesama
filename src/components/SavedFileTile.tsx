@@ -1,7 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MediaType } from 'expo-media-library';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { memo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SavedAsset } from '../services/library';
 import { useThemedStyles } from '../ThemeProvider';
@@ -11,8 +13,10 @@ import { PressableScale } from './PressableScale';
 interface SavedFileTileProps {
   asset: SavedAsset;
   size: number;
+  /** Tap: open in the viewer. */
   onOpen: (asset: SavedAsset) => void;
-  onDelete: (asset: SavedAsset) => void;
+  /** Long-press: the actions sheet (share, rename, delete). */
+  onMore: (asset: SavedAsset) => void;
 }
 
 /** `duration` arrives in milliseconds; render it as m:ss. */
@@ -23,7 +27,17 @@ export function formatDuration(durationMs: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTileProps) {
+/**
+ * Grid cell. Memoised because the list re-renders whenever the filter or a single
+ * asset changes, and decoding a thumbnail again for every unchanged tile is what made
+ * scrolling stutter.
+ */
+export const SavedFileTile = memo(function SavedFileTile({
+  asset,
+  size,
+  onOpen,
+  onMore,
+}: SavedFileTileProps) {
   const styles = useThemedStyles(makeStyles);
   const isAudio = asset.mediaType === MediaType.AUDIO;
   const isVideo = asset.mediaType === MediaType.VIDEO;
@@ -33,8 +47,9 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
     <PressableScale
       style={[styles.tile, { width: size, height: size }]}
       onPress={() => onOpen(asset)}
-      onLongPress={() => onDelete(asset)}
+      onLongPress={() => onMore(asset)}
       accessibilityRole="imagebutton"
+      accessibilityHint="Opens the file. Long-press for more actions."
     >
       {isAudio ? (
         <View style={[styles.thumb, styles.audioThumb]}>
@@ -44,11 +59,14 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
         <Image
           source={{ uri: asset.uri }}
           style={styles.thumb}
-          resizeMode="cover"
-          // The source is the full-resolution original but the tile is tiny.
-          // `resize` decodes a downsampled bitmap (Android/Fresco) instead of the
-          // full image, cutting thumbnail memory and decode cost substantially.
-          resizeMethod="resize"
+          contentFit="cover"
+          // The source is a full-resolution original; expo-image decodes a bitmap
+          // sized to the view and keeps it in its memory/disk cache, so a scroll
+          // back up costs nothing and the tile never holds a 4K decode.
+          cachePolicy="memory-disk"
+          recyclingKey={asset.id}
+          transition={0}
+          allowDownscaling
         />
       )}
 
@@ -75,7 +93,7 @@ export function SavedFileTile({ asset, size, onOpen, onDelete }: SavedFileTilePr
       </View>
     </PressableScale>
   );
-}
+});
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({

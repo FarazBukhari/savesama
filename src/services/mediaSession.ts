@@ -18,6 +18,14 @@ export interface SessionFetchResult {
   body: string;
   /** True when the user dismissed the login screen without authenticating. */
   cancelled?: boolean;
+  /**
+   * Set when Meta refused the request for a reason no retry or login fixes: a rate
+   * limit, an automation flag (`feedback_required`) or an account checkpoint. The
+   * resolver has already started a cooldown; extractors turn this into copy.
+   */
+  blocked?: import('./sessionThrottle').BlockReason;
+  /** Remaining cooldown when `blocked` is set, for the message. */
+  cooldownMs?: number;
 }
 
 export type MediaInfoFetcher = (mediaId: string) => Promise<SessionFetchResult>;

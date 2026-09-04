@@ -16,6 +16,14 @@ public class SaveSamaAudioExtractorModule: Module {
 
     Function("isTranscodeSupported") { true }
 
+    // FFmpeg is Android-only; iOS keeps its AVFoundation implementation.
+    Function("ffmpegVersion") { () -> String? in nil }
+
+    AsyncFunction("renameMediaAsset") { (assetId: String, displayName: String, promise: Promise) in
+      // PHAsset has no user-visible filename to rename.
+      promise.reject("ERR_RENAME_UNSUPPORTED", "Renaming saved files is not supported on iOS")
+    }
+
     AsyncFunction("transcodeVideo") {
       (srcPath: String, outPath: String, options: [String: Any], promise: Promise) in
       let targetHeight = (options["targetHeight"] as? NSNumber)?.intValue ?? 0

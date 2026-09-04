@@ -91,6 +91,8 @@ describe('extractYouTube fetch path', () => {
             hasAudio: true,
           },
         ],
+        username: 'Channel',
+        postCode: 'dQw4w9WgXcQ',
       },
     ]);
     expect(result.username).toBe('Channel');

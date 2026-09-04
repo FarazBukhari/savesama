@@ -1,4 +1,5 @@
 import { getFetcher } from '../services/mediaSession';
+import { describeBlock } from '../services/sessionThrottle';
 import { shortcodeToMediaId } from './shortcode';
 import { mapMediaInfo } from './threadsApi';
 import { ExtractionError, ExtractionResult } from './types';
@@ -33,6 +34,12 @@ export async function extractThreads(shortcode: string): Promise<ExtractionResul
     throw new ExtractionError(
       'threads login cancelled',
       'Threads requires a login to download. Sign in to save this post.'
+    );
+  }
+  if (result.blocked) {
+    throw new ExtractionError(
+      `threads blocked: ${result.blocked}`,
+      describeBlock('Threads', result.blocked, result.cooldownMs)
     );
   }
   if (!result.ok) {

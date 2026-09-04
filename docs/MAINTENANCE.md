@@ -193,7 +193,7 @@ restricted `types` scope.)
 
 ```bash
 npm run typecheck          # tsc --noEmit
-npm test                   # jest (184 tests)
+npm test                   # jest (197 tests)
 npx expo-doctor            # 21/21 checks
 npx expo export --platform android --output-dir /tmp/savesama-check && rm -rf /tmp/savesama-check
 ```
@@ -225,41 +225,78 @@ If revenue is wanted, it has to come from donations or a paid tier, not ads.
 
 ---
 
-## 7. "Save as Audio" (M4A) extraction
+## 7. The media engine: FFmpeg first, platform codecs as fallback
 
-The format picker's **Audio · M4A** option strips the video track from a downloaded
-clip and saves the audio only. It does **not** use FFmpeg.
+Everything that rewrites a media file — "Save as Audio" (M4A), the YouTube 1080p mux,
+and the downscale for a capped resolution — lives in the local Expo module
+[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor). On Android each
+call tries **FFmpeg** first and falls back to the platform implementation when the command
+fails; iOS keeps its AVFoundation implementation and has no FFmpeg.
 
-**Why not FFmpeg:** `ffmpeg-kit` (and the `ffmpeg-kit-react-native` wrapper) was retired
-by Arthenica on Jan 6 2025, and **all binaries were pulled from Maven Central / CocoaPods /
-npm on Apr 1 2025**. EAS builds then failed with
-`Could not find com.arthenica:ffmpeg-kit-https:6.0-2` because the artifact no longer
-resolves anywhere. There is no maintained, reachable binary to point Gradle at.
+| Function | FFmpeg command (Android) | Fallback |
+| --- | --- | --- |
+| `extractAudio` | `-vn -map 0:a:0 -c:a copy -f ipod`; retried with `-c:a aac -b:a 160k` if the track isn't MP4-compatible | `MediaExtractor` + `MediaMuxer` |
+| `muxVideoAudio` | `-map 0:v:0 -map 1:a:0 -c copy -movflags +faststart -shortest -f mp4` | two `MediaExtractor`s + `MediaMuxer` |
+| `transcodeVideo` | `-vf scale=W:H -c:v h264_mediacodec -b:v N -pix_fmt yuv420p -c:a copy` (hardware encoder; bitrate ≈ 2.5 bits/pixel/s, clamped 0.4–12 Mbps) | Media3 Transformer (§9) |
+| `ffmpegVersion` | `FFmpegKitConfig.getFFmpegVersion()` — Settings → About shows it | `null` |
 
-**What we do instead:** a tiny **local Expo module** at
-[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor) that remuxes the audio
-track using only OS-native muxers — no third-party binary, no APK bloat, no re-encode:
+Failures are logged under the `SaveSamaMedia` tag with the last 1500 chars of FFmpeg's
+own log, so `adb logcat -s SaveSamaMedia` shows why a command fell back.
 
-- **Android** ([`SaveSamaAudioExtractorModule.kt`](../modules/savesama-audio-extractor/android/src/main/java/expo/modules/savesamaaudioextractor/SaveSamaAudioExtractorModule.kt)):
-  `MediaExtractor` selects the first `audio/*` track and copies its samples into a new
-  MP4/M4A container via `MediaMuxer`.
-- **iOS** ([`SaveSamaAudioExtractorModule.swift`](../modules/savesama-audio-extractor/ios/SaveSamaAudioExtractorModule.swift)):
-  `AVAssetExportSession` with `AVAssetExportPresetPassthrough` and `outputFileType = .m4a`
-  over an audio-only `AVMutableComposition`.
+### Where FFmpeg comes from (and why it isn't the newest)
 
-JS calls `extractAudio(srcUri, destUri)` from
-[`modules/savesama-audio-extractor`](../modules/savesama-audio-extractor/index.ts); it's invoked in
-Phase 2 of `downloadAudioToGallery` ([`src/services/download.ts`](../src/services/download.ts)).
+Arthenica **retired ffmpeg-kit** (Jan 2025) and **pulled every binary** from Maven Central,
+CocoaPods and npm on Apr 1 2025 — `com.arthenica:ffmpeg-kit-*` resolves only for people
+with a warm Gradle cache. The repo itself was archived Jul 2026. Its successor,
+[FFmpegKitNext](https://github.com/arthenica/ffmpeg-kit-next) (FFmpeg **9.0.1** as of
+v9.0.0, Aug 2026), is **source-only**: no Maven, no CocoaPods, no npm, and the Android build
+goes through Nix and takes hours.
 
-**Gotchas:**
+What the app uses instead (verified Sept 2026, by downloading and inspecting the AAR):
+
+```
+implementation "com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1"   // module build.gradle
+```
+
+- On **Maven Central**, so EAS cloud builds resolve it with no download script.
+- ffmpeg-kit 6.x wrapper around **FFmpeg 6.0** (`libavutil` reports `n6.0`), built with
+  `--enable-gpl`, `libvpx`, `libaom`, `dav1d`, `libmp3lame`, `libopus`, `libopenh264`,
+  `--enable-mediacodec` (so `h264_mediacodec` / `hevc_mediacodec` encoders exist) — the
+  `full-gpl` feature set minus x264/x265.
+- Every `.so` has `PT_LOAD` alignment **16384**: it loads on Android 15+ devices booted with
+  16 KB pages. The other community forks checked (`@nikhil-cephei/ffmpeg-kit-react-native`,
+  `kroog-ffmpeg-kit-react-native`, `ffmpeg-kit-react-native-community`) ship 4 KB-aligned
+  libs and crash there.
+- Four ABIs, 84 MB AAR; the preview profile's `reactNativeArchitectures` filter packages
+  only arm64-v8a + armeabi-v7a, so the APK grows by roughly 40 MB.
+
+⚠️ **Licence:** this build is GPL (the `--enable-gpl` flag). The app is MIT and sideload-only,
+which is compatible, but the resulting APK is a GPL-licensed distribution. Don't ship it
+to a store that objects to that without switching to an LGPL build.
+
+⚠️ **`libc++_shared.so` collision.** ffmpeg-kit bundles its own `libc++_shared.so`, and so
+does React Native. `app.json` carries
+`["expo-build-properties", { android: { packagingOptions: { pickFirst: ["**/libc++_shared.so"] } } }]`
+for that reason. Remove it and `:app:mergeReleaseNativeLibs` fails with a duplicate-file error.
+
+**Upgrading to a newer FFmpeg core** means building FFmpegKitNext yourself:
+`nix-android.sh` in that repo emits an AAR; publish it to a local Maven repo (or check it
+into `modules/savesama-audio-extractor/android/libs` with a `flatDir`), swap the
+`implementation` line, and keep the `--enable-gpl`/mediacodec/libvpx flags so the three
+commands above keep working. The Java API (`FFmpegKit.executeWithArguments`, `ReturnCode`)
+is unchanged between 6.x and Next.
+
+### Gotchas
 
 - The module is **autolinked** because it lives in `modules/`. Any change to its native
-  code (or `expo-module.config.json`) needs a **new native build** — Metro/`expo export`
-  alone won't pick it up. It also won't run in Expo Go or jest (native module absent), but
-  no test imports `download.ts`, so that's fine.
-- If extraction ever needs real transcoding (e.g. non-AAC audio → MP3), the passthrough
-  approach won't cover it; you'd need an on-device encoder, not a remux. Today Instagram
-  serves AAC-in-MP4, which remuxes cleanly into M4A.
+  code, `build.gradle` or `expo-module.config.json` needs a **new native build** — Metro or
+  `expo export` alone won't pick it up. It also won't run in Expo Go or jest (native module
+  absent); no test imports `download.ts`, so that's fine.
+- `transcodeVideo` runs FFmpeg on Expo's worker thread and only hops to the main looper for
+  the Media3 fallback (Transformer must be built, started and listened to on one Looper).
+- Meta's DASH audio is HE-AAC in a fragmented MP4. FFmpeg's `-c:a copy` into `ipod` handles
+  it; the old MediaMuxer path sometimes didn't, which is why `downloadAudioStream` still
+  saves the raw stream if both fail.
 
 ---
 
@@ -817,3 +854,100 @@ live install silently destroys state:
 The fix in each case is to accept both the old and new values rather than
 replace — match a list of album titles, alternate the prefix regex, and read
 the old preferences path when the new one is absent.
+
+---
+
+## 18. Original quality (VP9) for Instagram / Threads
+
+§9 explains why the default download tops out at the muxed H.264 rendition: the true
+original exists only in `video_dash_manifest`, as VP9 video-only. With FFmpeg in the build
+that ceiling is now optional. `pickDashVideo` (`dashManifest.ts`) returns the manifest's
+largest video representation; `mapMediaInfo` attaches it as `MediaItem.originalVideo` **only
+when its short side beats the muxed rendition's**. `downloadToGallery` then, when the
+resolution is `max` *and* `preferences.preferOriginalQuality` is on *and* the item has both
+`originalVideo` and `audioOnlyUrl`, runs the mux path on the DASH video + DASH audio; FFmpeg
+`-c copy` puts VP9 + HE-AAC into an MP4. Any failure falls through to the normal plan, so the
+switch can never make a download fail that used to work.
+
+Why it is **off by default** (Settings → Default resolution → *Original quality*):
+
+- VP9-in-MP4 plays in every Android gallery and Chrome, but **not** on iPhones, and not in
+  QuickTime or some Windows players. Anyone who shares files to iOS friends wants it off.
+- The DASH `BaseURL` is fetched with a plain GET like the audio one (§11). Verified to return
+  a complete fMP4 for audio; assumed for video — if Meta ever serves only the index range,
+  the mux fails and the fallback saves the H.264 rendition.
+- The switch is disabled when `ffmpegVersion()` is null (iOS, or a build without the libs),
+  because MediaMuxer can't carry VP9 in MP4.
+
+---
+
+## 19. Keeping the account off Meta's automation radar
+
+Two Instagram suspensions ("we suspect automated behavior", which also locks Threads since
+it is the same account) prompted a review of everything the app does with the session.
+The failure modes were all on our side, not a Meta API change — the endpoint and payload
+are unchanged and `THREADS_APP_ID`/`IG_APP_ID` still work. What changed (Sept 2026):
+
+| Before | Problem | Now |
+| --- | --- | --- |
+| Both hidden WebViews loaded `instagram.com/` and `threads.com/` at **every app launch** and kept them alive | Two Meta sessions running feed polling, realtime and logging JS from a background page nobody looked at, on every launch — with no clicks, scrolls or views ever following | `WebViewSessionResolver` starts on `about:blank`, loads the site only when a fetch needs it, and parks again after 90 s idle (`IDLE_UNLOAD_MS`) |
+| Hidden WebView was **1×1 px** | The page's own telemetry reported a 1×1 viewport: a headless signature | Screen-sized, transparent, `zIndex: -1` |
+| `api/v1/media/<pk>/info/` sent only `X-IG-App-ID` + `X-Requested-With` | The web client always sends `X-CSRFToken`, `X-IG-WWW-Claim`, `X-ASBD-ID` too; a session whose API calls don't match its own JS is the textbook "third-party client" fingerprint | `buildFetchJs` reads `csrftoken` from `document.cookie`, `www-claim-v2` from `sessionStorage` (and stores the `x-ig-set-www-claim` response header back), and sends `X-ASBD-ID: 359341` |
+| Fetches fired the instant a link arrived, back-to-back on "Save all"/retries | Metronomic bursts | `sessionThrottle.waitForSlot`: ≥2.5 s + 0–1.5 s jitter between calls per platform |
+| Any 4xx/HTML answer opened the **login sheet**, re-opened on every retry | A `checkpoint_required` arrives as 400/403 → we showed sign-in → the user re-authenticated an account Instagram had just flagged, repeatedly | `classifyBlock` runs before `isLoginRequired`; `checkpoint`/`challenge`/`feedback_required`/429 start a **cooldown** (5/15/30 min) and surface a plain-language message; the login sheet opens at most **once per request** |
+| Authed failure → anonymous GraphQL (desktop UA) → embed (crawler UA), same IP, same second | Three client fingerprints from one device in a burst | Anonymous fallbacks run only when the user has **never signed in** on that platform (`instagramSignedIn` hint) |
+
+Things deliberately **not** changed, and why:
+
+- **The WebView user agent** still identifies as Android WebView (`; wv`). Spoofing a Chrome
+  UA makes the UA disagree with the client hints and JS-visible properties, which is a worse
+  signal than being an embedded browser (Meta's own apps are one).
+- **The endpoint.** `api/v1/media/<pk>/info/` is what instagram.com's own reels/stories code
+  calls; switching to GraphQL `PolarisPostActionLoadPostQueryQuery` would add a rotating
+  `doc_id` dependency (§1) for no fingerprint gain.
+
+If a suspension happens again, the first things to check are `adb logcat` for
+`SaveSamaMedia`/WebView errors around the time, whether the cooldown messages ever appeared
+(the user will have seen them), and whether Meta started demanding a header we don't send —
+compare a real browser's `api/v1/media` request headers in devtools against `buildFetchJs`.
+
+Recovery advice for the user, since the app can't do it: stop using the app for 48 h, use
+the Instagram app normally, change the password (which invalidates the WebView session —
+the app will simply ask to sign in again).
+
+---
+
+## 20. Saved-file names, the viewer, and rename
+
+**Names.** `savedName.ts` owns the scheme: `<poster> - <code>[ - <n>][ - audio].<ext>`.
+`buildSavedFilename` builds it from `MediaItem.username` / `postCode` / `position` (set by
+every mapper: `mapMediaInfo`, `mapGraphqlMedia`, `parseEmbedHtml`, `mapPlayerResponse`);
+`prettyName` parses it back, still accepting the legacy `savesama_<code>_<ts>_dl` form. The
+caption is never used — it is long, emoji-laden and the same across a carousel. ` - ` is
+the separator because neither handles nor base64url codes contain it; `sanitizePoster`
+strips it from channel names. Working files keep their ugly timestamped names; `download.ts`
+moves the finished file to `cache/savesama_outbox/<gallery name>` immediately before
+`saveToAppAlbum`, because the media library keeps the on-disk name. MediaStore de-duplicates
+with ` (1)`, which the parser ignores.
+
+**Viewer.** `MediaViewer` is a full-screen `Modal` over a horizontal paging `FlatList` of the
+currently filtered assets. Photos: `expo-image` in a pinch/pan/double-tap `GestureDetector`.
+Videos: `expo-video` `VideoView` with native controls, `loop`, paused when not the visible
+page. Audio: `expo-audio` player with a tappable track. `windowSize={3}` so only neighbours
+own native players. Share, Rename, Delete are toolbar buttons; the long-press menu
+(`AssetActionsSheet`) offers the same. `Sharing.shareAsync` is no longer what a tap does.
+
+**Rename** is `renameMediaAsset(assetId, displayName)` in the native module. On Android
+expo-media-library's asset id **is** the MediaStore `_ID`, so the module updates
+`DISPLAY_NAME` on `MediaStore.Files` (API 29+: MediaStore moves the file; the app owns the
+row, so no `RecoverableSecurityException`), or renames on disk and rewrites `DATA` on older
+devices. The extension is never editable (`RenameDialog` shows it read-only) so the MIME type
+stays right. iOS rejects with `ERR_RENAME_UNSUPPORTED` — a `PHAsset` has no filename a user
+sees. The library screen patches the row's `filename` from the returned name and then
+refreshes, because the asset's `uri` changes with it.
+
+**List performance.** Tiles and rows are `React.memo`; thumbnails use `expo-image` with
+`cachePolicy="memory-disk"`, `recyclingKey` and `allowDownscaling`; the FlatList has
+`removeClippedSubviews`, `windowSize={7}`, `initialNumToRender` 12/10. Together with the
+WebViews no longer loading two Meta sites at launch, cold start and Saved-tab scrolling are
+noticeably lighter — unmeasured beyond eyeballing, like §12.

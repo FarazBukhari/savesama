@@ -1,4 +1,6 @@
 import { getFetcher } from '../services/mediaSession';
+import { getPreferences } from '../services/preferences';
+import { describeBlock } from '../services/sessionThrottle';
 import { decodeHtmlEntities, decodeJsonString } from './html';
 import {
   CRAWLER_USER_AGENT,
@@ -21,11 +23,22 @@ import { ExtractionError, ExtractionResult, MediaItem } from './types';
 const GRAPHQL_DOC_ID = '10015901848480474';
 
 export async function extractInstagram(shortcode: string): Promise<ExtractionResult> {
-  // Instagram login-walled every anonymous endpoint, so the authenticated WebView
-  // fetch is the primary path. The legacy anonymous strategies remain as a fallback
-  // for environments without a mounted resolver (web build, tests).
+  // The authenticated WebView fetch is the primary path; downloads run as the user's
+  // own account. The anonymous strategies below remain for environments without a
+  // mounted resolver (web build, tests, e2e script) and for users who never signed in.
   const authed = await extractViaAuthenticatedFetch(shortcode);
   if (authed) return authed;
+
+  // A signed-in user gets no anonymous fallback. Firing desktop-UA GraphQL and
+  // crawler-UA embed requests from the same device seconds after an authed call is
+  // the "mixed clients on one IP" pattern that reads as scraping — and it would only
+  // ever fetch a post the account itself was refused.
+  if (getPreferences().instagramSignedIn && getFetcher('instagram')) {
+    throw new ExtractionError(
+      `instagram authed fetch failed for ${shortcode}`,
+      'Could not read this Instagram post. It may be private, deleted, or from an account you don’t follow.'
+    );
+  }
 
   const strategies: ReadonlyArray<(code: string) => Promise<ExtractionResult | null>> = [
     fetchViaGraphQl,
@@ -60,6 +73,12 @@ async function extractViaAuthenticatedFetch(shortcode: string): Promise<Extracti
     throw new ExtractionError(
       'instagram login cancelled',
       'Instagram requires a login to download. Sign in to save this post.'
+    );
+  }
+  if (result.blocked) {
+    throw new ExtractionError(
+      `instagram blocked: ${result.blocked}`,
+      describeBlock('Instagram', result.blocked, result.cooldownMs)
     );
   }
   if (!result.ok) return null;
@@ -122,6 +141,7 @@ export function mapGraphqlMedia(
   media: Record<string, unknown>,
   shortcode: string
 ): ExtractionResult | null {
+  const username = asString(getIn(media, ['owner', 'username']));
   const items: MediaItem[] = [];
   const sidecarEdges = asArray(getIn(media, ['edge_sidecar_to_children', 'edges']));
 
@@ -130,12 +150,12 @@ export function mapGraphqlMedia(
       const node = getIn(edge, ['node']);
       if (isRecord(node)) {
         const item = graphqlNodeToItem(node, `${shortcode}-${index}`);
-        if (item) items.push(item);
+        if (item) items.push({ ...item, username, postCode: shortcode, position: index + 1 });
       }
     });
   } else {
     const item = graphqlNodeToItem(media, shortcode);
-    if (item) items.push(item);
+    if (item) items.push({ ...item, username, postCode: shortcode });
   }
 
   if (items.length === 0) return null;
@@ -144,7 +164,7 @@ export function mapGraphqlMedia(
     platform: 'instagram',
     shortcode,
     items,
-    username: asString(getIn(media, ['owner', 'username'])),
+    username,
     caption: asString(getIn(media, ['edge_media_to_caption', 'edges', 0, 'node', 'text'])),
   };
 }
@@ -194,6 +214,8 @@ export function parseEmbedHtml(html: string, shortcode: string): ExtractionResul
           width: null,
           height: null,
           platform: 'instagram',
+          username,
+          postCode: shortcode,
         },
       ],
       username,
@@ -219,6 +241,8 @@ export function parseEmbedHtml(html: string, shortcode: string): ExtractionResul
         width: null,
         height: null,
         platform: 'instagram',
+        username,
+        postCode: shortcode,
       },
     ],
     username,

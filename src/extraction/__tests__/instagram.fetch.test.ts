@@ -66,6 +66,8 @@ describe('extractInstagram fetch path', () => {
         width: 1080,
         height: 1080,
         platform: 'instagram',
+        username: 'tester',
+        postCode: 'ABC123',
       },
     ]);
     expect(result.username).toBe('tester');

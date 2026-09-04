@@ -63,6 +63,31 @@ export interface MediaItem {
   audioOnlyUrl?: string | null;
   /** Full quality ladder when the source exposes one. Absent for images and single-URL fallbacks. */
   formats?: MediaFormat[];
+  /**
+   * Handle of the account that posted the media (Instagram/Threads username, YouTube
+   * channel name). Used to name the saved file; null when the source doesn't say.
+   */
+  username?: string | null;
+  /** The post's shortcode / video id, so a filename never has to be parsed back out of `id`. */
+  postCode?: string;
+  /** 1-based position inside a carousel; absent for single-item posts. */
+  position?: number;
+  /**
+   * The full-resolution rendition Meta publishes only in the DASH manifest (VP9 in an
+   * fMP4). `video_versions` tops out below the original (716x1274 vs 1088x1936), so
+   * this is the only way to save what was uploaded. Set only when it is strictly larger
+   * than the best muxed rendition; used when the "original quality" preference is on.
+   */
+  originalVideo?: OriginalVideo;
+}
+
+/** A video-only DASH representation (see `MediaItem.originalVideo`). */
+export interface OriginalVideo {
+  url: string;
+  width: number | null;
+  height: number | null;
+  codecs: string | null;
+  bandwidth: number | null;
 }
 
 export interface ExtractionResult {

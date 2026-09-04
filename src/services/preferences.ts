@@ -30,6 +30,13 @@ export interface Preferences {
    */
   instagramSignedIn: boolean;
   threadsSignedIn: boolean;
+  /**
+   * Save Instagram/Threads video from the DASH manifest's top rung (the true
+   * original, VP9) instead of the capped H.264 rendition when the quality is "Max".
+   * Off by default: the file is VP9-in-MP4, which every Android gallery plays but iOS
+   * does not, and it needs FFmpeg to mux — see docs/MAINTENANCE.md §18.
+   */
+  preferOriginalQuality: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -40,6 +47,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   libraryView: 'grid',
   instagramSignedIn: false,
   threadsSignedIn: false,
+  preferOriginalQuality: false,
 };
 
 export const THEME_MODES: ThemeMode[] = ['light', 'dark', 'auto'];
@@ -137,6 +145,7 @@ function normalize(raw: unknown): Preferences {
       : DEFAULT_PREFERENCES.libraryView,
     instagramSignedIn: record.instagramSignedIn === true,
     threadsSignedIn: record.threadsSignedIn === true,
+    preferOriginalQuality: record.preferOriginalQuality === true,
   };
 }
 

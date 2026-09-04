@@ -24,6 +24,8 @@ describe('mapGraphqlMedia', () => {
           width: 1080,
           height: 1350,
           platform: 'instagram',
+          username: 'someuser',
+          postCode: 'ABC123',
         },
       ],
       username: 'someuser',
@@ -49,6 +51,8 @@ describe('mapGraphqlMedia', () => {
         width: 720,
         height: 1280,
         platform: 'instagram',
+        username: null,
+        postCode: 'VID999',
       },
     ]);
   });

@@ -54,6 +54,24 @@ audio can't share one folder — SaveSama only names the album. Both paths are s
   `player` endpoint (ANDROID_VR client); everything is parsed on the device.
 - **Seamless downloads** — progress bars, then saved directly to the device gallery
   via the media library.
+- **Files named after the poster** — saves land as `<poster> - <code>.mp4`
+  (`natgeo - DblSWtPD9-n.mp4`, `natgeo - DblSWtPD9-n - 3.jpg` for the third carousel
+  photo, `… - audio.m4a` for a soundtrack). The caption is never used. Rename any file
+  from the Saved tab.
+- **Built-in viewer** — tap a saved file to open it: photos pinch-zoom, videos play with
+  the native controls, audio gets a transport. Swipe between files. Share, Rename and
+  Delete sit on the viewer's toolbar and on the long-press menu — sharing is no longer
+  what a tap does.
+- **FFmpeg engine** — audio extraction, HD muxing and downscaling run through FFmpeg
+  (ffmpeg-kit 6.x, FFmpeg 6.0, 16 KB page-aligned) on Android, with the platform codecs
+  as a fallback. See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §7.
+- **Original quality (opt-in)** — Settings → *Original quality* saves Instagram/Threads
+  video from Meta's DASH manifest (the true upload, VP9, ~1.5x the pixels of the normal
+  rendition) when the quality is "Highest". Android-only in practice; see §18.
+- **Careful with your account** — Instagram and Threads requests are shaped like the
+  site's own, paced with a jittered gap, and back off for minutes when Meta answers
+  with a rate limit, a checkpoint or an automation flag. The hidden session WebViews
+  load on demand and are parked after 90 s idle. See §19 for why.
 
 ## Limitations
 
@@ -64,8 +82,9 @@ audio can't share one folder — SaveSama only names the album. Both paths are s
 - **Light and dark themes.** Settings → Appearance switches between them or follows the
   phone. Dark is the fallback when the OS hasn't reported a preference yet.
 - **Saved opens as a grid, with a list view one tap away.** The choice persists. List rows
-  show name, kind, length and date; byte size and resolution aren't in the media-library
-  record, so they aren't shown.
+  show poster, kind, length, date and post code; byte size and resolution aren't in the
+  media-library record, so they aren't shown. Renaming is Android-only (iOS photo
+  assets have no user-visible filename).
 - **Sign out per platform.** Settings → Accounts drops the Instagram or Threads session.
   The signed-in state shown there is a cached hint — see
   [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §14.
@@ -77,11 +96,11 @@ audio can't share one folder — SaveSama only names the album. Both paths are s
   rendition, so a capped preference there is honoured by downscaling on-device — slower, and
   the short side is what's matched ("480p" = the shorter dimension lands near 480). See
   [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §9, §12–§14.
-- **Instagram/Threads video quality is capped below the original.** Meta's DASH manifest
-  advertises the full-resolution original (e.g. 1088x1936 where the downloadable rendition is
-  716x1274), but only as VP9 — which iOS can't put in an MP4 and Android muxes unevenly. So
-  the muxed H.264 rendition is used instead. Deliberate; see
-  [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §9.
+- **Instagram/Threads video quality is capped below the original by default.** Meta's DASH
+  manifest advertises the full-resolution original (e.g. 1088x1936 where the downloadable
+  rendition is 716x1274), but only as VP9. The default download is the muxed H.264
+  rendition; the *Original quality* switch in Settings muxes the VP9 original through
+  FFmpeg instead. See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §9 and §18.
 - **Songs/audio pages aren't supported.** A `/reels/audio/<id>` link shows a clear
   "not supported" message — Instagram walls the audio asset for anonymous clients and
   never serves full licensed tracks (see [docs/MAINTENANCE.md](docs/MAINTENANCE.md) §2b).
@@ -101,8 +120,12 @@ App.tsx                     # Tabs, share-intent wiring, state, layout; mounts o
                             # WebViewSessionResolver per authenticated platform
 src/
   components/               # Header, LinkInput, MediaCard, ErrorNotice, EmptyState
-    WebViewSessionResolver.tsx  # Hidden session WebView + login modal (both platforms)
-    webViewSession.ts       # Per-platform config + login predicates (pure, tested)
+    WebViewSessionResolver.tsx  # On-demand session WebView + login modal (both platforms)
+    webViewSession.ts       # Per-platform config, fetch script, login/block predicates (tested)
+    MediaViewer.tsx         # Full-screen photo/video/audio viewer with Share/Rename/Delete
+    AssetActionsSheet.tsx   # Long-press menu on a saved file
+    RenameDialog.tsx        # Cross-platform rename prompt
+    savedName.ts            # Saved-file naming scheme + parser (tested)
   extraction/
     urlParser.ts            # Link detection/normalization (all platforms, pure, tested)
     http.ts                 # fetch helpers + anonymous Instagram CSRF token
@@ -115,12 +138,13 @@ src/
     extract.ts              # Platform dispatcher + share-link redirect resolution
   services/
     mediaSession.ts         # Bridge from extraction to the mounted session WebViews
+    sessionThrottle.ts      # Request pacing + cooldowns for Meta sessions (tested)
     download.ts             # Download with progress + save to gallery
     downloadQueue.ts        # Module-level queue; one job at a time, outlives screens
     rangedDownload.ts       # Parallel byte-range downloads + streamed join
     resolutionPlan.ts       # Picks the rendition/plan for a resolution preference
     preferences.ts          # Resolution defaults, theme mode, library view, session hints
-    library.ts              # Saved-files listing for the Saved tab
+    library.ts              # Saved-files listing, share, rename, delete
   theme.ts                  # lightTheme / darkTheme + spacing, radius, type scales
   ThemeProvider.tsx         # Resolves the active theme; useTheme / useThemedStyles
 ```
@@ -133,11 +157,12 @@ npm run typecheck   # tsc --noEmit
 npm test            # jest (URL parser + extraction parser tests)
 ```
 
-> Note: `expo-share-intent`, `react-native-webview` and the two local native modules
-> (`savesama-audio-extractor`, `savesama-download-service`) all require a native build — the app does
-> **not** run in Expo Go. Use a development build (`eas build --profile development`) or the
-> preview APK. Adding `savesama-download-service` means an **existing dev build won't pick it up**;
-> rebuild.
+> Note: `expo-share-intent`, `react-native-webview`, `expo-video`, `expo-audio` and the two
+> local native modules (`savesama-audio-extractor`, `savesama-download-service`) all require a
+> native build — the app does **not** run in Expo Go. Use a development build
+> (`eas build --profile development`) or the preview APK. The FFmpeg engine, the rename
+> function and the two players were added to native code, so **an existing dev build won't
+> pick them up**; rebuild.
 
 > 🔧 **Maintaining this app?** See [docs/MAINTENANCE.md](docs/MAINTENANCE.md) — what to
 > check if Instagram or Threads extraction breaks, how to test extraction fast, why

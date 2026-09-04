@@ -35,6 +35,10 @@ type SaveSamaAudioExtractorModule = {
   ): Promise<void>;
   /** Whether `transcodeVideo` is implemented on this platform. */
   isTranscodeSupported(): boolean;
+  /** FFmpeg version string when the FFmpeg engine is present (Android), else null. */
+  ffmpegVersion(): string | null;
+  /** Renames a saved MediaStore asset; resolves with the name actually applied. */
+  renameMediaAsset(assetId: string, displayName: string): Promise<string>;
 };
 
 const SaveSamaAudioExtractor = requireNativeModule<SaveSamaAudioExtractorModule>('SaveSamaAudioExtractor');
@@ -42,9 +46,9 @@ const SaveSamaAudioExtractor = requireNativeModule<SaveSamaAudioExtractorModule>
 /**
  * Extracts the audio track from a local video file into an `.m4a` at `destPath`.
  *
- * Implemented with the OS-native muxers (Android `MediaExtractor`/`MediaMuxer`,
- * iOS `AVAssetExportSession` passthrough) so there is no third-party FFmpeg
- * binary and the audio stream is copied without re-encoding. Both paths may be
+ * On Android this runs through FFmpeg (`-c:a copy`, re-encoding to AAC only when the
+ * source track can't live in MP4), falling back to `MediaExtractor`/`MediaMuxer` if
+ * the command fails; iOS uses `AVAssetExportSession` passthrough. Both paths may be
  * `file://` URIs or bare filesystem paths.
  */
 export async function extractAudio(srcPath: string, destPath: string): Promise<void> {
@@ -100,4 +104,27 @@ export function isTranscodeSupported(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * FFmpeg version backing the Android engine (e.g. "6.0"), or null when the module is
+ * running without it (iOS, jest, or a build whose ABI has no ffmpeg libs). Settings
+ * shows it so a user can tell which engine produced their files.
+ */
+export function ffmpegVersion(): string | null {
+  try {
+    return SaveSamaAudioExtractor.ffmpegVersion();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Renames a file the app saved to the gallery. `assetId` is the expo-media-library
+ * asset id (the MediaStore `_ID` on Android). Resolves with the name MediaStore
+ * applied — it may differ from the request when a sibling already has that name.
+ * Rejects with `ERR_RENAME_UNSUPPORTED` on iOS.
+ */
+export async function renameMediaAsset(assetId: string, displayName: string): Promise<string> {
+  return SaveSamaAudioExtractor.renameMediaAsset(assetId, displayName);
 }
