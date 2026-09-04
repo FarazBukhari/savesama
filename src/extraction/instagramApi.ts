@@ -1,4 +1,4 @@
-import { pickDashAudioUrl } from './dashManifest';
+import { pickDashAudioUrl, pickDashVideo } from './dashManifest';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
 import { ExtractionResult, MediaFormat, MediaItem, SourcePlatform } from './types';
 
@@ -25,17 +25,22 @@ export function mapMediaInfo(
   const media = getIn(json, ['items', 0]);
   if (!isRecord(media)) return null;
 
+  const username = asString(getIn(media, ['user', 'username']));
   const items: MediaItem[] = [];
   const carousel = asArray(media['carousel_media']);
   if (carousel) {
     carousel.forEach((child, index) => {
       if (isRecord(child)) {
-        const item = nodeToItem(child, `${shortcode}-${index}`, platform);
+        const item = nodeToItem(child, `${shortcode}-${index}`, platform, {
+          username,
+          postCode: shortcode,
+          position: index + 1,
+        });
         if (item) items.push(item);
       }
     });
   } else {
-    const item = nodeToItem(media, shortcode, platform);
+    const item = nodeToItem(media, shortcode, platform, { username, postCode: shortcode });
     if (item) items.push(item);
   }
 
@@ -45,15 +50,23 @@ export function mapMediaInfo(
     platform,
     shortcode,
     items,
-    username: asString(getIn(media, ['user', 'username'])),
+    username,
     caption: asString(getIn(media, ['caption', 'text'])),
   };
+}
+
+/** Post-level fields every item carries so the saved file can be named after its poster. */
+interface ItemMeta {
+  username: string | null;
+  postCode: string;
+  position?: number;
 }
 
 function nodeToItem(
   node: Record<string, unknown>,
   id: string,
-  platform: SourcePlatform
+  platform: SourcePlatform,
+  meta: ItemMeta
 ): MediaItem | null {
   const isVideo = node['media_type'] === MEDIA_TYPE_VIDEO || Array.isArray(node['video_versions']);
   const thumbnail = asString(getIn(node, ['image_versions2', 'candidates', 0, 'url']));
@@ -68,6 +81,12 @@ function nodeToItem(
     // video_dash_manifest carries an audio-only AdaptationSet; its video
     // representations are VP9 and deliberately unused (see dashManifest.ts).
     const audioOnlyUrl = pickDashAudioUrl(node['video_dash_manifest']);
+    // The manifest's top video rung is the true original; only worth carrying when it
+    // beats the muxed rendition, otherwise the default path already saves the best.
+    const dashVideo = pickDashVideo(node['video_dash_manifest']);
+    const muxedShortSide = Math.min(formats[0].width ?? 0, formats[0].height ?? 0);
+    const dashShortSide = Math.min(dashVideo?.width ?? 0, dashVideo?.height ?? 0);
+    const originalVideo = dashVideo && dashShortSide > muxedShortSide ? dashVideo : null;
     return {
       id,
       type: 'video',
@@ -77,7 +96,9 @@ function nodeToItem(
       height: formats[0].height,
       platform,
       formats,
+      ...meta,
       ...(audioOnlyUrl ? { audioOnlyUrl } : {}),
+      ...(originalVideo ? { originalVideo } : {}),
     };
   }
 
@@ -94,6 +115,7 @@ function nodeToItem(
     width: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'width'])),
     height: asNumber(getIn(node, ['image_versions2', 'candidates', 0, 'height'])),
     platform,
+    ...meta,
     ...(formats.length > 1 ? { formats } : {}),
   };
 }

@@ -1,6 +1,8 @@
 import { Album, Asset, MediaType, getPermissionsAsync, requestPermissionsAsync } from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 
+import { renameMediaAsset } from '../../modules/savesama-audio-extractor';
+import { splitExtension } from '../components/savedName';
 import { ALBUM_NAME } from './download';
 
 export class LibraryError extends Error {
@@ -135,12 +137,56 @@ export async function listSavedAssets(): Promise<SavedAsset[]> {
   return infos;
 }
 
-/** Opens the native share/open sheet for a saved asset. */
-export async function openAsset(asset: SavedAsset): Promise<void> {
+/** Opens the native share sheet for a saved asset. */
+export async function shareAsset(asset: SavedAsset): Promise<void> {
   if (!(await Sharing.isAvailableAsync())) {
     throw new LibraryError('sharing unavailable', 'Sharing is not available on this device.');
   }
   await Sharing.shareAsync(asset.uri);
+}
+
+/** Characters no filesystem or MediaStore accepts in a display name. */
+const ILLEGAL_NAME_CHARS = /[\\/:*?"<>|\u0000-\u001f]/g;
+
+/**
+ * Cleans a user-typed stem. The extension is never editable — it must keep matching
+ * the file's MIME type or MediaStore rejects the update and players get confused.
+ */
+export function normalizeRenameStem(stem: string): string {
+  return stem.replace(ILLEGAL_NAME_CHARS, '').replace(/\s+/g, ' ').trim().replace(/\.+$/, '');
+}
+
+/**
+ * Renames a saved file, keeping its extension. Resolves with the filename MediaStore
+ * applied (it de-duplicates with " (1)" when a sibling has the same name). Android
+ * only — the native module rejects on iOS, surfaced as a friendly error.
+ */
+export async function renameSavedAsset(asset: SavedAsset, newStem: string): Promise<string> {
+  const stem = normalizeRenameStem(newStem);
+  if (stem.length === 0) {
+    throw new LibraryError('empty name', 'Give the file a name.');
+  }
+  const extension =
+    (asset.filename ? splitExtension(asset.filename).extension : null) ??
+    defaultExtension(asset.mediaType);
+  try {
+    return await renameMediaAsset(asset.id, `${stem}.${extension}`);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === 'ERR_RENAME_UNSUPPORTED') {
+      throw new LibraryError('rename unsupported', 'Renaming files isn’t available on this device.');
+    }
+    if (code === 'ERR_RENAME_EXISTS') {
+      throw new LibraryError('name taken', 'A file with that name already exists.');
+    }
+    throw new LibraryError(`rename failed: ${String(error)}`, 'Could not rename this file. Please try again.');
+  }
+}
+
+function defaultExtension(mediaType: MediaType): string {
+  if (mediaType === MediaType.AUDIO) return 'm4a';
+  if (mediaType === MediaType.VIDEO) return 'mp4';
+  return 'jpg';
 }
 
 /** Deletes a saved asset from the device's media store. */

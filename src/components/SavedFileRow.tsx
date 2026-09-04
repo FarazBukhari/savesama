@@ -1,18 +1,22 @@
 import Feather from '@expo/vector-icons/Feather';
+import { Image } from 'expo-image';
 import { MediaType } from 'expo-media-library';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { memo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { SavedAsset } from '../services/library';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
 import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 import { PressableScale } from './PressableScale';
 import { formatDuration } from './SavedFileTile';
-import { kindLabel, prettyName } from './savedName';
+import { prettyName } from './savedName';
 
 interface SavedFileRowProps {
   asset: SavedAsset;
+  /** Tap: open in the viewer. */
   onOpen: (asset: SavedAsset) => void;
-  onDelete: (asset: SavedAsset) => void;
+  /** The trailing "…" button and long-press: the actions sheet. */
+  onMore: (asset: SavedAsset) => void;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -34,17 +38,18 @@ function formatWhen(timestamp: number | null): string {
 }
 
 /**
- * List-view row. Byte size and resolution aren't in the media-library record,
- * so they aren't shown rather than guessed.
+ * List-view row: poster on the first line, kind · date · length · code beneath.
+ * Byte size and resolution aren't in the media-library record, so they aren't
+ * shown rather than guessed.
  */
-export function SavedFileRow({ asset, onOpen, onDelete }: SavedFileRowProps) {
+export const SavedFileRow = memo(function SavedFileRow({ asset, onOpen, onMore }: SavedFileRowProps) {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const isAudio = asset.mediaType === MediaType.AUDIO;
   const hasDuration = asset.duration != null && asset.duration > 0;
-  const { title, code } = prettyName(asset.filename, asset.mediaType);
+  const { title, kind, code } = prettyName(asset.filename, asset.mediaType);
 
-  const facts = [formatWhen(asset.modificationTime ?? asset.creationTime)];
+  const facts = [kind, formatWhen(asset.modificationTime ?? asset.creationTime)];
   if (hasDuration) facts.push(formatDuration(asset.duration as number));
   if (code) facts.push(code);
 
@@ -52,9 +57,10 @@ export function SavedFileRow({ asset, onOpen, onDelete }: SavedFileRowProps) {
     <PressableScale
       style={styles.row}
       onPress={() => onOpen(asset)}
-      onLongPress={() => onDelete(asset)}
+      onLongPress={() => onMore(asset)}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${kindLabel(asset.mediaType)}`}
+      accessibilityLabel={`${title}, ${kind}`}
+      accessibilityHint="Opens the file. Long-press for more actions."
     >
       {isAudio ? (
         <View style={[styles.thumb, styles.audioThumb]}>
@@ -64,8 +70,11 @@ export function SavedFileRow({ asset, onOpen, onDelete }: SavedFileRowProps) {
         <Image
           source={{ uri: asset.uri }}
           style={styles.thumb}
-          resizeMode="cover"
-          resizeMethod="resize"
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={asset.id}
+          transition={0}
+          allowDownscaling
         />
       )}
 
@@ -78,10 +87,18 @@ export function SavedFileRow({ asset, onOpen, onDelete }: SavedFileRowProps) {
         </Text>
       </View>
 
-      <Feather name="chevron-right" size={18} color={theme.colors.placeholder} />
+      <Pressable
+        onPress={() => onMore(asset)}
+        hitSlop={8}
+        style={styles.more}
+        accessibilityRole="button"
+        accessibilityLabel="More actions"
+      >
+        <Feather name="more-vertical" size={18} color={theme.colors.textSecondary} />
+      </Pressable>
     </PressableScale>
   );
-}
+});
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
@@ -118,5 +135,11 @@ const makeStyles = (theme: Theme) =>
       fontSize: typography.figure,
       fontFamily: fonts.mono,
       color: theme.colors.textSecondary,
+    },
+    more: {
+      width: MIN_TAP - 8,
+      height: MIN_TAP - 8,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
   });

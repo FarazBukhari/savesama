@@ -20,16 +20,19 @@
 //     </AdaptationSet>
 //   </Period></MPD>
 //
-// Only the AUDIO side is read. The video representations are deliberately ignored:
-// they are VP9, which iOS cannot carry in an MP4 and Android's MediaMuxer supports
-// unevenly, so video keeps coming from the muxed `video_versions` entries. See
-// docs/MAINTENANCE.md §9.
+// The AUDIO side feeds "Save as Audio". The VIDEO side is VP9: the default download
+// still comes from the muxed H.264 `video_versions`, but the largest video
+// representation is exposed as `MediaItem.originalVideo` so the opt-in "original
+// quality" preference can mux it with the audio stream through FFmpeg (which, unlike
+// Android's MediaMuxer, carries VP9 in MP4 reliably). See docs/MAINTENANCE.md §9/§18.
 
 /** One `<Representation>` inside an `<AdaptationSet>`. */
 interface DashRepresentation {
   url: string;
   bandwidth: number;
   codecs: string | null;
+  width: number | null;
+  height: number | null;
 }
 
 /**
@@ -50,6 +53,13 @@ function decodeXmlEntities(value: string): string {
     .replace(/&#x([0-9a-fA-F]+);/g, (_match, code: string) => String.fromCharCode(parseInt(code, 16)))
     // &amp; last: decoding it earlier would let "&amp;lt;" turn into "<".
     .replace(/&amp;/g, '&');
+}
+
+function numberAttribute(tag: string, name: string): number | null {
+  const raw = attribute(tag, name);
+  if (raw == null) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function attribute(tag: string, name: string): string | null {
@@ -86,6 +96,8 @@ function representations(block: string): DashRepresentation[] {
         url: decodeXmlEntities(baseUrl[1].trim()),
         bandwidth: Number(attribute(openTag, 'bandwidth') ?? 0),
         codecs: attribute(openTag, 'codecs'),
+        width: numberAttribute(openTag, 'width'),
+        height: numberAttribute(openTag, 'height'),
       });
     }
 
@@ -124,4 +136,47 @@ export function pickDashAudioUrl(manifest: unknown): string | null {
   }
 
   return best ? best.url : null;
+}
+
+/** The largest video-only representation in the manifest, or null. */
+export function pickDashVideo(manifest: unknown): {
+  url: string;
+  width: number | null;
+  height: number | null;
+  codecs: string | null;
+  bandwidth: number | null;
+} | null {
+  if (typeof manifest !== 'string' || manifest.length === 0) return null;
+
+  let best: DashRepresentation | null = null;
+  for (const block of adaptationSets(manifest)) {
+    const openTagEnd = block.indexOf('>');
+    const openTag = openTagEnd === -1 ? block : block.slice(0, openTagEnd);
+    const contentType = attribute(openTag, 'contentType');
+
+    for (const rep of representations(block)) {
+      const isVideo =
+        contentType === 'video' ||
+        (contentType == null && /^(vp0?9|avc|hev|hvc|av01)/i.test(rep.codecs ?? ''));
+      if (!isVideo) continue;
+      if (!best) {
+        best = rep;
+        continue;
+      }
+      // Rank by pixel count, then bandwidth — the manifest lists several bitrates at
+      // one resolution and only the top rung is the original.
+      const bestArea = (best.width ?? 0) * (best.height ?? 0);
+      const area = (rep.width ?? 0) * (rep.height ?? 0);
+      if (area > bestArea || (area === bestArea && rep.bandwidth > best.bandwidth)) best = rep;
+    }
+  }
+
+  if (!best) return null;
+  return {
+    url: best.url,
+    width: best.width,
+    height: best.height,
+    codecs: best.codecs,
+    bandwidth: best.bandwidth || null,
+  };
 }

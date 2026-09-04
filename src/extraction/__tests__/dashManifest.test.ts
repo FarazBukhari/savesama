@@ -1,4 +1,4 @@
-import { pickDashAudioUrl } from '../dashManifest';
+import { pickDashAudioUrl, pickDashVideo } from '../dashManifest';
 
 // Trimmed from a live Threads `video_dash_manifest` (August 2026). The attribute
 // names, ordering and nesting are verbatim; only the signed BaseURLs and the long
@@ -82,5 +82,22 @@ describe('pickDashAudioUrl — XML entity decoding', () => {
   it('does not double-decode: &amp;lt; stays a literal &lt;', () => {
     const manifest = SIGNED.replace('oe=68A1', 'q=&amp;lt;');
     expect(pickDashAudioUrl(manifest)).toContain('q=&lt;');
+  });
+});
+
+describe('pickDashVideo', () => {
+  it('returns the largest video representation with decoded url and dimensions', () => {
+    expect(pickDashVideo(MANIFEST)).toEqual({
+      url: 'https://cdn/video-1088.mp4',
+      width: 1088,
+      height: 1936,
+      codecs: 'vp09.00.40.08.00.01.01.01.00',
+      bandwidth: 2612000,
+    });
+  });
+
+  it('returns null for missing manifests', () => {
+    expect(pickDashVideo(null)).toBeNull();
+    expect(pickDashVideo('')).toBeNull();
   });
 });

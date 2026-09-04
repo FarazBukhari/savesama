@@ -1,10 +1,11 @@
 import Feather from '@expo/vector-icons/Feather';
 import Constants from 'expo-constants';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ffmpegVersion } from '../../modules/savesama-audio-extractor';
 import { Header } from '../components/Header';
 import { ResolutionChoiceModal } from '../components/ResolutionChoiceModal';
 import { usePreferences } from '../hooks/usePreferences';
@@ -51,6 +52,10 @@ const ACCOUNT_ROWS: AccountRow[] = [
   can never drift from the one in app.json.
 */
 const APP_VERSION = Constants.expoConfig?.version ?? '—';
+
+/** Resolved once: the native module doesn't change while the app runs. */
+const FFMPEG_VERSION = ffmpegVersion();
+const ENGINE_LABEL = FFMPEG_VERSION ? `FFmpeg ${FFMPEG_VERSION}` : 'System codecs';
 
 const THEME_CHOICES: { mode: ThemeMode; icon: 'sun' | 'moon' | 'smartphone' }[] = [
   { mode: 'light', icon: 'sun' },
@@ -152,6 +157,30 @@ export function SettingsScreen() {
           offered, SaveSama takes the next one down.
         </Text>
 
+        <View style={styles.row}>
+          <View style={styles.rowCopy}>
+            <Text style={styles.rowLabel}>Original quality (Instagram &amp; Threads)</Text>
+            <Text style={styles.rowHint}>
+              {FFMPEG_VERSION
+                ? 'With "Highest", save the full-resolution upload (VP9) instead of the capped H.264 rendition'
+                : 'Needs the FFmpeg engine, which this build doesn\u2019t include'}
+            </Text>
+          </View>
+          <Switch
+            value={prefs.preferOriginalQuality}
+            disabled={!FFMPEG_VERSION}
+            onValueChange={(value) => void savePreferences({ preferOriginalQuality: value })}
+            trackColor={{ true: theme.colors.accent, false: theme.colors.border }}
+            thumbColor="#FFFFFF"
+            accessibilityLabel="Prefer original quality for Instagram and Threads"
+          />
+        </View>
+        <Text style={styles.footnote}>
+          Meta only publishes the true original as VP9 video, roughly 1.5x the pixels of the
+          normal download. It plays in every Android gallery; iPhones and some desktop players
+          don't handle VP9 in MP4, so keep this off if you share files there.
+        </Text>
+
         <Text style={styles.overline}>Accounts</Text>
         {ACCOUNT_ROWS.map((row) => {
           const signedIn = prefs[row.flag];
@@ -206,6 +235,14 @@ export function SettingsScreen() {
           <Text style={styles.rowLabelGrow}>Version</Text>
           <Text style={styles.rowFigure}>{APP_VERSION}</Text>
         </View>
+        <View style={styles.row}>
+          <Text style={styles.rowLabelGrow}>Media engine</Text>
+          <Text style={styles.rowFigure}>{ENGINE_LABEL}</Text>
+        </View>
+        <Text style={styles.footnote}>
+          Audio extraction, HD muxing and downscaling run through {ENGINE_LABEL}
+          {FFMPEG_VERSION ? ', falling back to Android\u2019s own codecs if a command fails.' : '.'}
+        </Text>
       </ScrollView>
 
       {editing ? (

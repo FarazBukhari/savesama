@@ -107,6 +107,8 @@ describe('extractThreads', () => {
                 hasAudio: true,
               },
             ],
+            username: 'izadailylife78',
+            postCode: 'Dbnv00dEeUn',
           },
         ],
       });

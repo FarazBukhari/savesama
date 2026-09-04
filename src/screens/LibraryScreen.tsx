@@ -15,8 +15,11 @@ import {
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AssetActionsSheet } from '../components/AssetActionsSheet';
 import { ErrorNotice } from '../components/ErrorNotice';
 import { Header } from '../components/Header';
+import { MediaViewer } from '../components/MediaViewer';
+import { RenameDialog } from '../components/RenameDialog';
 import { SavedFileRow } from '../components/SavedFileRow';
 import { SavedFileTile } from '../components/SavedFileTile';
 import { usePreferences } from '../hooks/usePreferences';
@@ -25,7 +28,8 @@ import {
   SavedAsset,
   deleteSavedAsset,
   listSavedAssets,
-  openAsset,
+  renameSavedAsset,
+  shareAsset,
 } from '../services/library';
 import { LibraryView, savePreferences } from '../services/preferences';
 import { ENTER, enterRow, EXIT, REFLOW, TINT_TRANSITION } from '../motion';
@@ -86,6 +90,12 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const hasLoaded = useRef(false);
+  // Which of the *visible* assets the viewer is open on; null when closed.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [sheetAsset, setSheetAsset] = useState<SavedAsset | null>(null);
+  const [renaming, setRenaming] = useState<SavedAsset | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const load = useCallback(async (mode: 'initial' | 'refresh') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -109,11 +119,24 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
     hasLoaded.current = true;
   }, [refreshToken, load]);
 
-  const handleOpen = useCallback(async (asset: SavedAsset) => {
+  const visible = useMemo(
+    () => assets.filter((asset) => matchesFilter(asset, filter)),
+    [assets, filter]
+  );
+
+  const handleOpen = useCallback(
+    (asset: SavedAsset) => {
+      const position = visible.findIndex((candidate) => candidate.id === asset.id);
+      setViewerIndex(position === -1 ? 0 : position);
+    },
+    [visible]
+  );
+
+  const handleShare = useCallback(async (asset: SavedAsset) => {
     try {
-      await openAsset(asset);
-    } catch (openError) {
-      Alert.alert('Cannot open file', friendlyMessage(openError));
+      await shareAsset(asset);
+    } catch (shareError) {
+      Alert.alert('Cannot share file', friendlyMessage(shareError));
     }
   }, []);
 
@@ -127,17 +150,40 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
           try {
             await deleteSavedAsset(asset.id);
             setAssets((previous) => previous.filter((a) => a.id !== asset.id));
+            // The viewer was showing this file; if it was the last one, close.
+            setViewerIndex((index) => {
+              if (index == null) return null;
+              const remaining = visible.length - 1;
+              return remaining <= 0 ? null : Math.min(index, remaining - 1);
+            });
           } catch (deleteError) {
             Alert.alert('Cannot delete file', friendlyMessage(deleteError));
           }
         },
       },
     ]);
-  }, []);
+  }, [visible.length]);
 
-  const visible = useMemo(
-    () => assets.filter((asset) => matchesFilter(asset, filter)),
-    [assets, filter]
+  const handleRenameSubmit = useCallback(
+    async (asset: SavedAsset, stem: string) => {
+      setRenameBusy(true);
+      setRenameError(null);
+      try {
+        const applied = await renameSavedAsset(asset, stem);
+        // The row's filename (and on Android its file uri) changed; patch the name
+        // immediately and let a quiet refresh pick up the rest.
+        setAssets((previous) =>
+          previous.map((a) => (a.id === asset.id ? { ...a, filename: applied } : a))
+        );
+        setRenaming(null);
+        void load('refresh');
+      } catch (renameFailure) {
+        setRenameError(friendlyMessage(renameFailure));
+      } finally {
+        setRenameBusy(false);
+      }
+    },
+    [load]
   );
 
   if (loading) {
@@ -152,6 +198,7 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
   const padding = isGrid ? GRID_PADDING : LIST_PADDING;
 
   return (
+    <>
     <Animated.FlatList
       // numColumns can't change on a mounted FlatList — remounting on the view
       // toggle is the supported way, and without it the switch throws.
@@ -169,6 +216,13 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
         visible.length === 0 && styles.contentEmpty,
       ]}
       columnWrapperStyle={isGrid ? styles.row : undefined}
+      // Tiles are cheap to mount but each holds a decoded thumbnail; keep the
+      // rendered window modest and drop offscreen views so a long library doesn't
+      // pin hundreds of bitmaps.
+      initialNumToRender={isGrid ? 12 : 10}
+      maxToRenderPerBatch={isGrid ? 8 : 6}
+      windowSize={7}
+      removeClippedSubviews
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -229,7 +283,7 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
             </Text>
             <Text style={styles.emptyBody}>
               {filter === 'all'
-                ? 'Files you save land here. Long-press one to delete it.'
+                ? 'Files you save land here. Tap one to open it; long-press for share, rename and delete.'
                 : 'Try another filter, or save something new from the Get tab.'}
             </Text>
           </Animated.View>
@@ -241,22 +295,44 @@ export function LibraryScreen({ refreshToken }: LibraryScreenProps) {
         // up mid-scroll — which reads as jank, not choreography.
         <Animated.View entering={index < FIRST_SCREENFUL ? enterRow(index) : undefined}>
           {isGrid ? (
-            <SavedFileTile
-              asset={item}
-              size={TILE_SIZE}
-              onOpen={(asset) => void handleOpen(asset)}
-              onDelete={handleDelete}
-            />
+            <SavedFileTile asset={item} size={TILE_SIZE} onOpen={handleOpen} onMore={setSheetAsset} />
           ) : (
-            <SavedFileRow
-              asset={item}
-              onOpen={(asset) => void handleOpen(asset)}
-              onDelete={handleDelete}
-            />
+            <SavedFileRow asset={item} onOpen={handleOpen} onMore={setSheetAsset} />
           )}
         </Animated.View>
       )}
     />
+
+    <MediaViewer
+      assets={visible}
+      index={viewerIndex}
+      onClose={() => setViewerIndex(null)}
+      onShare={(asset) => void handleShare(asset)}
+      onRename={(asset) => {
+        setRenameError(null);
+        setRenaming(asset);
+      }}
+      onDelete={handleDelete}
+    />
+    <AssetActionsSheet
+      asset={sheetAsset}
+      onClose={() => setSheetAsset(null)}
+      onOpen={handleOpen}
+      onShare={(asset) => void handleShare(asset)}
+      onRename={(asset) => {
+        setRenameError(null);
+        setRenaming(asset);
+      }}
+      onDelete={handleDelete}
+    />
+    <RenameDialog
+      asset={renaming}
+      busy={renameBusy}
+      error={renameError}
+      onCancel={() => setRenaming(null)}
+      onSubmit={(asset, stem) => void handleRenameSubmit(asset, stem)}
+    />
+    </>
   );
 }
 

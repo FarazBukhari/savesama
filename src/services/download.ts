@@ -7,6 +7,7 @@ import {
   muxVideoAudio,
   transcodeVideo,
 } from '../../modules/savesama-audio-extractor';
+import { buildSavedFilename } from '../components/savedName';
 import { MediaItem } from '../extraction/types';
 import { CancelToken, isCancelledError } from './cancellation';
 import { ResolutionPref, loadPreferences, resolutionForPlatform } from './preferences';
@@ -103,6 +104,33 @@ export const FILE_PREFIX = 'savesama_';
 function cacheUri(item: MediaItem, suffix: string): string {
   const safeId = item.id.replace(/[^A-Za-z0-9_-]/g, '');
   return `${FileSystem.cacheDirectory}${FILE_PREFIX}${safeId}_${Date.now()}_${suffix}`;
+}
+
+/**
+ * Directory a finished file is moved into under its gallery name just before the
+ * save. The media library keeps the on-disk name, so the name of the cache file *is*
+ * the name the user sees — and the working files above are deliberately ugly
+ * (timestamped, suffixed) so two concurrent jobs can't collide.
+ */
+const OUTBOX_DIR = `${FileSystem.cacheDirectory}${FILE_PREFIX}outbox/`;
+
+/**
+ * Moves `fileUri` to the outbox under the gallery-facing name
+ * (`<poster> - <code>.<ext>`, see savedName.ts) and returns the new uri. The caller
+ * saves that and deletes it afterwards. Jobs run one at a time, so a same-named
+ * leftover can only be an earlier crash — it is replaced.
+ */
+async function withGalleryName(
+  fileUri: string,
+  item: MediaItem,
+  format: 'video' | 'audio' | 'image',
+  extension: string
+): Promise<string> {
+  await FileSystem.makeDirectoryAsync(OUTBOX_DIR, { intermediates: true }).catch(() => undefined);
+  const target = `${OUTBOX_DIR}${buildSavedFilename(item, format, extension)}`;
+  await deleteQuietly(target);
+  await FileSystem.moveAsync({ from: fileUri, to: target });
+  return target;
 }
 
 async function deleteQuietly(fileUri: string): Promise<void> {
@@ -232,8 +260,8 @@ export async function downloadToGallery(
 
   // Await the (idempotent) load so a cold-launch download can't race past the
   // saved preference and silently use the defaults.
-  const pref =
-    override ?? resolutionForPlatform(await loadPreferences(), item.platform ?? 'instagram');
+  const prefs = await loadPreferences();
+  const pref = override ?? resolutionForPlatform(prefs, item.platform ?? 'instagram');
 
   if (item.type !== 'video') {
     // Photos honour the preference by picking a smaller rendition from the source's
@@ -241,6 +269,24 @@ export async function downloadToGallery(
     const url = pickImageUrl(item, pref);
     await downloadDirect(item, url, guessExtension(item, url), onProgress, token);
     return;
+  }
+
+  // Opt-in: Meta's true original lives only in the DASH manifest as VP9 video-only,
+  // so it is downloaded alongside the audio stream and muxed by FFmpeg (`-c copy`).
+  // Anything going wrong falls through to the normal muxed rendition below.
+  if (pref === 'max' && prefs.preferOriginalQuality && item.originalVideo && item.audioOnlyUrl) {
+    try {
+      await downloadMuxed(
+        item,
+        { kind: 'mux', videoUrl: item.originalVideo.url, audioUrl: item.audioOnlyUrl },
+        onProgress,
+        token
+      );
+      return;
+    } catch (error) {
+      if (isCancelledError(error)) throw error;
+      onProgress(0);
+    }
   }
 
   const plan = planVideoDownload(item, pref);
@@ -286,12 +332,19 @@ async function downloadDirect(
     token
   );
 
+  let fileToSave = result.uri;
   try {
     token?.throwIfCancelled();
+    fileToSave = await withGalleryName(
+      result.uri,
+      item,
+      item.type === 'video' ? 'video' : 'image',
+      extension
+    );
     // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
     // (it now throws at runtime). Use the new class-based API instead, routing
     // the asset into the app's own album rather than the default Camera folder.
-    await saveToAppAlbum(result.uri);
+    await saveToAppAlbum(fileToSave);
   } catch (error) {
     if (isCancelledError(error)) throw error;
     throw new DownloadError(
@@ -299,7 +352,7 @@ async function downloadDirect(
       'Downloaded, but saving to your gallery failed. Check storage permissions.'
     );
   } finally {
-    await deleteQuietly(result.uri);
+    await Promise.all([deleteQuietly(result.uri), deleteQuietly(fileToSave)]);
   }
 
   onProgress(1);
@@ -320,6 +373,7 @@ async function downloadMuxed(
   const videoUri = cacheUri(item, 'v.mp4');
   const audioUri = cacheUri(item, 'a.m4a');
   const outUri = cacheUri(item, 'hd.mp4');
+  let named: string | null = null;
 
   try {
     if (!plan.audioUrl) {
@@ -380,7 +434,8 @@ async function downloadMuxed(
 
     token?.throwIfCancelled();
     try {
-      await saveToAppAlbum(outUri);
+      named = await withGalleryName(outUri, item, 'video', 'mp4');
+      await saveToAppAlbum(named);
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -390,7 +445,12 @@ async function downloadMuxed(
     }
     onProgress(1);
   } finally {
-    await Promise.all([deleteQuietly(videoUri), deleteQuietly(audioUri), deleteQuietly(outUri)]);
+    await Promise.all([
+      deleteQuietly(videoUri),
+      deleteQuietly(audioUri),
+      deleteQuietly(outUri),
+      named ? deleteQuietly(named) : Promise.resolve(),
+    ]);
   }
 }
 
@@ -422,6 +482,7 @@ async function downloadTranscoded(
 ): Promise<void> {
   const srcUri = cacheUri(item, 'src.mp4');
   const outUri = cacheUri(item, 'small.mp4');
+  let named: string | null = null;
 
   try {
     const srcResult = await downloadFile(
@@ -455,7 +516,8 @@ async function downloadTranscoded(
 
     token?.throwIfCancelled();
     try {
-      await saveToAppAlbum(fileToSave);
+      named = await withGalleryName(fileToSave, item, 'video', 'mp4');
+      await saveToAppAlbum(named);
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -465,7 +527,11 @@ async function downloadTranscoded(
     }
     onProgress(1);
   } finally {
-    await Promise.all([deleteQuietly(srcUri), deleteQuietly(outUri)]);
+    await Promise.all([
+      deleteQuietly(srcUri),
+      deleteQuietly(outUri),
+      named ? deleteQuietly(named) : Promise.resolve(),
+    ]);
   }
 }
 
@@ -521,9 +587,11 @@ export async function downloadAudioToGallery(
   onProgress(0.9);
 
   // Phase 3: save M4A to media library (90 → 100%)
+  let named: string | null = null;
   try {
     token?.throwIfCancelled();
-    await saveToAppAlbum(audioUri);
+    named = await withGalleryName(audioUri, item, 'audio', 'm4a');
+    await saveToAppAlbum(named);
   } catch (error) {
     if (isCancelledError(error)) throw error;
     throw new DownloadError(
@@ -531,7 +599,7 @@ export async function downloadAudioToGallery(
       'Extracted audio, but saving to your library failed. Check storage permissions.'
     );
   } finally {
-    await deleteQuietly(audioUri);
+    await Promise.all([deleteQuietly(audioUri), named ? deleteQuietly(named) : Promise.resolve()]);
   }
 
   onProgress(1);
@@ -557,6 +625,7 @@ async function downloadAudioStream(
 ): Promise<void> {
   const srcUri = cacheUri(item, 'audiosrc.m4a');
   const outUri = cacheUri(item, 'audio.m4a');
+  let named: string | null = null;
 
   try {
     // Audio-only streams are small (a 13s reel's is ~105KB): skip the range probe.
@@ -575,7 +644,8 @@ async function downloadAudioStream(
 
     try {
       token?.throwIfCancelled();
-      await saveToAppAlbum(fileToSave);
+      named = await withGalleryName(fileToSave, item, 'audio', 'm4a');
+      await saveToAppAlbum(named);
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -585,6 +655,10 @@ async function downloadAudioStream(
     }
     onProgress(1);
   } finally {
-    await Promise.all([deleteQuietly(srcUri), deleteQuietly(outUri)]);
+    await Promise.all([
+      deleteQuietly(srcUri),
+      deleteQuietly(outUri),
+      named ? deleteQuietly(named) : Promise.resolve(),
+    ]);
   }
 }

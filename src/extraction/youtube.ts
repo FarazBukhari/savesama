@@ -195,6 +195,7 @@ export function mapPlayerResponse(
   // pulling the whole video and stripping its audio track. Omitted rather than
   // null when the video exposes no adaptive audio, so the fallback path applies.
   const audioOnlyUrl = pickBestAdaptiveAudio(player);
+  const username = asString(getIn(player, ['videoDetails', 'author']));
 
   return {
     platform: 'youtube',
@@ -209,10 +210,12 @@ export function mapPlayerResponse(
         height: asNumber(best['height']),
         platform: 'youtube',
         formats: buildFormats(player),
+        username,
+        postCode: videoId,
         ...(audioOnlyUrl ? { audioOnlyUrl } : {}),
       } satisfies MediaItem,
     ],
-    username: asString(getIn(player, ['videoDetails', 'author'])),
+    username,
     caption: asString(getIn(player, ['videoDetails', 'title'])),
   };
 }
