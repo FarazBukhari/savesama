@@ -127,10 +127,41 @@ async function withGalleryName(
   extension: string
 ): Promise<string> {
   await FileSystem.makeDirectoryAsync(OUTBOX_DIR, { intermediates: true }).catch(() => undefined);
-  const target = `${OUTBOX_DIR}${buildSavedFilename(item, format, extension)}`;
+  // The gallery name has spaces (`natgeo - DblSWtPD9-n.mp4`). A file:// URI with a raw
+  // space is not a valid URI, and expo-media-library's Asset.create rejects it — which
+  // surfaced as "downloaded, but saving to your gallery failed" on every file. Encode
+  // the name; both expo-file-system and the media library decode it back on disk.
+  const target = `${OUTBOX_DIR}${encodeURIComponent(buildSavedFilename(item, format, extension))}`;
   await deleteQuietly(target);
   await FileSystem.moveAsync({ from: fileUri, to: target });
   return target;
+}
+
+/**
+ * Saves `fileUri` under its gallery name. If moving or saving the renamed file fails
+ * for any reason, the original cache file is saved as-is — a nicer filename is never
+ * worth failing a download over. Returns every uri that may now exist so the caller
+ * can clean up.
+ */
+async function saveNamedToAppAlbum(
+  fileUri: string,
+  item: MediaItem,
+  format: 'video' | 'audio' | 'image',
+  extension: string
+): Promise<string[]> {
+  let named: string | null = null;
+  try {
+    named = await withGalleryName(fileUri, item, format, extension);
+    await saveToAppAlbum(named);
+    return [fileUri, named];
+  } catch (error) {
+    console.warn('[download] named save failed, saving under the cache name', error);
+    // The move may or may not have happened; save whichever file exists.
+    const info = named ? await FileSystem.getInfoAsync(named) : null;
+    const source = info && info.exists ? (named as string) : fileUri;
+    await saveToAppAlbum(source);
+    return [fileUri, named ?? fileUri];
+  }
 }
 
 async function deleteQuietly(fileUri: string): Promise<void> {
@@ -332,19 +363,18 @@ async function downloadDirect(
     token
   );
 
-  let fileToSave = result.uri;
+  let leftovers = [result.uri];
   try {
     token?.throwIfCancelled();
-    fileToSave = await withGalleryName(
+    // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
+    // (it now throws at runtime). Use the new class-based API instead, routing
+    // the asset into the app's own album rather than the default Camera folder.
+    leftovers = await saveNamedToAppAlbum(
       result.uri,
       item,
       item.type === 'video' ? 'video' : 'image',
       extension
     );
-    // SDK 56 removed the legacy `saveToLibraryAsync` from the main entrypoint
-    // (it now throws at runtime). Use the new class-based API instead, routing
-    // the asset into the app's own album rather than the default Camera folder.
-    await saveToAppAlbum(fileToSave);
   } catch (error) {
     if (isCancelledError(error)) throw error;
     throw new DownloadError(
@@ -352,7 +382,7 @@ async function downloadDirect(
       'Downloaded, but saving to your gallery failed. Check storage permissions.'
     );
   } finally {
-    await Promise.all([deleteQuietly(result.uri), deleteQuietly(fileToSave)]);
+    await Promise.all(leftovers.map(deleteQuietly));
   }
 
   onProgress(1);
@@ -434,8 +464,7 @@ async function downloadMuxed(
 
     token?.throwIfCancelled();
     try {
-      named = await withGalleryName(outUri, item, 'video', 'mp4');
-      await saveToAppAlbum(named);
+      named = (await saveNamedToAppAlbum(outUri, item, 'video', 'mp4'))[1];
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -516,8 +545,7 @@ async function downloadTranscoded(
 
     token?.throwIfCancelled();
     try {
-      named = await withGalleryName(fileToSave, item, 'video', 'mp4');
-      await saveToAppAlbum(named);
+      named = (await saveNamedToAppAlbum(fileToSave, item, 'video', 'mp4'))[1];
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
@@ -590,8 +618,7 @@ export async function downloadAudioToGallery(
   let named: string | null = null;
   try {
     token?.throwIfCancelled();
-    named = await withGalleryName(audioUri, item, 'audio', 'm4a');
-    await saveToAppAlbum(named);
+    named = (await saveNamedToAppAlbum(audioUri, item, 'audio', 'm4a'))[1];
   } catch (error) {
     if (isCancelledError(error)) throw error;
     throw new DownloadError(
@@ -644,8 +671,7 @@ async function downloadAudioStream(
 
     try {
       token?.throwIfCancelled();
-      named = await withGalleryName(fileToSave, item, 'audio', 'm4a');
-      await saveToAppAlbum(named);
+      named = (await saveNamedToAppAlbum(fileToSave, item, 'audio', 'm4a'))[1];
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(
