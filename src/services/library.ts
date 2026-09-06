@@ -179,6 +179,14 @@ export async function renameSavedAsset(asset: SavedAsset, newStem: string): Prom
     if (code === 'ERR_RENAME_EXISTS') {
       throw new LibraryError('name taken', 'A file with that name already exists.');
     }
+    if (code === 'ERR_RENAME_PERMISSION') {
+      // MediaStore only lets the app that wrote a file rename it; a reinstall clears that
+      // ownership, so files saved by an earlier install can't be renamed from here.
+      throw new LibraryError(
+        'rename not permitted',
+        'Android won’t let SaveSama rename this file — it was saved by an earlier install. Rename it in your Files app instead.'
+      );
+    }
     throw new LibraryError(`rename failed: ${String(error)}`, 'Could not rename this file. Please try again.');
   }
 }

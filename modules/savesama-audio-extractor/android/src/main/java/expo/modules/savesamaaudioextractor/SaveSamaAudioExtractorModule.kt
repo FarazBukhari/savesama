@@ -1,5 +1,6 @@
 package expo.modules.savesamaaudioextractor
 
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.media.MediaCodec
@@ -7,6 +8,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -247,19 +249,43 @@ class SaveSamaAudioExtractorModule : Module() {
   // MediaStore rename
   // ---------------------------------------------------------------------------
 
+  /**
+   * Resolves the id expo-media-library hands us to the MediaStore row to update.
+   *
+   * On Android the library's `Asset.id` is the asset's **content uri**
+   * (`content://media/external/images/media/123`), not the bare `_ID`. Parsing it as a
+   * number failed for every file, which is why renames never applied. The uri is also
+   * the better handle: it names the type-specific collection, and MediaStore only allows
+   * a DISPLAY_NAME change (a "movement") within a well-defined collection — the generic
+   * Files collection can refuse it. A bare numeric id is still accepted for callers that
+   * have one, against the Files collection as before.
+   */
+  private fun assetUri(assetId: String): Uri {
+    val parsed = Uri.parse(assetId)
+    if (parsed.scheme == ContentResolver.SCHEME_CONTENT) {
+      try {
+        ContentUris.parseId(parsed)
+      } catch (e: Exception) {
+        throw CodedException("ERR_RENAME", "asset uri has no row id: $assetId", e)
+      }
+      return parsed
+    }
+    val id =
+      assetId.toLongOrNull()
+        ?: throw CodedException("ERR_RENAME", "asset id is neither a content uri nor a MediaStore id: $assetId", null)
+    return ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), id)
+  }
+
   private fun renameMediaAsset(assetId: String, displayName: String): String {
     val context =
       appContext.reactContext
         ?: throw CodedException("ERR_RENAME", "no android context available", null)
-    val id =
-      assetId.toLongOrNull()
-        ?: throw CodedException("ERR_RENAME", "asset id is not a MediaStore id: $assetId", null)
+    val uri = assetUri(assetId)
     val safeName = displayName.replace(Regex("[\\\\/:*?\"<>|\\x00-\\x1f]"), "").trim()
     if (safeName.isEmpty() || safeName.startsWith(".")) {
       throw CodedException("ERR_RENAME", "invalid file name", null)
     }
     val resolver = context.contentResolver
-    val uri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), id)
 
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
       // Legacy storage: MediaStore doesn't move files for us, so rename on disk and

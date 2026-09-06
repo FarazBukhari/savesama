@@ -30,6 +30,21 @@ describe('buildSavedFilename', () => {
     expect(buildSavedFilename(item, 'audio', 'm4a')).toBe('natgeo - DblSWtPD9-n - 3 - audio.m4a');
   });
 
+  it('names a photo post\'s soundtrack as the post\'s audio, in its own container', () => {
+    expect(
+      buildSavedFilename(
+        { id: 'DblSWtPD9-n-audio', username: 'natgeo', postCode: 'DblSWtPD9-n', platform: 'instagram' },
+        'audio',
+        'mp3'
+      )
+    ).toBe('natgeo - DblSWtPD9-n - audio.mp3');
+    expect(prettyName('natgeo - DblSWtPD9-n - audio.mp3', MediaType.AUDIO)).toEqual({
+      title: 'natgeo',
+      kind: 'Audio',
+      code: 'DblSWtPD9-n',
+    });
+  });
+
   it('falls back to the platform when the poster is unknown', () => {
     expect(
       buildSavedFilename(

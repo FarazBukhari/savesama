@@ -1,6 +1,6 @@
 import { pickDashAudioUrl, pickDashVideo } from './dashManifest';
 import { asArray, asNumber, asString, getIn, isRecord } from './json';
-import { ExtractionResult, MediaFormat, MediaItem, SourcePlatform } from './types';
+import { AudioTrack, ExtractionResult, MediaFormat, MediaItem, SourcePlatform } from './types';
 
 /** Instagram's public web app id, required on api/v1 requests. */
 export const IG_APP_ID = '936619743392459';
@@ -46,6 +46,14 @@ export function mapMediaInfo(
 
   if (items.length === 0) return null;
 
+  // A photo's soundtrack is a file of its own — nothing else in the post carries it, so
+  // it gets a row. A video already has its sound inside it ("Save as Audio" covers that),
+  // so a plain reel adds nothing here.
+  if (items.some((item) => item.type === 'image')) {
+    const audio = postAudioItem(media, shortcode, platform, username);
+    if (audio) items.push(audio);
+  }
+
   return {
     platform,
     shortcode,
@@ -53,6 +61,92 @@ export function mapMediaInfo(
     username,
     caption: asString(getIn(media, ['caption', 'text'])),
   };
+}
+
+/**
+ * The soundtrack Instagram attaches to a photo post or carousel, when it exposes one.
+ *
+ * A post "with music" carries the track on the parent media (not the carousel children)
+ * under `music_metadata`: a licensed song as `music_info.music_asset_info`, a creator's own
+ * recording as `original_sound_info`. Reels use the same shape under `clips_metadata`. Each
+ * has a `progressive_download_url` pointing at the audio file itself — an MP3 for licensed
+ * music, an audio MP4 for original sounds — which is what gets saved. Tracks Instagram has
+ * muted for the viewer's region carry no url and are skipped.
+ *
+ * Only the signed-in `media/info` payload has this; the anonymous GraphQL and embed paths
+ * name the song but never link to it.
+ */
+function postAudioItem(
+  media: Record<string, unknown>,
+  shortcode: string,
+  platform: SourcePlatform,
+  username: string | null
+): MediaItem | null {
+  const found = findPostAudio(media);
+  if (!found) return null;
+  const { url, thumbnailUrl, track } = found;
+  return {
+    id: `${shortcode}-audio`,
+    type: 'audio',
+    url,
+    thumbnailUrl,
+    width: null,
+    height: null,
+    platform,
+    audioOnlyUrl: url,
+    username,
+    postCode: shortcode,
+    track,
+  };
+}
+
+interface PostAudio {
+  url: string;
+  thumbnailUrl: string | null;
+  track: AudioTrack;
+}
+
+function findPostAudio(media: Record<string, unknown>): PostAudio | null {
+  for (const container of ['music_metadata', 'clips_metadata']) {
+    const music = getIn(media, [container, 'music_info', 'music_asset_info']);
+    if (isRecord(music)) {
+      // `progressive_download_url` is the track; `fast_start_…` is the same file with its
+      // index up front. The 30s preview is a last resort for songs served no other way.
+      const url =
+        asString(music['progressive_download_url']) ??
+        asString(music['fast_start_progressive_download_url']) ??
+        asString(music['web_30s_preview_download_url']);
+      if (url) {
+        return {
+          url,
+          thumbnailUrl:
+            asString(music['cover_artwork_thumbnail_uri']) ?? asString(music['cover_artwork_uri']),
+          track: {
+            title: asString(music['title']) ?? asString(music['sanitized_title']),
+            artist: asString(music['display_artist']),
+            durationMs: asNumber(music['duration_in_ms']),
+          },
+        };
+      }
+    }
+
+    const original = getIn(media, [container, 'original_sound_info']);
+    if (isRecord(original)) {
+      const url = asString(original['progressive_download_url']);
+      if (url) {
+        return {
+          url,
+          thumbnailUrl: null,
+          track: {
+            title: asString(original['original_audio_title']),
+            artist: asString(getIn(original, ['ig_artist', 'username'])),
+            durationMs: asNumber(original['duration_in_ms']),
+          },
+        };
+      }
+    }
+  }
+  return null;
 }
 
 /** Post-level fields every item carries so the saved file can be named after its poster. */

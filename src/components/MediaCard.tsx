@@ -7,6 +7,7 @@ import { WIDTH_TRANSITION } from '../motion';
 import { useTheme, useThemedStyles } from '../ThemeProvider';
 import { fonts, MIN_TAP, radius, spacing, Theme, typography } from '../theme';
 import { PressableScale } from './PressableScale';
+import { formatDuration } from './SavedFileTile';
 
 export type DownloadStatus = 'idle' | 'queued' | 'downloading' | 'done' | 'error';
 
@@ -36,6 +37,7 @@ export function MediaCard({ item, state, onDownload, onCancel, last }: MediaCard
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const isVideo = item.type === 'video';
+  const isAudio = item.type === 'audio';
   const busy = state.status === 'downloading' || state.status === 'queued';
 
   return (
@@ -45,7 +47,7 @@ export function MediaCard({ item, state, onDownload, onCancel, last }: MediaCard
       ) : (
         <View style={[styles.thumb, styles.thumbFallback]}>
           <Feather
-            name={isVideo ? 'play' : 'image'}
+            name={isAudio ? 'music' : isVideo ? 'play' : 'image'}
             size={18}
             color={theme.colors.textSecondary}
           />
@@ -53,7 +55,7 @@ export function MediaCard({ item, state, onDownload, onCancel, last }: MediaCard
       )}
 
       <View style={styles.info}>
-        <Text style={styles.typeLabel}>{isVideo ? 'Video' : 'Photo'}</Text>
+        <Text style={styles.typeLabel}>{isAudio ? 'Audio' : isVideo ? 'Video' : 'Photo'}</Text>
 
         {state.status === 'downloading' ? (
           <View style={styles.progressRow}>
@@ -69,14 +71,12 @@ export function MediaCard({ item, state, onDownload, onCancel, last }: MediaCard
             <Text style={styles.progressLabel}>{Math.round(state.progress * 100)}%</Text>
           </View>
         ) : (
-          <Text style={styles.facts}>
+          <Text style={styles.facts} numberOfLines={1}>
             {state.status === 'queued'
               ? 'Waiting'
               : state.status === 'error'
                 ? 'Failed'
-                : item.width && item.height
-                  ? `${item.width}×${item.height}`
-                  : ''}
+                : idleFacts(item)}
           </Text>
         )}
       </View>
@@ -91,6 +91,18 @@ export function MediaCard({ item, state, onDownload, onCancel, last }: MediaCard
       />
     </View>
   );
+}
+
+/** The second line at rest: dimensions for a picture, the song for a soundtrack. */
+function idleFacts(item: MediaItem): string {
+  if (item.type === 'audio') {
+    const parts = [item.track?.title, item.track?.artist].filter(
+      (part): part is string => typeof part === 'string' && part.length > 0
+    );
+    if (item.track?.durationMs) parts.push(formatDuration(item.track.durationMs));
+    return parts.join(' · ');
+  }
+  return item.width && item.height ? `${item.width}×${item.height}` : '';
 }
 
 type Styles = ReturnType<typeof makeStyles>;
