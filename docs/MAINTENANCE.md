@@ -151,6 +151,14 @@ needs no auth, and as of §11 it downloads only the audio stream rather than the
   no `inputs`, so the workflow's `default: preview` does **not** apply — the job sets
   `PROFILE: ${{ inputs.profile || 'preview' }}` and every step uses `$PROFILE`. Don't
   reintroduce a bare `${{ inputs.profile }}` in a step or push builds get an empty profile.
+- Two runner requirements learned the hard way (September 2026): the workflow must run
+  **Node 22** — `eas-cli` 23.x pulls `@oclif/plugin-autocomplete`, whose `engines` field
+  refuses Node 20, so "Setup EAS" fails before any build work — and it must **free disk
+  first**. Run 34060211586 died 26 minutes into "Build APK" with the step still recorded as
+  `in_progress`, no post-steps and no uploadable log (the job-log API answers 404 and the
+  run's log zip is empty): that is a runner lost to a full disk, the same failure as the two
+  runs cited in the workflow's header comment. The "Free disk space" step removes the
+  preinstalled .NET, GHC, Swift, Boost, CodeQL and Docker images (~30 GB) before the install.
 - Profiles live in [`eas.json`](../eas.json): `preview` and `development` produce an APK
   (`buildType: apk`); `production` is set up for store builds.
 - **Expo Go does not work** — `expo-share-intent` needs a native build. Use the preview
