@@ -45,6 +45,15 @@ export function jobId(item: MediaItem, format: DownloadFormat = 'video'): string
   return item.type === 'video' ? `${item.id}:${format}` : item.id;
 }
 
+/**
+ * The format an item saves as when nobody chose one: audio items are audio files and
+ * have nothing else to offer; everything else (video, photo) takes the video path,
+ * which handles photos itself.
+ */
+export function defaultFormat(item: MediaItem): DownloadFormat {
+  return item.type === 'audio' ? 'audio' : 'video';
+}
+
 type Listener = (jobs: DownloadJob[]) => void;
 
 const jobs = new Map<string, DownloadJob>();
@@ -111,6 +120,9 @@ export function enqueueDownload(
   format: DownloadFormat = 'video',
   options: EnqueueOptions = {}
 ): string {
+  // An audio item can only ever be saved as audio; a caller passing the default 'video'
+  // (e.g. "Save all") must not end up downloading a song through the photo path.
+  if (item.type === 'audio') format = 'audio';
   const id = jobId(item, format);
   const existing = jobs.get(id);
   if (existing) {

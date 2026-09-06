@@ -286,6 +286,13 @@ export async function downloadToGallery(
   override?: ResolutionPref,
   token?: CancelToken
 ): Promise<void> {
+  // A post's soundtrack is a sound file, not a picture: there is no rendition to pick
+  // and the image path would save it with a .jpg name.
+  if (item.type === 'audio') {
+    await downloadAudioToGallery(item, onProgress, token);
+    return;
+  }
+
   await ensureMediaPermission();
   token?.throwIfCancelled();
 
@@ -580,6 +587,15 @@ export async function downloadAudioToGallery(
   await ensureMediaPermission();
   token?.throwIfCancelled();
 
+  if (item.type === 'audio') {
+    // The item *is* the audio file (a photo post's soundtrack). Licensed songs come as
+    // MP3 and stay MP3 — FFmpeg would happily copy the stream into an .m4a, but MP3
+    // inside an MP4 container is something many players refuse to open.
+    const url = item.audioOnlyUrl ?? item.url;
+    await downloadAudioStream(item, url, onProgress, token, audioExtension(url));
+    return;
+  }
+
   if (item.audioOnlyUrl) {
     await downloadAudioStream(item, item.audioOnlyUrl, onProgress, token);
     return;
@@ -632,6 +648,17 @@ export async function downloadAudioToGallery(
   onProgress(1);
 }
 
+/** Containers an audio-only download is saved in. */
+type AudioExtension = 'm4a' | 'mp3';
+
+/**
+ * The container a standalone audio url is served in, by its path. Instagram's licensed
+ * music is MP3; original sounds and DASH streams are audio MP4, which saves as .m4a.
+ */
+export function audioExtension(url: string): AudioExtension {
+  return url.split('?')[0].toLowerCase().endsWith('.mp3') ? 'mp3' : 'm4a';
+}
+
 /**
  * Audio-only path: download just the audio stream, then save it as an M4A.
  *
@@ -642,15 +669,18 @@ export async function downloadAudioToGallery(
  * downloaded file as-is: it is a valid audio MP4 either way, and a container
  * preference is not worth failing a download over.
  *
+ * An MP3 source (`extension` = 'mp3') skips the remux and is saved as it came.
+ *
  * Progress: download 0→0.85, remux 0.85→0.9, save 0.9→1.0.
  */
 async function downloadAudioStream(
   item: MediaItem,
   url: string,
   onProgress: (fraction: number) => void,
-  token?: CancelToken
+  token?: CancelToken,
+  extension: AudioExtension = 'm4a'
 ): Promise<void> {
-  const srcUri = cacheUri(item, 'audiosrc.m4a');
+  const srcUri = cacheUri(item, `audiosrc.${extension}`);
   const outUri = cacheUri(item, 'audio.m4a');
   let named: string | null = null;
 
@@ -661,17 +691,19 @@ async function downloadAudioStream(
     token?.throwIfCancelled();
 
     let fileToSave = srcResult.uri;
-    try {
-      await extractAudio(srcResult.uri, outUri);
-      fileToSave = outUri;
-    } catch {
-      // Keep the downloaded stream: already audio-only, already playable.
+    if (extension === 'm4a') {
+      try {
+        await extractAudio(srcResult.uri, outUri);
+        fileToSave = outUri;
+      } catch {
+        // Keep the downloaded stream: already audio-only, already playable.
+      }
     }
     onProgress(0.9);
 
     try {
       token?.throwIfCancelled();
-      named = (await saveNamedToAppAlbum(fileToSave, item, 'audio', 'm4a'))[1];
+      named = (await saveNamedToAppAlbum(fileToSave, item, 'audio', extension))[1];
     } catch (error) {
       if (isCancelledError(error)) throw error;
       throw new DownloadError(

@@ -17,6 +17,7 @@ const downloadAudioToGallery = mockDownloadAudioToGallery;
 import {
   cancelDownload,
   clearFinishedDownloads,
+  defaultFormat,
   enqueueDownload,
   getDownloadJob,
   getDownloadJobs,
@@ -81,6 +82,30 @@ describe('enqueueDownload', () => {
     await drain();
     expect(downloadAudioToGallery).toHaveBeenCalledTimes(1);
     expect(downloadToGallery).not.toHaveBeenCalled();
+  });
+
+  it('saves an audio item as audio even when asked for the default video format', async () => {
+    // "Save all" enqueues with the default format; a photo post's soundtrack must still
+    // land in the audio downloader rather than the photo path.
+    const song: MediaItem = {
+      id: 'IMG-audio',
+      type: 'audio',
+      url: 'https://cdn/track.mp3',
+      audioOnlyUrl: 'https://cdn/track.mp3',
+      thumbnailUrl: null,
+      width: null,
+      height: null,
+      platform: 'instagram',
+    };
+    expect(defaultFormat(song)).toBe('audio');
+    expect(defaultFormat(videoItem('a'))).toBe('video');
+
+    enqueueDownload(song, 'video');
+    await drain();
+    expect(downloadAudioToGallery).toHaveBeenCalledTimes(1);
+    expect(downloadToGallery).not.toHaveBeenCalled();
+    expect(getDownloadJob(jobId(song))?.format).toBe('audio');
+    expect(getDownloadJob(jobId(song))?.status).toBe('done');
   });
 
   it('keeps video and audio of the same item as separate jobs', async () => {

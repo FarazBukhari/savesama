@@ -621,6 +621,33 @@ Fallbacks that must stay:
 ⚠️ Regex gotcha when reading manifests: `width="` also matches inside `bandwidth="`. Use a
 `\b` word boundary (this bug produced nonsense dimensions during the original probe).
 
+**Photo posts with music.** A photo (or photo carousel) posted "with music" used to resolve
+to its pictures only — the soundtrack had no row and could not be saved. The signed-in
+`media/info` payload carries it on the **parent** media (never on `carousel_media`
+children) as `music_metadata`: licensed songs under `music_info.music_asset_info`, a
+creator's recording under `original_sound_info`; reels use the same shape under
+`clips_metadata`. `mapMediaInfo` turns it into a `MediaItem` of `type: 'audio'`
+(`id: <code>-audio`, `track: {title, artist, durationMs}`, cover art as the thumbnail),
+appended after the pictures — only when the post has at least one photo, since a video's
+sound is already inside it and "Save as Audio" covers that. The row shows as **Audio** with
+the song and artist; tapping Save downloads it directly (no format sheet), and `enqueueDownload`
+forces the `audio` format for these items so "Save all" can't push a song through the photo
+path.
+
+URL priority: `progressive_download_url` → `fast_start_progressive_download_url` →
+`web_30s_preview_download_url` (a 30-second preview, last resort). ⚠️ Unverified against
+live Instagram at the time of writing: whether licensed tracks arrive as the full song or a
+preview is Meta's call per track (§2 found the audio *page* rights-walled to previews).
+Region-muted tracks (`music_consumption_info.should_mute_audio`) ship no url and get no row.
+
+Licensed music is served as **MP3** and is saved as `.mp3` — `audioExtension()` in
+`download.ts` decides by the url's path, and the MP3 path skips the `extractAudio` remux:
+FFmpeg will copy an MP3 stream into an `.m4a`, but MP3-in-MP4 is a container many players
+refuse. Original sounds are audio MP4 and go through the usual remux-to-m4a path. The file is
+named `<poster> - <code> - audio.<ext>` like any audio save. Only the authenticated path can
+do this: the anonymous GraphQL and embed responses name the song (`clips_music_attribution_info`)
+but never link to it.
+
 ---
 
 ## 12. Download speed: parallel range requests
@@ -937,11 +964,19 @@ page. Audio: `expo-audio` player with a tappable track. `windowSize={3}` so only
 own native players. Share, Rename, Delete are toolbar buttons; the long-press menu
 (`AssetActionsSheet`) offers the same. `Sharing.shareAsync` is no longer what a tap does.
 
-**Rename** is `renameMediaAsset(assetId, displayName)` in the native module. On Android
-expo-media-library's asset id **is** the MediaStore `_ID`, so the module updates
-`DISPLAY_NAME` on `MediaStore.Files` (API 29+: MediaStore moves the file; the app owns the
-row, so no `RecoverableSecurityException`), or renames on disk and rewrites `DATA` on older
-devices. The extension is never editable (`RenameDialog` shows it read-only) so the MIME type
+**Rename** is `renameMediaAsset(assetId, displayName)` in the native module. ⚠️ On Android
+the SDK 56 class-based `Asset.id` is the asset's **content uri**
+(`content://media/external/images/media/123`), *not* the bare MediaStore `_ID` — an earlier
+version of this note said otherwise, and the module parsed the id as a number, so every
+rename rejected with "Could not rename this file" before MediaStore was ever asked. The
+module now takes the uri as-is (a bare numeric id still works, against `MediaStore.Files`)
+and updates `DISPLAY_NAME` on it. Using the type-specific uri also matters on its own:
+MediaStore treats a `DISPLAY_NAME` change as a "movement" and only allows it within a
+well-defined collection. API 29+: MediaStore moves the file; the app owns the row, so no
+`RecoverableSecurityException` — except for files saved by an **earlier install**, whose
+ownership a reinstall clears; those reject with `ERR_RENAME_PERMISSION`, which the library
+surfaces as "rename it in your Files app instead". Older devices rename on disk and rewrite
+`DATA`. The extension is never editable (`RenameDialog` shows it read-only) so the MIME type
 stays right. iOS rejects with `ERR_RENAME_UNSUPPORTED` — a `PHAsset` has no filename a user
 sees. The library screen patches the row's `filename` from the returned name and then
 refreshes, because the asset's `uri` changes with it.

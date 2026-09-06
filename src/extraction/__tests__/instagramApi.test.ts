@@ -284,3 +284,125 @@ describe('mapMediaInfo — DASH audio stream', () => {
     expect(item?.audioOnlyUrl).toBeUndefined();
   });
 });
+
+describe('mapMediaInfo — photo post soundtrack', () => {
+  // Shape from a live api/v1 media-info response for a photo posted "with music": the
+  // track lives on the parent media under music_metadata, never on carousel children.
+  const LICENSED = {
+    music_canonical_id: '18027713423069702',
+    audio_type: 'licensed_music',
+    music_info: {
+      music_asset_info: {
+        id: '1273422726399305',
+        title: 'Never Gonna Give You Up',
+        display_artist: 'Rick Astley',
+        cover_artwork_uri: 'https://cdn/cover.jpg',
+        cover_artwork_thumbnail_uri: 'https://cdn/cover-thumb.jpg',
+        progressive_download_url: 'https://cdn/track.mp3?sig=1',
+        fast_start_progressive_download_url: 'https://cdn/track-fast.mp3?sig=1',
+        web_30s_preview_download_url: null,
+        duration_in_ms: 213000,
+      },
+      music_consumption_info: { should_mute_audio: false, overlap_duration_in_ms: 15000 },
+    },
+    original_sound_info: null,
+  };
+
+  const photo = (music_metadata?: unknown) => ({
+    items: [
+      {
+        media_type: 1,
+        image_versions2: { candidates: [{ url: 'https://cdn/i.jpg', width: 1080, height: 1080 }] },
+        user: { username: 'bob' },
+        ...(music_metadata === undefined ? {} : { music_metadata }),
+      },
+    ],
+  });
+
+  it('adds the song as an audio item after the photo', () => {
+    const items = mapMediaInfo(photo(LICENSED), 'IMG')?.items ?? [];
+    expect(items.map((i) => i.type)).toEqual(['image', 'audio']);
+    expect(items[1]).toEqual({
+      id: 'IMG-audio',
+      type: 'audio',
+      url: 'https://cdn/track.mp3?sig=1',
+      audioOnlyUrl: 'https://cdn/track.mp3?sig=1',
+      thumbnailUrl: 'https://cdn/cover-thumb.jpg',
+      width: null,
+      height: null,
+      platform: 'instagram',
+      username: 'bob',
+      postCode: 'IMG',
+      track: { title: 'Never Gonna Give You Up', artist: 'Rick Astley', durationMs: 213000 },
+    });
+  });
+
+  it('adds a creator\'s original sound too', () => {
+    const original = {
+      audio_type: 'original_sounds',
+      music_info: null,
+      original_sound_info: {
+        original_audio_title: 'Original audio',
+        progressive_download_url: 'https://cdn/original.mp4?sig=2',
+        ig_artist: { username: 'bob' },
+        duration_in_ms: 12000,
+      },
+    };
+    const audio = mapMediaInfo(photo(original), 'IMG')?.items[1];
+    expect(audio?.type).toBe('audio');
+    expect(audio?.url).toBe('https://cdn/original.mp4?sig=2');
+    expect(audio?.track).toEqual({ title: 'Original audio', artist: 'bob', durationMs: 12000 });
+  });
+
+  it('adds nothing when the post has no music, or the track is muted (no url)', () => {
+    expect(mapMediaInfo(photo(), 'IMG')?.items.map((i) => i.type)).toEqual(['image']);
+    expect(mapMediaInfo(photo(null), 'IMG')?.items.map((i) => i.type)).toEqual(['image']);
+    const muted = {
+      ...LICENSED,
+      music_info: {
+        ...LICENSED.music_info,
+        music_asset_info: { ...LICENSED.music_info.music_asset_info, progressive_download_url: null, fast_start_progressive_download_url: null },
+      },
+    };
+    expect(mapMediaInfo(photo(muted), 'IMG')?.items.map((i) => i.type)).toEqual(['image']);
+  });
+
+  it('adds the track once for a carousel, after every photo', () => {
+    const json = {
+      items: [
+        {
+          media_type: 8,
+          user: { username: 'carol' },
+          music_metadata: LICENSED,
+          carousel_media: [
+            { media_type: 1, image_versions2: { candidates: [{ url: 'https://cdn/1.jpg' }] } },
+            { media_type: 1, image_versions2: { candidates: [{ url: 'https://cdn/2.jpg' }] } },
+          ],
+        },
+      ],
+    };
+    const items = mapMediaInfo(json, 'CAR')?.items ?? [];
+    expect(items.map((i) => [i.type, i.id])).toEqual([
+      ['image', 'CAR-0'],
+      ['image', 'CAR-1'],
+      ['audio', 'CAR-audio'],
+    ]);
+    // No carousel position: the track belongs to the post, not to a slide.
+    expect(items[2].position).toBeUndefined();
+  });
+
+  it('adds no separate track to a plain reel — its sound is inside the video', () => {
+    const reel = {
+      items: [
+        {
+          media_type: 2,
+          video_versions: [{ url: 'https://cdn/v.mp4', width: 720, height: 1280 }],
+          image_versions2: { candidates: [{ url: 'https://cdn/thumb.jpg' }] },
+          clips_metadata: LICENSED,
+          user: { username: 'alice' },
+        },
+      ],
+    };
+    expect(mapMediaInfo(reel, 'REEL')?.items.map((i) => i.type)).toEqual(['video']);
+  });
+});

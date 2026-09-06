@@ -1,6 +1,18 @@
 export type SourcePlatform = 'instagram' | 'threads' | 'youtube';
 
-export type MediaType = 'image' | 'video';
+/**
+ * `audio` is a standalone sound file: the soundtrack Instagram attaches to a photo post or
+ * carousel (see `mapMediaInfo`). It has no video to strip audio from, so it is saved
+ * directly as an audio file.
+ */
+export type MediaType = 'image' | 'video' | 'audio';
+
+/** What an `audio` item is, for the row's label — the song, or a creator's original sound. */
+export interface AudioTrack {
+  title: string | null;
+  artist: string | null;
+  durationMs: number | null;
+}
 
 export interface ParsedLink {
   platform: SourcePlatform;
@@ -72,6 +84,8 @@ export interface MediaItem {
   postCode?: string;
   /** 1-based position inside a carousel; absent for single-item posts. */
   position?: number;
+  /** Song / original-sound details; set only on `audio` items. */
+  track?: AudioTrack;
   /**
    * The full-resolution rendition Meta publishes only in the DASH manifest (VP9 in an
    * fMP4). `video_versions` tops out below the original (716x1274 vs 1088x1936), so

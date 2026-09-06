@@ -16,7 +16,7 @@ import { DownloadError } from '../services/download';
 import { ResolutionChoiceModal } from '../components/ResolutionChoiceModal';
 import { useDownloadJobs } from '../hooks/useDownloadJobs';
 import { usePreferences } from '../hooks/usePreferences';
-import { DownloadJob, cancelDownload, enqueueDownload, jobId } from '../services/downloadQueue';
+import { DownloadJob, cancelDownload, defaultFormat, enqueueDownload, jobId } from '../services/downloadQueue';
 import { ResolutionPref, resolutionForPlatform } from '../services/preferences';
 import Animated from 'react-native-reanimated';
 
@@ -154,7 +154,8 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
       if (item.type === 'video') {
         setModalItem(item);
       } else {
-        void handleDownload(item);
+        // Photos and a post's soundtrack have one form each — no format sheet.
+        void handleDownload(item, defaultFormat(item));
       }
     },
     [handleDownload]
@@ -168,7 +169,7 @@ export function DownloadScreen({ onSaved }: DownloadScreenProps) {
     for (const item of result.items) {
       const state = downloads[jobId(item, 'video')] ?? IDLE_STATE;
       if (state.status === 'done' || state.status === 'downloading' || state.status === 'queued') continue;
-      enqueueDownload(item, 'video', { onSaved });
+      enqueueDownload(item, defaultFormat(item), { onSaved });
     }
   }, [result, downloads, onSaved]);
 
