@@ -10,7 +10,15 @@ GraphQL/CSRF, YouTube bot-check) are worth reading before writing extraction cod
 - The server runs on the owner's own devices: Windows 11, macOS, and Android via Termux
   (arm64, no root). Every dependency must install and run on all three, so avoid native
   modules that need a toolchain Termux can't build.
-- Stack not chosen yet. Prefer TypeScript + npm, or Python + venv.
+- No accounts: nothing ever logs in to a platform or stores platform cookies.
+- Branch names describe the work (`feature/...`, `fix/...`); never `claude/...`.
+
+## Layout
+- `server/`: Python 3.10+ download server (yt-dlp + ffmpeg), runs in Termux, Windows, macOS.
+  Pure Python deps only: compiled wheels (pydantic-core, curl_cffi, ...) don't install on Termux.
+- `app/`: Expo (React Native) Android app, the client. Built via EAS or GitHub Actions.
+- `docs/API.md`: the app <-> server contract. Change it first, then both sides.
+- `.claude/skills/`: design skills (impeccable, ui-ux-pro-max, taste-skill, redesign-skill).
 
 ## Working style
 - Hands-off: run commands and make changes without asking for each step.
