@@ -26,7 +26,8 @@ log = logging.getLogger("savesama.download")
 
 # Direct downloads only go to the CDNs our own extractors read URLs from.
 CDN_DOMAINS = ("cdninstagram.com", "fbcdn.net", "instagram.com", "facebook.com", "threads.com",
-               "threads.net")
+               "threads.net", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "tiktokv.com",
+               "tiktok.com", "ibyteimg.com", "byteimg.com", "muscdn.com")
 CHUNK = 256 * 1024
 
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "heic", "gif", "avif"}
@@ -215,6 +216,18 @@ def download_direct(resolved: Resolved, item: Item, mode: str, quality, can_mux:
         ctype = fetch(v.url, part, referer=ref, progress=progress, key="image", cancel=cancel)
         out = os.path.join(tmpdir, "image." + _ext_from(ctype, v.url, "jpg"))
         os.replace(part, out)
+        return out
+
+    if item.type == "audio":  # a standalone soundtrack (TikTok photo posts)
+        v = item.variants[0]
+        part = os.path.join(tmpdir, "track.part")
+        ctype = fetch(v.url, part, referer=ref, progress=progress, key="audio", cancel=cancel)
+        raw = _rename(part, os.path.join(tmpdir, "track." + _ext_from(ctype, v.url, v.ext or "mp3")))
+        if mode != "audio" or not can_mux or raw.endswith(".m4a"):
+            return raw
+        on_processing()
+        out = os.path.join(tmpdir, "out.m4a")
+        _ffmpeg_or_error(to_m4a, raw, out, cancel)
         return out
 
     if mode == "audio":
