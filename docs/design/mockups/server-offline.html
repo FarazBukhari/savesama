@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Server, offline</title><link rel="stylesheet" href="base.css">
+<style>
+  .card .kv + .kv { box-shadow: 0 -2px 0 var(--ground); }
+  ol.fix { margin: 8px 0 0 18px; font: 400 14px/22px Schibsted; color: var(--ink); }
+  .acts { display: flex; gap: 8px; margin-top: 8px; margin-left: -12px; }
+</style></head>
+<body>
+<div class="phone" data-tab="server">
+  <div class="appbar"><span class="t-display">Server</span></div>
+  <div class="scroll">
+    <div class="card" style="padding-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <span class="t-headline one">Pixel 8 (Termux)</span>
+        <span class="pill" style="background:var(--sunk)"><i class="dot off"></i>Offline</span>
+      </div>
+      <div class="banner err" style="margin-top:16px">
+        <span data-icon="plugs" data-icon-class="s20"></span>
+        <div style="flex:1">
+          <div class="t-body-m">Server isn't answering</div>
+          <ol class="fix"><li>Open Termux.</li><li>Run savesama.</li><li>Come back here. SaveSama checks again by itself.</li></ol>
+          <div class="acts"><span class="btn text">Open Termux</span><span class="btn text">Try again</span></div>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="kv"><span class="t-meta">Address</span><span class="t-meta-m num">127.0.0.1:8765</span></div>
+        <div class="kv"><span class="t-meta">Last seen</span><span class="t-meta-m num">Today at 08:12</span></div>
+      </div>
+    </div>
+
+    <div class="banner info" style="margin:16px 8px 0">
+      <span data-icon="device-mobile" data-icon-class="s20"></span>
+      <div style="flex:1">
+        <div class="t-body-m">First time on this phone?</div>
+        <div class="t-meta" style="color:var(--ink)">The setup guide walks through installing Termux and the server.</div>
+        <div class="acts"><span class="btn text">Setup guide</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+</body></html>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Enter details</title><link rel="stylesheet" href="base.css">
+<style>
+  .bar { display: flex; align-items: center; gap: 4px; height: 64px; padding: 0 4px; flex: none; }
+  .form { padding: 8px 20px 0; display: flex; flex-direction: column; gap: 20px; }
+  .inp { height: 52px; border-radius: 14px; background: var(--sunk); display: flex; align-items: center; padding: 0 16px; font: 400 16px/24px Schibsted; color: var(--ink); }
+  .inp.ph { color: var(--ink-2); }
+  .inp.err { box-shadow: inset 0 0 0 2px var(--err); background: var(--surface); }
+  .help { font: 400 14px/20px Schibsted; color: var(--ink-2); margin: 6px 4px 0; }
+  .help.err { color: var(--err); display: flex; gap: 6px; align-items: center; }
+  .row2 { display: flex; gap: 12px; }
+</style></head>
+<body>
+<div class="phone">
+  <div class="bar"><span class="iconbtn" data-icon="arrow-left"></span><span class="t-title">Enter details</span></div>
+  <div class="scroll">
+    <div class="form">
+      <div><div class="lbl">Name</div><div class="inp">Faraz-PC</div><div class="help">Optional. Shown in the Server tab.</div></div>
+      <div class="row2">
+        <div style="flex:1"><div class="lbl">Address</div><div class="inp num">192.168.1.20</div></div>
+        <div style="width:112px"><div class="lbl">Port</div><div class="inp num">8765</div></div>
+      </div>
+      <div><div class="lbl">Key</div><div class="inp err" style="justify-content:space-between">••••••••••••••••••••<span data-icon="eye" data-icon-class="s20"></span></div>
+        <div class="help err"><span data-icon="warning-circle" data-icon-class="s16"></span>That key wasn't accepted. Copy it again from the server.</div></div>
+    </div>
+  </div>
+  <div class="footer" style="background:var(--ground)"><span class="btn primary big">Pair</span></div>
+</div>
+<script src="shared.js"></script>
+</body></html>

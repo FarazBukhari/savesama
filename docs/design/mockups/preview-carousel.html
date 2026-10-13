@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Preview, carousel</title><link rel="stylesheet" href="base.css">
+<style>
+  .under { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .shead { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 8px 0 20px; flex: none; }
+  .strip { display: flex; gap: 8px; padding: 0 20px; overflow: hidden; }
+  .tile { position: relative; width: 104px; height: 130px; border-radius: 10px; overflow: hidden; flex: none; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile.off img { opacity: .55; }
+  .count { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px 20px; }
+  .body { padding: 16px 20px 0; }
+  .ctl { padding: 16px 20px 0; }
+</style></head>
+<body>
+<div class="phone" data-status="deck" data-gesture="none">
+  <div class="under">
+    <section class="deck" style="height:420px"><div class="deck-top" style="margin-top:32px"><span class="t-wordmark">SaveSama</span></div></section>
+  </div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="shead">
+      <span data-icon="instagram-logo" data-icon-class="s20"></span>
+      <span class="t-meta-m">Instagram</span><span class="t-meta one" style="flex:1">· @lahore.eats</span>
+      <span class="iconbtn" data-icon="x"></span>
+    </div>
+    <div class="count"><span class="t-meta-m num">4 items · 3 selected</span><span class="btn text">Select all</span></div>
+    <div class="strip">
+      <div class="tile"><img src="assets/photos/nightmarket.jpg" alt=""><span class="media-check on" data-icon="check-bold" data-icon-class="s16"></span><span class="dur">0:31</span></div>
+      <div class="tile"><img src="assets/photos/rickshaw.jpg" alt=""><span class="media-check on" data-icon="check-bold" data-icon-class="s16"></span></div>
+      <div class="tile off"><img src="assets/photos/concert.jpg" alt=""><span class="media-check"></span><span class="dur">0:12</span></div>
+      <div class="tile"><img src="assets/photos/cat.jpg" alt=""><span class="media-check on" data-icon="check-bold" data-icon-class="s16"></span></div>
+    </div>
+    <div class="body">
+      <div class="t-title">Four stops on Food Street, ranked. The last one is worth the queue.</div>
+      <div class="t-meta num" style="margin-top:4px">Post · 4 items · 2 videos, 2 photos</div>
+    </div>
+    <div class="ctl">
+      <div class="lbl">Format</div>
+      <div class="seg"><div class="on">Video &amp; photos</div><div>Audio only</div></div>
+      <div class="t-meta" style="margin:8px 4px 0">Photos are saved as they are.</div>
+    </div>
+    <div class="ctl">
+      <div class="lbl">Quality</div>
+      <div class="chips">
+        <span class="chip on" data-icon="check-bold" data-icon-class="s16">Best</span>
+        <span class="chip">1080p</span><span class="chip">720p</span><span class="chip">480p</span><span class="chip">360p</span>
+      </div>
+      <div class="t-meta" style="margin:8px 4px 0">Best is 1080p for this post.</div>
+    </div>
+        <div class="footer"><span class="btn primary big"><i class="rec"></i>Save 3 items</span></div>
+    <div class="gesturebar"></div>
+  </div>
+  <span class="mock-note" style="top:40px;bottom:auto;z-index:7;color:#fff">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>

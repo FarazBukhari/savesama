@@ -31,7 +31,7 @@ nothing else (no reels, no cassette drawings, no skeuomorphism):
    appears: Grab, Activity, and the onboarding progress.
 
 Type: a wide, audio-gear display face (**Michroma**) only for the wordmark and one- or two-word
-screen titles; a precise workhorse grotesk (**Geist**) for everything else, with tabular figures for
+screen titles; a narrow-shouldered newspaper grotesk (**Schibsted Grotesk**) for everything else; its compact width plays against Michroma's breadth, with tabular figures for
 every number that changes.
 
 What this design refuses (from the legacy audit, §16, and the skills' slop lists): warm near-black
@@ -132,28 +132,30 @@ Rules:
 Fonts (all OFL, all from Expo's font packages):
 
 - `@expo-google-fonts/michroma` → `Michroma_400Regular`
-- `@expo-google-fonts/geist` → `Geist_400Regular`, `Geist_500Medium`, `Geist_600SemiBold`,
-  `Geist_700Bold`
+- `@expo-google-fonts/schibsted-grotesk` → `SchibstedGrotesk_400Regular`,
+  `SchibstedGrotesk_500Medium`, `SchibstedGrotesk_600SemiBold`, `SchibstedGrotesk_700Bold`
+  (Geist was the first pick; the impeccable detector flags it as an overused AI default, so it
+  was replaced with a face that has the same `tnum` support)
 - Code blocks only: platform `monospace`.
 
 Load all with `useFonts` and keep the splash screen up until they resolve. On Android, a custom
 font's weight is selected by family name, never by `fontWeight`; set `fontWeight` only on the
-monospace style. Geist has a `tnum` feature: set `fontVariant: ['tabular-nums']` on every role
+monospace style. Schibsted Grotesk has a `tnum` feature: set `fontVariant: ['tabular-nums']` on every role
 marked "tnum" below.
 
 | Role | Family | Size / line (sp) | Letter spacing | Used for |
 | --- | --- | --- | --- | --- |
 | `display` | Michroma | 26 / 32 | -0.5 | Large top app bar titles (Activity, Library, Server, Settings), onboarding wordmark |
 | `wordmark` | Michroma | 19 / 24 | -0.3 | "SaveSama" on the Grab deck |
-| `headline` | Geist SemiBold | 24 / 30 | -0.3 | Onboarding headlines, dialog titles, Server device name, guide title |
-| `title` | Geist SemiBold | 18 / 24 | -0.1 | Section titles, sheet titles, post titles in preview, small top bar title |
-| `bodyLarge` | Geist Regular | 17 / 24 | 0 | Paste field text |
-| `body` | Geist Regular | 16 / 24 | 0 | Body copy, list primary text |
-| `bodyStrong` | Geist Medium | 16 / 24 | 0 | List primary text that needs weight (job titles) |
-| `label` | Geist Medium | 15 / 20 | 0 | Buttons, segments |
-| `meta` | Geist Regular | 14 / 20 | 0 | Secondary lines, helper text (tnum) |
-| `metaStrong` | Geist Medium | 14 / 20 | 0 | Chips, field labels, list secondary that needs weight (tnum) |
-| `caption` | Geist Medium | 12 / 16 | +0.2 | Nav labels, tape legend, duration pills (tnum) |
+| `headline` | Schibsted Grotesk SemiBold | 24 / 30 | -0.3 | Onboarding headlines, dialog titles, Server device name, guide title |
+| `title` | Schibsted Grotesk SemiBold | 18 / 24 | -0.1 | Section titles, sheet titles, post titles in preview, small top bar title |
+| `bodyLarge` | Schibsted Grotesk Regular | 17 / 24 | 0 | Paste field text |
+| `body` | Schibsted Grotesk Regular | 16 / 24 | 0 | Body copy, list primary text |
+| `bodyStrong` | Schibsted Grotesk Medium | 16 / 24 | 0 | List primary text that needs weight (job titles) |
+| `label` | Schibsted Grotesk Medium | 15 / 20 | 0 | Buttons, segments |
+| `meta` | Schibsted Grotesk Regular | 14 / 20 | 0 | Secondary lines, helper text (tnum) |
+| `metaStrong` | Schibsted Grotesk Medium | 14 / 20 | 0 | Chips, field labels, list secondary that needs weight (tnum) |
+| `caption` | Schibsted Grotesk Medium | 12 / 16 | +0.2 | Nav labels, tape legend, duration pills (tnum) |
 | `code` | monospace | 14 / 20 | 0 | Copyable commands, tokens in the guide |
 
 Rules: sentence case everywhere (titles too). Michroma never sets more than 14 characters and
@@ -354,7 +356,8 @@ Container `sunk`, radius pill, padding 4, height 48. Segments equal width, 40 hi
 Inside a card (Grab) or as a list row (Activity): thumbnail 56 (radius 12, `expo-image`
 `contentFit="cover"`, placeholder `sunk` with the platform icon 24 `ink3`), then title
 (`bodyStrong`, 1 line), status line (`meta`, tnum, leading REC lamp 8 dp while running or
-transferring, `CheckCircle` 16 `ok` when saved, `WarningCircle` 16 `err` when failed), then the
+transferring, `CheckCircle` (fill) 16 `ok` when saved, the error's icon (§7) 16 `err` when failed;
+max 2 lines), then the
 tape line (hidden once saved or cancelled). Trailing control, 48 icon button: `X` "Cancel" while
 queued/running/processing/transferring; `ArrowCounterClockwise` "Retry" when failed or cancelled;
 none when saved (row tap opens the file in the viewer). Mode/quality suffix in the status line of
@@ -459,10 +462,12 @@ Mockup files are named in brackets; each exists as `-light.png` and `-dark.png` 
 `docs/design/screens/`.
 
 ### 12.1 Onboarding [`onboarding-welcome`, `onboarding-server`]
-Layout: the deck owns the top 46% of the screen (wordmark in `display` at 20/56 from top inset,
-platform logos row 24 dp icons, 16 gap, `onDeck` at the bottom of the deck); below on `ground`:
-onboarding tape line (3 spans, equal flex, legend "Welcome", "Server", "Gallery") then headline,
-body, and the actions pinned to the bottom (primary full width 56, text button under it).
+Layout (step 1): the deck owns the top 360 dp (wordmark in `display` at 34/40, 56 below the
+status bar; the headline at the bottom of the deck in `headline` enlarged to 30/36, `onDeck`,
+max width 330); below on `ground`: onboarding tape line (3 equal spans, legend "Welcome",
+"Server", "Gallery"), body, platform grid, and the primary action pinned to the bottom (full
+width, 56). Steps 2 and 3 drop the deck: tape line at the top, then headline, body, state block,
+actions pinned at the bottom (primary or tonal 56 + text button).
 
 1. **Welcome.** Headline, body, primary "Get started".
 2. **Server.** On entry the app probes `http://127.0.0.1:8765/api/v1/info` (2 s timeout).
@@ -592,7 +597,9 @@ Android 14 counts as granted, with a warn banner "SaveSama can only see some of 
 `viewerBg`, full-bleed media, status/nav bars hidden while chrome is hidden. Chrome (toggle on
 tap, auto-hide after 3 s while playing): top `mediaScrim` bar with back, title (1 line,
 `bodyStrong` `mediaInk`), and actions share, info, delete; bottom area for video uses
-`expo-video` native controls; images use pinch-zoom (1-5x) and double-tap zoom (2.5x at the tap
+custom controls over `expo-video` (`VideoView nativeControls={false}`): seek bar (4 dp
+`#FFFFFF` 24% track, `#FFD12E` fill and 16 dp thumb, elapsed/total `caption` tnum under it) and a
+64 dp white play/pause disc, the platform/author/saved line above the seek bar; images use pinch-zoom (1-5x) and double-tap zoom (2.5x at the tap
 point) with `react-native-gesture-handler`; audio shows the thumbnail (or `MusicNotes` 64) at
 280, title, author, a seek bar (`select` fill on `#FFFFFF` 24% track) with elapsed/total
 (`caption` tnum) and a 64 play/pause. Horizontal swipe moves between items in the current
@@ -621,7 +628,8 @@ poll `/info` every 2 s for up to 60 s. Outcomes: new version → snackbar "Extra
 banner (§13.4). Disabled while any job is running, with helper "Finish or cancel running
 downloads first."
 
-Offline: status card shows the offline pill, and an err banner with the steps (an ordered list:
+Offline: status card shows the offline pill, the rows reduce to "Address" and "Last seen"
+("Today at 08:12"), and an err banner with the steps (an ordered list:
 open Termux, run `savesama`, come back), "Open Termux", "Try again". Unauthorized (401): warn
 banner "This server doesn't accept SaveSama's key any more." + "Pair again".
 
@@ -675,7 +683,7 @@ TikTok, Facebook, Threads); `{name}` the server's device name.
 | Code | Title | Body | Actions |
 | --- | --- | --- | --- |
 | `unsupported_url` | SaveSama can't open this link | It takes links from YouTube, Instagram, TikTok, Facebook and Threads. | Close |
-| `login_required` | This post needs an account | It's private, age-restricted or only visible to signed-in people. SaveSama never signs in to any platform, so your accounts can't be flagged or banned, and that means it can't save this one. Public posts work. | Close |
+| `login_required` | This post needs an account | It's private, age-restricted or only visible when signed in. SaveSama never signs in, so your accounts stay safe from flags and bans, but it can't open posts like this. Public posts save fine. | Close |
 | `not_found` | This post isn't there | It may have been deleted, or the link is incomplete. Check the link and try again. | Close · Try again |
 | `rate_limited` | {Platform} is slowing things down | Too many requests in a short time. Wait a few minutes, then try again. | Close · Try again |
 | `unavailable` | This one can't be saved | {server message}. If there is no message: {Platform} doesn't offer it as a download. Live streams, region-locked videos and text-only posts can't be saved. | Close |
@@ -731,6 +739,7 @@ TikTok, Facebook, Threads); `{name}` the server's device name.
 | Library, limited access | warn | SaveSama can only see some of your media | Allow access to all photos, videos and audio to see everything it saved. | Allow all |
 | Onboarding, found | ok | Found SaveSama {version} on this phone | In Termux, stop it with Ctrl + C and start it again with the command below. It opens this app and pairs by itself. | — |
 | Onboarding, paired | ok | Paired with {name} | — | — |
+| Server, offline (below the status card) | info | First time on this phone? | The setup guide walks through installing Termux and the server. | Setup guide |
 
 ### 13.5 Empty states and dialogs
 | Where | Title | Body | Button |
@@ -774,12 +783,13 @@ TikTok, Facebook, Threads); `{name}` the server's device name.
 
 **Onboarding:**
 - Welcome headline: "Save posts to your phone, without an account"
-- Welcome body: "Video, photos and audio from YouTube, Instagram, TikTok, Facebook and Threads, at the best quality they offer."
+- Welcome body: "Video, photos and audio at the best quality each app offers. No ads, no cloud, nothing to sign in to." followed by the five platforms as icon + name pairs in a 2-column grid (`bodyStrong`)
 - Welcome button: "Get started"
 - Server headline: "SaveSama works with a server you run"
 - Server body: "The server does the downloading. It runs in Termux on this phone, or on your PC. Your files never pass through anyone else."
 - Checking: "Looking for a server on this phone…"
 - Rows: "Set up on this phone" / "Install Termux and the SaveSama server, step by step." · "Scan a QR code" / "For a server on your PC." · "Enter details" / "Type the address and key by hand."
+- Found state extras: waiting line "Waiting for the pairing link…" (12 dp spinner), tonal button "Open Termux" (hidden when Termux isn't installed)
 - Skip: "Do this later"
 - Gallery headline: "One last thing"
 - Gallery body: "SaveSama puts what you save in a SaveSama album in your gallery. Allow access to photos, videos and audio so it can."
@@ -817,11 +827,11 @@ gallery" announcement: "Saved {title} to the SaveSama album".
 yyyy}" · selection "{n} selected" · a11y "Share", "Delete", "Exit selection", tile "{Type}, {title},
 {duration}".
 
-**Viewer:** a11y "Back", "Share", "Info", "Delete", "Play", "Pause" · Info sheet title "Details" ·
+**Viewer:** meta line "{Platform} · {author} · Saved {relative time}" · a11y "Back", "Share", "Info", "Delete", "Play", "Pause" · Info sheet title "Details" ·
 rows "Title", "From", "Link", "Saved", "Size", "Dimensions", "Duration", "File name" · "Copy link"
 → snackbar "Link copied".
 
-**Server:** title "Server" · rows "Address", "Extractor", "ffmpeg", "Server" · values "Ready",
+**Server:** title "Server" · rows "Address", "Extractor", "ffmpeg", "Server", "Last seen" (offline only, "Today at {time}") · values "Ready",
 "Missing", "SaveSama {version} · API {api}" · buttons "Update extractor" / "Updating…", "Setup
 guide" · helper while jobs run "Finish or cancel running downloads first." · section "Servers" ·
 row status "Online", "Offline", "Checking" · "Add a server" · menu "Rename", "Remove" · rename
@@ -876,7 +886,7 @@ tone-step depth with shadows only on floating things; tabular treatment of machi
 the "SaveSama" album name and `savesama` scheme (user data bindings, §17 of MAINTENANCE.md).
 
 Avoid: warm near-black + orange accent (category default, now replaced by deck yellow + ink);
-monospace for "machine output" (reads as costume; replaced by Geist tabular figures); Feather icons
+monospace for "machine output" (reads as costume; replaced by Schibsted Grotesk tabular figures); Feather icons
 (the default AI icon set; replaced by Phosphor); a single-screen layout where status, errors and
 results stack in one scroll; overline labels; in-app platform sign-in (now forbidden); an ad band
 reserved at the bottom; disabled predictive back.

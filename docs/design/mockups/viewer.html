@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Viewer</title><link rel="stylesheet" href="base.css">
+<style>
+  .phone { background: #000; color: #fff; }
+  .media { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); }
+  .media img { width: 100%; display: block; aspect-ratio: 9/16; object-fit: cover; max-height: 915px; }
+  .top { position: absolute; top: 0; left: 0; right: 0; padding-top: 32px; background: var(--media-scrim); display: flex; align-items: center; gap: 4px; padding-left: 4px; padding-right: 4px; z-index: 2; }
+  .top .iconbtn { color: #fff; }
+  .bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 36px; background: var(--media-scrim); z-index: 2; }
+  .seek { height: 4px; border-radius: 2px; background: rgba(255,255,255,.24); position: relative; margin: 12px 0 8px; }
+  .seek b { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: #FFD12E; border-radius: 2px; }
+  .seek b::after { content: ""; position: absolute; right: -8px; top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #FFD12E; }
+  .times { display: flex; justify-content: space-between; font: 500 12px/16px Schibsted; font-variant-numeric: tabular-nums; color: #fff; }
+  .ctr { display: flex; justify-content: center; align-items: center; gap: 32px; margin-top: 8px; }
+  .play { width: 64px; height: 64px; border-radius: 50%; background: #fff; color: #000; display: grid; place-items: center; }
+</style></head>
+<body>
+<div class="phone" data-status="none" data-gesture="none">
+  <div class="media"><img src="assets/photos/skater.jpg" alt=""></div>
+  <div class="top">
+    <span class="iconbtn" data-icon="arrow-left"></span>
+    <span class="t-body-m one" style="flex:1">Kickflip over the stadium gap</span>
+    <span class="iconbtn" data-icon="share-network"></span>
+    <span class="iconbtn" data-icon="info"></span>
+    <span class="iconbtn" data-icon="trash"></span>
+  </div>
+  <div class="bottom">
+    <div class="t-meta" style="color:#fff;display:flex;gap:8px;align-items:center"><span data-icon="tiktok-logo" data-icon-class="s16"></span>TikTok · @montreal.sk8 · Saved today</div>
+    <div class="seek"><b></b></div>
+    <div class="times"><span>0:18</span><span>0:48</span></div>
+    <div class="ctr"><span class="play" data-icon="pause-fill"></span></div>
+  </div>
+  <span class="mock-note" style="top:96px;bottom:auto;color:#fff">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>
