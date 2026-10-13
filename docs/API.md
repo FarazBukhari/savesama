@@ -21,6 +21,14 @@ Supported platforms: `youtube`, `instagram`, `tiktok`, `facebook`, `threads`.
 - Every route except `GET /api/v1/info` requires `Authorization: Bearer <token>`.
   Missing/wrong token → `401 {"error": {"code": "unauthorized", ...}}`.
 - Request bodies over 64 KB → `413`.
+- CORS: every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` preflights answer
+  `204` allowing `GET, POST, DELETE, OPTIONS` and headers `Authorization, Content-Type, Range`
+  (expose `Content-Length, Content-Range, Content-Disposition`). Safe because auth is a bearer
+  header, never a cookie; it lets the app's web build be tested against a real server.
+- Hosts: `/resolve` and `/jobs` only accept URLs whose host belongs to a supported platform
+  (youtube.com, youtu.be, instagram.com, tiktok.com, facebook.com, fb.watch, threads.com,
+  threads.net and their subdomains); anything else → `unsupported_url`. The server never
+  fetches arbitrary user-supplied hosts.
 - All errors use one shape:
   ```json
   {"error": {"code": "<code>", "message": "<human readable, safe to show the user>"}}
