@@ -93,6 +93,30 @@ def main(argv: list[str] | None = None) -> None:
 
 
 PID_FILE = os.path.join(DATA_DIR, "server.pid")
+LOCK_FILE = os.path.join(DATA_DIR, "server.lock")
+
+
+def _lock_data_dir():
+    """Hold an OS lock on ~/.savesama for the process lifetime (one server per data dir).
+
+    The OS drops it when the process dies, so a crash or reboot never leaves a stale lock.
+    Returns the open file (keep a reference) or None if another server holds it.
+    """
+    fh = open(LOCK_FILE, "a+")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return None
+    return fh
 
 
 def stop_running() -> bool:
@@ -142,16 +166,25 @@ def serve(args, token: str, name: str) -> None:
     from .jobs import JobManager
     from .resolver import Resolver
 
+    lock = _lock_data_dir()
+    # After an in-place update on Windows the old process may still be exiting.
+    for _ in range(20 if os.environ.get("SAVESAMA_RESTARTED") else 0):
+        if lock is not None:
+            break
+        time.sleep(0.5)
+        lock = _lock_data_dir()
+    if lock is None:
+        log.error("another SaveSama server is already running (stop it with `savesama stop`)")
+        sys.exit(1)
     downloads = os.path.abspath(os.path.expanduser(args.dir or os.path.join(DATA_DIR, "downloads")))
     ffmpeg = shutil.which("ffmpeg") is not None
     resolver = Resolver(can_mux=ffmpeg)
-    jobs = JobManager(DATA_DIR, downloads, resolver, workers=max(1, min(args.workers, 8)), can_mux=ffmpeg)
     bind = "127.0.0.1" if args.local_only else "0.0.0.0"
 
     server = None
     for attempt in range(20):  # after an in-place restart the old socket may linger briefly
         try:
-            server = Server((bind, args.port), token=token, name=name, jobs=jobs, resolver=resolver,
+            server = Server((bind, args.port), token=token, name=name, jobs=None, resolver=resolver,
                             ffmpeg=ffmpeg)
             break
         except OSError as e:
@@ -160,9 +193,17 @@ def serve(args, token: str, name: str) -> None:
                           bind, args.port, e)
                 sys.exit(1)
             time.sleep(0.5)
+    # Only now that the port is ours: the job manager clears temp files and starts workers,
+    # which must never happen next to another running instance.
+    jobs = JobManager(DATA_DIR, downloads, resolver, workers=max(1, min(args.workers, 8)), can_mux=ffmpeg)
+    server.jobs = jobs
 
     text, link, local_link = _pairing_text(args, token, name)
-    print(text, flush=True)
+    if sys.stdout.isatty():
+        print(text, flush=True)
+    else:  # e.g. Termux:Boot logging to a file: never write the token there
+        print(f"SaveSama server {__version__} - {name} on port {args.port}. "
+              "Run `savesama pair` in a terminal to show the pairing QR code.", flush=True)
     log.info("downloads: %s", downloads)
     log.info("yt-dlp %s, ffmpeg %s, JS runtime: %s", yt_dlp.version.__version__,
              "found" if ffmpeg else "MISSING (no HD merging or audio conversion)", ytdlp.runtime_summary())
