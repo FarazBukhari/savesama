@@ -92,6 +92,8 @@ class ApiTest(unittest.TestCase):
         self.assertEqual((resp.status, self.jbody(payload)["error"]["code"]), (400, "bad_request"))
         resp, payload = self.req("POST", "/resolve", raw=b"[1]")
         self.assertEqual(resp.status, 400)
+        resp, payload = self.req("POST", "/resolve", raw=b"{}", headers={"Content-Length": "-5"})
+        self.assertEqual(resp.status, 400)
         for body in ({"url": "u", "mode": "video"}, {"url": "u", "quality": "high"},
                      {"url": "u", "quality": -1}, {"url": "u", "items": []}, {"url": "u", "items": ["0"]},
                      {"url": "u", "items": [True]}):

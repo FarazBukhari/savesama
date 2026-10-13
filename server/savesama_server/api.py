@@ -71,6 +71,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = f"SaveSama/{__version__}"
     sys_version = ""
+    timeout = 120  # seconds a connection may sit idle (or stall a transfer) before it's dropped
 
     # ---- plumbing -------------------------------------------------------------------
 
@@ -114,6 +115,9 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self.close_connection = True
             raise ApiError("bad_request", "Invalid Content-Length.") from None
+        if length < 0:
+            self.close_connection = True
+            raise ApiError("bad_request", "Invalid Content-Length.")
         if length > MAX_BODY:
             raise _TooLarge()
         raw = self.rfile.read(length) if length > 0 else b""
