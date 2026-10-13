@@ -1,14 +1,9 @@
 #!/bin/bash
-# SessionStart hook: installs JS dependencies so typecheck and tests
-# work in Claude Code on the web sessions (fresh container each session).
+# Installs JS deps in Claude Code cloud sessions (fresh container each session).
+# Local machines manage their own deps.
 set -euo pipefail
 
-# Only needed in the remote (web) environment; local machines manage their own deps.
-if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
-  exit 0
-fi
-
+[ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 cd "$CLAUDE_PROJECT_DIR"
-
-# Idempotent: npm install is safe to re-run and benefits from container caching.
+[ -f package.json ] || exit 0
 npm install
