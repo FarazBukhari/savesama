@@ -161,13 +161,17 @@ def run_ffmpeg(args: list[str], cancel: threading.Event) -> None:
     err_chunks: list[bytes] = []
     reader = threading.Thread(target=lambda: err_chunks.append(proc.stderr.read()), daemon=True)
     reader.start()
-    while proc.poll() is None:
-        if cancel.is_set():
-            proc.kill()
-            proc.wait()
-            raise Cancelled()
-        time.sleep(0.2)
-    reader.join(2)
+    try:
+        while proc.poll() is None:
+            if cancel.is_set():
+                proc.kill()
+                proc.wait()
+                raise Cancelled()
+            time.sleep(0.2)
+        reader.join(2)
+    finally:
+        reader.join(2)
+        proc.stderr.close()
     if proc.returncode != 0:
         tail = b"".join(err_chunks).decode("utf-8", "replace")[-800:]
         raise RuntimeError(f"ffmpeg failed ({proc.returncode}): {tail}")
@@ -305,16 +309,6 @@ def file_name(resolved: Resolved, item_index: int, ext: str) -> str:
     if len(resolved.items) > 1:
         tag = f"{tag}-{item_index + 1}"
     return f"{base} [{tag}].{ext.lower()}"
-
-
-def unique_path(directory: str, name: str) -> str:
-    stem, ext = os.path.splitext(name)
-    candidate = os.path.join(directory, name)
-    n = 2
-    while os.path.exists(candidate):
-        candidate = os.path.join(directory, f"{stem} ({n}){ext}")
-        n += 1
-    return candidate
 
 
 def place(src: str, downloads_dir: str, name: str) -> str:
