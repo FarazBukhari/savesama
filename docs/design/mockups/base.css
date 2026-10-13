@@ -1,0 +1,223 @@
+/* SaveSama mockup foundation. Token names mirror DESIGN.md §3 one to one; 1 CSS px = 1 dp/sp. */
+@font-face { font-family: Michroma; src: url(assets/fonts/Michroma_400Regular.ttf); font-weight: 400; }
+@font-face { font-family: Geist; src: url(assets/fonts/Geist_400Regular.ttf); font-weight: 400; }
+@font-face { font-family: Geist; src: url(assets/fonts/Geist_500Medium.ttf); font-weight: 500; }
+@font-face { font-family: Geist; src: url(assets/fonts/Geist_600SemiBold.ttf); font-weight: 600; }
+@font-face { font-family: Geist; src: url(assets/fonts/Geist_700Bold.ttf); font-weight: 700; }
+
+:root {
+  --ground: #F3F3EF;
+  --surface: #FFFFFF;
+  --sunk: #E7E7E1;
+  --raised-press: #DCDCD5;
+  --ink: #15140F;
+  --ink-2: #56554D;
+  --ink-3: #6B6A61;
+  --deck: #FFD12E;
+  --on-deck: #15140F;
+  --on-deck-2: #4F4A2A;
+  --deck-well: #FFFFFF;
+  --action: #15140F;
+  --on-action: #FFFFFF;
+  --select: #FFD12E;
+  --on-select: #15140F;
+  --tape-track: #D6D5CD;
+  --tape-fill: #15140F;
+  --rec: #E0301A;
+  --rec-on-action: #E0301A;
+  --badge: #E0301A;
+  --ok: #1A6E43;
+  --ok-on-deck: #1A6E43;
+  --snack-action: #FFD12E;
+  --ok-soft: #DDEFE3;
+  --warn: #8A5A00;
+  --warn-soft: #F7EBCF;
+  --err: #B3261E;
+  --err-soft: #F9DEDC;
+  --scrim: rgba(21, 20, 15, 0.42);
+  --media-scrim: rgba(10, 10, 8, 0.62);
+  --sheet-shadow: 0 -8px 28px rgba(21, 20, 15, 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #111110;
+    --surface: #1C1C1A;
+    --sunk: #262624;
+    --raised-press: #31312E;
+    --ink: #F2F1EA;
+    --ink-2: #A9A89E;
+    --ink-3: #8F8E85;
+    --deck: #F0C52B;
+    --on-deck: #15140F;
+    --on-deck-2: #4A4524;
+    --deck-well: #1C1C1A;
+    --action: #F2F1EA;
+    --on-action: #15140F;
+    --select: #FFD12E;
+    --on-select: #15140F;
+    --tape-track: #33332F;
+    --tape-fill: #FFD12E;
+    --rec: #FF5A43;
+    --rec-on-action: #C42B17;
+    --badge: #C42B17;
+    --ok: #6FD49B;
+    --ok-on-deck: #1A6E43;
+    --snack-action: #8A5A00;
+    --ok-soft: #1D3326;
+    --warn: #F5C062;
+    --warn-soft: #3A2F14;
+    --err: #FFB4AB;
+    --err-soft: #3D1E1B;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --media-scrim: rgba(0, 0, 0, 0.62);
+    --sheet-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #777; }
+body {
+  font-family: Geist, sans-serif; color: var(--ink);
+  -webkit-font-smoothing: antialiased; font-feature-settings: "tnum" 0;
+}
+.phone {
+  position: relative; width: 412px; height: 915px; overflow: hidden;
+  background: var(--ground); display: flex; flex-direction: column;
+}
+.num { font-variant-numeric: tabular-nums; }
+svg.i { width: 24px; height: 24px; flex: none; fill: currentColor; }
+svg.i.s20 { width: 20px; height: 20px; }
+svg.i.s18 { width: 18px; height: 18px; }
+svg.i.s16 { width: 16px; height: 16px; }
+
+/* System bars (edge-to-edge: app paints under them) */
+.statusbar {
+  height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px 0 24px; font: 500 14px/1 Geist; color: var(--ink); position: relative; z-index: 3;
+}
+.statusbar .sys { display: flex; gap: 6px; align-items: center; }
+.statusbar .sys b { display: inline-block; width: 14px; height: 10px; border-radius: 2px; background: currentColor; opacity: .9; }
+.gesturebar { height: 24px; flex: none; display: grid; place-items: center; background: var(--surface); }
+.gesturebar::after { content: ""; width: 108px; height: 4px; border-radius: 2px; background: var(--ink); opacity: .5; }
+
+/* Type roles */
+.t-display { font: 400 26px/32px Michroma; letter-spacing: -0.5px; }
+.t-wordmark { font: 400 19px/24px Michroma; letter-spacing: -0.3px; }
+.t-headline { font: 600 24px/30px Geist; letter-spacing: -0.3px; }
+.t-title { font: 600 18px/24px Geist; letter-spacing: -0.1px; }
+.t-body-l { font: 400 17px/24px Geist; }
+.t-body { font: 400 16px/24px Geist; }
+.t-body-m { font: 500 16px/24px Geist; }
+.t-label { font: 500 15px/20px Geist; }
+.t-meta { font: 400 14px/20px Geist; color: var(--ink-2); }
+.t-meta-m { font: 500 14px/20px Geist; }
+.t-caption { font: 500 12px/16px Geist; letter-spacing: .2px; }
+.ink2 { color: var(--ink-2); }
+.ink3 { color: var(--ink-3); }
+
+/* Large top app bar */
+.appbar { flex: none; padding: 16px 20px 12px; display: flex; align-items: flex-end; justify-content: space-between; min-height: 72px; }
+.appbar .acts { display: flex; gap: 4px; margin-right: -12px; }
+
+/* Buttons */
+.btn {
+  height: 48px; padding: 0 20px; border-radius: 999px; border: 0; display: inline-flex; align-items: center;
+  justify-content: center; gap: 8px; font: 500 15px/20px Geist; white-space: nowrap;
+}
+.btn.primary { background: var(--action); color: var(--on-action); }
+.btn.tonal { background: var(--sunk); color: var(--ink); }
+.btn.text { background: transparent; color: var(--ink); padding: 0 12px; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.btn.big { height: 56px; font-size: 16px; width: 100%; }
+.btn.danger { background: var(--err-soft); color: var(--err); }
+.btn[disabled] { background: var(--sunk); color: var(--ink-3); }
+.btn .rec { width: 12px; height: 12px; border-radius: 50%; background: var(--rec-on-action); flex: none; }
+.iconbtn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--ink); flex: none; }
+.iconbtn.tonal { background: var(--sunk); }
+
+/* Chips */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  height: 36px; padding: 0 14px; border-radius: 10px; background: var(--sunk); color: var(--ink);
+  display: inline-flex; align-items: center; gap: 6px; font: 500 14px/20px Geist; white-space: nowrap;
+  position: relative;
+}
+/* 36dp paint inside a 48dp hit area, see DESIGN.md §6.3 */
+.chip.on { background: var(--select); color: var(--on-select); }
+
+/* Segmented */
+.seg { display: flex; background: var(--sunk); border-radius: 999px; padding: 4px; gap: 4px; }
+.seg > div { flex: 1; height: 40px; border-radius: 999px; display: flex; align-items: center; justify-content: center; gap: 6px; font: 500 15px/20px Geist; color: var(--ink-2); }
+.seg > div.on { background: var(--select); color: var(--on-select); }
+
+/* Fields */
+.field { background: var(--surface); border-radius: 16px; padding: 14px 16px; }
+.field.sunk { background: var(--sunk); }
+.input { height: 48px; border-radius: 14px; background: var(--sunk); display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--ink-3); font: 400 16px/24px Geist; }
+.lbl { font: 500 14px/20px Geist; color: var(--ink-2); margin: 0 0 6px 4px; }
+
+/* Lists */
+.row { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 20px; }
+.group .row { padding: 8px 12px; }
+.row .grow { flex: 1; min-width: 0; }
+.row .one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group { background: var(--surface); border-radius: 20px; margin: 0 8px; overflow: hidden; }
+.group .row + .row { box-shadow: 0 -2px 0 var(--ground); }
+.gtitle { font: 600 14px/20px Geist; color: var(--ink-2); padding: 24px 20px 8px; }
+
+/* Thumbs */
+.thumb { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; flex: none; background: var(--sunk); }
+.pf { width: 20px; height: 20px; }
+
+/* Signature: the tape line (three spans: Server · To phone · Saved) */
+.tape { display: flex; gap: 3px; height: 6px; margin-top: 10px; }
+.tape > i { display: block; height: 100%; border-radius: 3px; background: var(--tape-track); position: relative; overflow: hidden; }
+.tape > i:nth-child(1) { flex: 6; }
+.tape > i:nth-child(2) { flex: 3; }
+.tape > i:nth-child(3) { flex: 1; }
+.tape > i > b { position: absolute; inset: 0 auto 0 0; background: var(--tape-fill); border-radius: 3px; }
+.tape-legend { display: flex; gap: 3px; margin-top: 6px; font: 500 12px/16px Geist; color: var(--ink-3); letter-spacing: .2px; }
+.tape-legend > span:nth-child(1) { flex: 6; }
+.tape-legend > span:nth-child(2) { flex: 3; }
+.tape-legend > span:nth-child(3) { flex: 1; text-align: right; white-space: nowrap; }
+.tape-legend > .now { color: var(--ink); }
+
+/* Status dot */
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.ok { background: var(--ok); }
+.dot.rec { background: var(--rec); }
+.dot.off { background: var(--ink-3); }
+.pill { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 10px; border-radius: 999px; font: 500 14px/20px Geist; }
+
+/* Banners (inline notices) */
+.banner { display: flex; gap: 12px; padding: 14px 16px; border-radius: 16px; align-items: flex-start; }
+.banner.warn { background: var(--warn-soft); color: var(--ink); }
+.banner.warn > svg { color: var(--warn); }
+.banner.err { background: var(--err-soft); }
+.banner.err > svg { color: var(--err); }
+.banner.ok { background: var(--ok-soft); }
+.banner.ok > svg { color: var(--ok); }
+.banner.info { background: var(--sunk); }
+
+/* Navigation bar (Material 3) */
+.navbar { flex: none; height: 80px; background: var(--surface); display: flex; padding: 12px 4px 16px; }
+.navbar > div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; font: 500 12px/16px Geist; color: var(--ink-2); letter-spacing: .2px; position: relative; }
+.navbar .ind { width: 64px; height: 32px; border-radius: 999px; display: grid; place-items: center; position: relative; }
+.navbar .on { color: var(--ink); font-weight: 600; }
+.navbar .on .ind { background: var(--select); color: var(--on-select); }
+.navbar .badge { position: absolute; top: -2px; left: 38px; min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; background: var(--badge); color: #fff; font: 600 11px/18px Geist; text-align: center; }
+
+/* Scrim + sheet */
+.scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 5; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 28px 28px 0 0; z-index: 6; box-shadow: var(--sheet-shadow); display: flex; flex-direction: column; }
+.handle { width: 32px; height: 4px; border-radius: 2px; background: var(--ink-3); opacity: .6; margin: 12px auto 4px; flex: none; }
+
+/* Snackbar */
+.snack { position: absolute; left: 12px; right: 12px; bottom: 116px; min-height: 52px; border-radius: 12px; background: var(--ink); color: var(--ground); display: flex; align-items: center; padding: 6px 8px 6px 16px; gap: 8px; font: 400 15px/20px Geist; z-index: 4; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.snack .act { margin-left: auto; font: 600 15px/20px Geist; color: var(--snack-action); padding: 14px 12px; }
+
+.scroll { flex: 1; overflow: hidden; }
+.mock-note { position: absolute; right: 8px; bottom: 108px; font: 500 10px/1 Geist; color: var(--ink-3); opacity: .7; z-index: 2; }
+
+/* Card: 8dp from the screen edge, 12dp inner padding, so card content shares the 20dp text edge */
+.card { margin: 0 8px; background: var(--surface); border-radius: 20px; padding: 14px 12px; }
+.well-ink { color: var(--ink); }
