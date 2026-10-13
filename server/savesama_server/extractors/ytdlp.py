@@ -182,7 +182,9 @@ def _is_aac(f: dict) -> bool:
 
 
 def _audio_score(f: dict) -> tuple:
-    return (_is_aac(f) or f.get("ext") == "m4a", f.get("abr") or f.get("tbr") or 0)
+    # "-drc" is YouTube's dynamic-range-compressed copy of the same track.
+    return (_is_aac(f) or f.get("ext") == "m4a", "drc" not in str(f.get("format_id")),
+            f.get("abr") or f.get("tbr") or 0)
 
 
 def _proto_score(f: dict) -> int:
