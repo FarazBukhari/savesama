@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Server</title><link rel="stylesheet" href="base.css">
+<style>
+  .card .kv + .kv { box-shadow: 0 -2px 0 var(--ground); }
+  .kv .t-meta-m { text-align: right; }
+  .srow { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 4px 8px 12px; }
+  .group .srow + .srow { box-shadow: 0 -2px 0 var(--ground); }
+</style></head>
+<body>
+<div class="phone" data-tab="server">
+  <div class="appbar"><span class="t-display">Server</span></div>
+  <div class="scroll">
+    <div class="card" style="padding-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <span class="t-headline one">Pixel 8 (Termux)</span>
+        <span class="pill" style="background:var(--ok-soft);color:var(--ink)"><i class="dot ok"></i>Online</span>
+      </div>
+      <div style="margin-top:12px">
+        <div class="kv"><span class="t-meta">Address</span><span class="t-meta-m num">127.0.0.1:8765</span></div>
+        <div class="kv"><span class="t-meta">Extractor</span><span class="t-meta-m num">yt-dlp 2026.08.19</span></div>
+        <div class="kv"><span class="t-meta">ffmpeg</span><span class="t-meta-m">Ready</span></div>
+        <div class="kv"><span class="t-meta">Server</span><span class="t-meta-m num">SaveSama 0.1.0 · API 1</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <span class="btn tonal" data-icon="arrows-clockwise" data-icon-class="s20">Update extractor</span>
+        <span class="btn text">Setup guide</span>
+      </div>
+    </div>
+
+    <div class="gtitle">Servers</div>
+    <div class="group">
+      <div class="srow">
+        <span class="radio on"></span>
+        <div style="flex:1;min-width:0"><div class="t-body-m one">Pixel 8 (Termux)</div><div class="t-meta num">127.0.0.1:8765 · This phone</div></div>
+        <span class="t-meta" style="color:var(--ok)">Online</span>
+        <span class="iconbtn" data-icon="dots-three-vertical" style="color:var(--ink-2)"></span>
+      </div>
+      <div class="srow">
+        <span class="radio"></span>
+        <div style="flex:1;min-width:0"><div class="t-body-m one">Faraz-PC</div><div class="t-meta num">192.168.1.20:8765</div></div>
+        <span class="t-meta">Offline</span>
+        <span class="iconbtn" data-icon="dots-three-vertical" style="color:var(--ink-2)"></span>
+      </div>
+      <div class="srow" style="padding-right:12px">
+        <span data-icon="plus" style="color:var(--ink)"></span>
+        <div class="t-body-m" style="flex:1">Add a server</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+</body></html>

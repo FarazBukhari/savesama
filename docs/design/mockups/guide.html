@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Set up on this phone</title><link rel="stylesheet" href="base.css">
+<style>
+  .bar { display: flex; align-items: center; gap: 4px; height: 64px; padding: 0 4px; flex: none; }
+  .steps > li .t-meta { margin-top: 2px; }
+  .steps .code { margin-top: 10px; margin-left: 0; }
+  .steps .btn { margin-top: 6px; margin-left: -12px; }
+</style></head>
+<body>
+<div class="phone">
+  <div class="bar"><span class="iconbtn" data-icon="arrow-left"></span><span class="t-title">Set up on this phone</span></div>
+  <div class="scroll">
+    <p class="t-body ink2" style="padding:4px 20px 20px">About five minutes, once. After that SaveSama starts saving whenever the server is running.</p>
+    <ol class="steps">
+      <li><div class="t-body-m">Install Termux</div><div class="t-meta">Get it from F-Droid. The Play Store version is outdated and won't work.</div>
+        <span class="btn text" data-icon="arrow-square-out" data-icon-class="s18">Open F-Droid</span></li>
+      <li><div class="t-body-m">Install the tools</div>
+        <div class="code"><span>pkg update -y &amp;&amp; pkg install -y python ffmpeg git</span><span class="iconbtn" data-icon="copy" data-icon-class="s20"></span></div></li>
+      <li><div class="t-body-m">Install the SaveSama server</div>
+        <div class="code"><span>pip install "git+https://github.com/FarazBukhari/savesama#subdirectory=server"</span><span class="iconbtn" data-icon="copy" data-icon-class="s20"></span></div></li>
+      <li><div class="t-body-m">Start it</div><div class="t-meta">It shows a QR code and opens SaveSama to pair. Leave Termux running.</div>
+        <div class="code"><span>savesama</span><span class="iconbtn" data-icon="copy" data-icon-class="s20"></span></div></li>
+      <li><div class="t-body-m">Keep it awake</div><div class="t-meta">In Android settings, set Termux's battery use to Unrestricted. In the Termux notification, tap Acquire wakelock.</div></li>
+    </ol>
+  </div>
+  <div class="mock-note" style="top:40px;bottom:auto">Commands illustrative; source of truth is docs/SERVER.md</div>
+</div>
+<script src="shared.js"></script>
+</body></html>

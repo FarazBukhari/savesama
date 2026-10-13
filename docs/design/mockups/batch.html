@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Save several links</title><link rel="stylesheet" href="base.css">
+<style>
+  .under { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .ctl { padding: 12px 20px 0; }
+  .lrow { display: flex; gap: 12px; align-items: center; min-height: 72px; padding: 8px 20px; }
+  .lrow + .lrow { box-shadow: 0 -2px 0 var(--ground); }
+  .lrow .grow { flex: 1; min-width: 0; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--ink-3); flex: none; }
+</style></head>
+<body>
+<div class="phone" data-status="deck" data-gesture="none">
+  <div class="under"><section class="deck" style="height:420px"><div class="deck-top" style="margin-top:32px"><span class="t-wordmark">SaveSama</span></div></section></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 8px 0 20px">
+      <span class="t-title">Save 4 links</span><span class="iconbtn" data-icon="x"></span>
+    </div>
+    <div class="ctl"><div class="seg"><div class="on">Video</div><div>Audio only</div></div></div>
+    <div class="ctl"><div class="chips"><span class="chip on" data-icon="check-bold" data-icon-class="s16">Best</span><span class="chip">1080p</span><span class="chip">720p</span><span class="chip">480p</span><span class="chip">360p</span></div></div>
+    <div style="margin-top:12px">
+      <div class="lrow"><img class="thumb" src="assets/photos/lake.jpg" alt=""><div class="grow"><div class="t-body-m one">Hunza in four seasons, 4K drone cut</div><div class="t-meta stat num"><span data-icon="youtube-logo" data-icon-class="s16"></span>Video · 14:07</div></div><span data-icon="caret-right" data-icon-class="s20" style="color:var(--ink-2)"></span></div>
+      <div class="lrow"><img class="thumb" src="assets/photos/skater.jpg" alt=""><div class="grow"><div class="t-body-m one">Kickflip over the stadium gap</div><div class="t-meta stat num"><span data-icon="tiktok-logo" data-icon-class="s16"></span>Video · 0:48 · <span style="color:var(--warn);display:inline-flex;gap:4px;align-items:center"><span data-icon="clock-counter-clockwise" data-icon-class="s16"></span>Saved before</span></div></div><span data-icon="caret-right" data-icon-class="s20" style="color:var(--ink-2)"></span></div>
+      <div class="lrow"><span class="thumb" style="display:grid;place-items:center;color:var(--ink-3)" data-icon="facebook-logo"></span><div class="grow"><div class="t-body one ink2">facebook.com/watch/?v=1029384756</div><div class="t-meta stat"><i class="spin"></i>Reading…</div></div></div>
+      <div class="lrow"><span class="thumb" style="display:grid;place-items:center;color:var(--ink-3)" data-icon="instagram-logo"></span><div class="grow"><div class="t-body one ink2">instagram.com/p/C8kQ0aLx2Zt</div><div class="t-meta stat" style="color:var(--err)"><span data-icon="lock" data-icon-class="s16"></span>Needs an account. Will be skipped</div></div></div>
+    </div>
+    <div class="footer" style="padding-top:16px"><span class="btn primary big"><i class="rec"></i>Save 2 links</span></div>
+    <div class="gesturebar"></div>
+  </div>
+  <span class="mock-note" style="top:40px;bottom:auto;z-index:7;color:#fff">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>
