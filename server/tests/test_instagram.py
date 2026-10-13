@@ -71,6 +71,7 @@ class EmbedParseTest(unittest.TestCase):
 class ExtractFlowTest(unittest.TestCase):
     def setUp(self):
         instagram._csrf = None
+        instagram._graphql_blocked_until = 0.0
 
     def test_graphql_recipe(self):
         fake = FakeNet([
@@ -105,6 +106,13 @@ class ExtractFlowTest(unittest.TestCase):
         self.assertEqual(res.via, "embed")
         self.assertEqual(len(res.items), 3)
         self.assertIn("facebookexternalhit", fake.calls[-1]["ua"])
+        # The rate limit starts a cooldown: the next link skips GraphQL entirely.
+        fake.calls.clear()
+        with mock.patch.object(net, "request", fake), \
+                mock.patch.object(ytdlp, "resolve", side_effect=AssertionError("must not be needed")):
+            instagram.extract("https://www.instagram.com/p/BQ0eAlwhDrw/", True)
+        self.assertEqual([c["method"] for c in fake.calls], ["GET"])
+        self.assertIn("/embed/", fake.calls[0]["url"])
 
     def test_blocked_reel_falls_back_to_ytdlp(self):
         fake = FakeNet([

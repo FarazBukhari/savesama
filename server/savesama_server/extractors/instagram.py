@@ -38,6 +38,10 @@ _EMBED_IMG_RE = re.compile(r'<img[^>]+class="EmbeddedMediaImage"[^>]+src="([^"]+
 _csrf_lock = threading.Lock()
 _csrf: tuple[str, float] | None = None
 CSRF_TTL = 30 * 60
+# After Instagram rate-limits GraphQL, go straight to the fallbacks for a while instead of
+# spending two more requests per link and deepening the limit.
+GRAPHQL_COOLDOWN = 10 * 60
+_graphql_blocked_until = 0.0
 
 
 def _csrf_token() -> str:
@@ -168,13 +172,17 @@ def extract(url: str, can_mux: bool) -> Resolved:
     post_url = f"https://www.instagram.com/p/{code}/"
     errors: list[ApiError] = []
 
-    try:
-        media = via_graphql(code)
-        info = meta.meta_from_graph(media)
-        return _resolved(post_url, code, info, meta.items_from_graph(media, can_mux), "graphql")
-    except ApiError as e:
-        log.info("instagram graphql %s: %s", code, e)
-        errors.append(e)
+    global _graphql_blocked_until
+    if time.time() >= _graphql_blocked_until:
+        try:
+            media = via_graphql(code)
+            info = meta.meta_from_graph(media)
+            return _resolved(post_url, code, info, meta.items_from_graph(media, can_mux), "graphql")
+        except ApiError as e:
+            log.info("instagram graphql %s: %s", code, e)
+            if e.code == "rate_limited":
+                _graphql_blocked_until = time.time() + GRAPHQL_COOLDOWN
+            errors.append(e)
 
     partial = None
     try:
