@@ -60,6 +60,7 @@ PY="$VENV/bin/python"
 "$PY" -m pip install --quiet --upgrade --disable-pip-version-check pip || warn "couldn't upgrade pip; continuing"
 
 say "Installing the SaveSama server"
+export GIT_TERMINAL_PROMPT=0  # a private repo must fail fast, not hang on a password prompt
 install_from() {
     "$PY" -m pip install --upgrade --disable-pip-version-check --no-input "$1"
 }
@@ -76,7 +77,11 @@ elif ! install_from "git+$REPO@$REF#subdirectory=server"; then
     else
         die "couldn't install the server from branch $REF"
     fi
-fi
+fi || die "couldn't download the server from GitHub. If the repository is private, install with
+the GitHub CLI instead (see docs/SERVER.md):
+  pkg install -y gh git && gh auth login && gh auth setup-git
+  gh repo clone FarazBukhari/savesama ~/savesama -- -b $FALLBACK_REF
+  bash ~/savesama/server/install-termux.sh"
 
 say "Updating the extractor (yt-dlp) to the latest release"
 "$PY" -m savesama_server.update || warn "extractor update failed; the installed version still works"
