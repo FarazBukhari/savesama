@@ -39,9 +39,10 @@ def _setup_logging(verbose: bool) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="savesama", description="SaveSama download server.")
-    p.add_argument("command", nargs="?", default="serve", choices=["serve", "pair", "reset-token"],
+    p.add_argument("command", nargs="?", default="serve", choices=["serve", "pair", "stop", "reset-token"],
                    help="serve (default): run the server; pair: show the pairing QR/link again; "
-                        "reset-token: make a new pairing token (unpairs every app)")
+                        "stop: stop a running server; reset-token: make a new pairing token "
+                        "(unpairs every app)")
     p.add_argument("--port", type=int, default=int(os.environ.get("SAVESAMA_PORT", DEFAULT_PORT)))
     p.add_argument("--dir", default=os.environ.get("SAVESAMA_DIR"),
                    help="where finished files wait for the app (default ~/.savesama/downloads)")
@@ -74,6 +75,8 @@ def _pairing_text(args, token: str, name: str) -> tuple[str, str, str]:
 def main(argv: list[str] | None = None) -> None:
     args = _parser().parse_args(argv)
     token_path = os.path.join(DATA_DIR, "token")
+    if args.command == "stop":
+        sys.exit(0 if stop_running() else 1)
     if args.command == "reset-token":
         pairing.load_token(token_path, reset=True)
         print("New pairing token created. Restart the server and pair the app again.")
@@ -87,6 +90,45 @@ def main(argv: list[str] | None = None) -> None:
             pairing.open_on_termux(local_link)
         return
     serve(args, token, name)
+
+
+PID_FILE = os.path.join(DATA_DIR, "server.pid")
+
+
+def stop_running() -> bool:
+    try:
+        with open(PID_FILE, encoding="utf-8") as fh:
+            pid = int(fh.read().strip())
+    except (OSError, ValueError):
+        print("SaveSama server isn't running.")
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print("SaveSama server isn't running.")
+        _remove_pid(pid)
+        return False
+    except OSError as e:
+        print(f"Couldn't stop the server (pid {pid}): {e}")
+        return False
+    for _ in range(50):
+        time.sleep(0.2)
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+    print("SaveSama server stopped.")
+    return True
+
+
+def _remove_pid(pid: int) -> None:
+    try:
+        with open(PID_FILE, encoding="utf-8") as fh:
+            if int(fh.read().strip()) != pid:
+                return
+        os.remove(PID_FILE)
+    except (OSError, ValueError):
+        pass
 
 
 def serve(args, token: str, name: str) -> None:
@@ -132,6 +174,8 @@ def serve(args, token: str, name: str) -> None:
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, stop)
+    with open(PID_FILE, "w", encoding="utf-8") as fh:
+        fh.write(str(os.getpid()))
     try:
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
@@ -142,4 +186,5 @@ def serve(args, token: str, name: str) -> None:
                 time.sleep(1)
         jobs.save()
         server.server_close()
+        _remove_pid(os.getpid())
         print("SaveSama server stopped.")
