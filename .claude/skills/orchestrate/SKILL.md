@@ -14,7 +14,9 @@ Invoking this skill is the user's explicit opt-in to multi-agent orchestration, 
 1. **Task.** Empty task → ask the user what to orchestrate and stop.
 2. **Understand first.** Read the code the task touches. If the task is small enough for one agent, say so and just do it yourself.
 3. **Decompose.** Split into units with **disjoint file ownership**: list the files each unit owns. Units that must touch the same file are merged into one unit or run in sequence. Note dependencies between units.
-4. **Run.**
+4. **Run.** Every agent runs on Opus: pass `model: "opus"` on each Agent call and in each
+   Workflow `agent()` options. Never use Fable, and don't use the `fork` agent type (forks
+   inherit the parent's model).
    - Workflow tool available → load the `workflow-authoring` skill, then write a script with phases Implement → Verify, piping each unit's result into its own verification. Respect the session's agent-count guideline.
    - Otherwise → Agent tool: launch all independent units in one message; use `isolation: "worktree"` when ownership can't be kept disjoint. Run dependent units after their inputs finish.
    - Every agent prompt is self-contained: goal, files it owns, files it must not edit, how to verify, what to return.
