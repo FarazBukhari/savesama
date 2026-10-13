@@ -104,7 +104,9 @@ Android likes to put background apps to sleep. Do all of these once:
    process restrictions**. On Android 12 and 13, search the web for "Termux phantom process
    killer adb" for the one-time fix.
 5. **Start on boot (optional):** install Termux:Boot, open it once, then re-run the installer
-   and answer **y** to the autostart question. Its log is `~/.savesama/boot.log`.
+   and answer **y** to the autostart question. Its log is `~/.savesama/boot.log`. A server
+   started this way runs without a window, so type `savesama pair` in Termux to see the QR
+   code. (The pairing code is only ever shown on screen, never written to a log.)
 
 ### 1.6 Updating
 
