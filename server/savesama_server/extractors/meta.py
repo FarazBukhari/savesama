@@ -169,7 +169,8 @@ def meta_from_graph(media: dict) -> dict:
 
 
 def is_complete(items: list[Item]) -> bool:
-    return all(i.variants for i in items)
+    """Every item can be downloaded (directly, or through yt-dlp's entry)."""
+    return all(i.variants or i.source == "ytdlp" for i in items)
 
 
 # ---- page helpers ----------------------------------------------------------------------

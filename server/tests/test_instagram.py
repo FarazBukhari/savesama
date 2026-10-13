@@ -53,7 +53,7 @@ class GraphqlParseTest(unittest.TestCase):
 
 class EmbedParseTest(unittest.TestCase):
     def test_live_sidecar_embed_has_video_urls(self):
-        media, img = instagram.parse_embed(fixture("instagram_embed_sidecar.html"))
+        media, img, _ = instagram.parse_embed(fixture("instagram_embed_sidecar.html"))
         self.assertIsNone(img)
         items = meta.items_from_graph(media, True)
         self.assertEqual(len(items), 3)
@@ -61,7 +61,8 @@ class EmbedParseTest(unittest.TestCase):
         self.assertTrue(all(i.type == "video" and i.variants for i in items))
 
     def test_live_copyright_blocked_reel_is_incomplete(self):
-        media, img = instagram.parse_embed(fixture("instagram_embed_reel_blocked.html"))
+        media, img, author = instagram.parse_embed(fixture("instagram_embed_reel_blocked.html"))
+        self.assertEqual(author, "instagram")
         self.assertIsNone(img)  # a video must never degrade to its poster
         items = meta.items_from_graph(media, True)
         self.assertFalse(meta.is_complete(items))
@@ -129,6 +130,27 @@ class ExtractFlowTest(unittest.TestCase):
         self.assertIs(res, yres)
         yt.assert_called_once()
 
+    def test_carousel_merge_matches_videos_by_position(self):
+        from savesama_server.extractors import meta as meta_mod
+
+        partial_items = [Item(index=0, type="image", variants=[Variant("img")]),
+                         Item(index=1, type="video", variants=[Variant("embed-A")]),
+                         Item(index=2, type="video")]  # blocked in the embed
+        partial = Resolved(url="u", platform="instagram", id="C", items=partial_items, via="embed")
+        yres = Resolved(url="u", platform="instagram", id="C", via="yt-dlp", items=[
+            Item(index=0, type="video", source="ytdlp", playlist_index=2),
+            Item(index=1, type="video", source="ytdlp", playlist_index=3)])
+        with mock.patch.object(instagram, "via_graphql", side_effect=ApiError("rate_limited")), \
+                mock.patch.object(instagram, "via_embed", return_value=({"x": 1}, None, None)), \
+                mock.patch.object(meta_mod, "items_from_graph", return_value=partial_items), \
+                mock.patch.object(instagram, "_resolved", return_value=partial), \
+                mock.patch.object(ytdlp, "resolve", return_value=yres):
+            res = instagram.extract("https://www.instagram.com/p/C/", True)
+        self.assertEqual([i.variants[0].url if i.variants else i.source for i in res.items],
+                         ["img", "embed-A", "ytdlp"])
+        self.assertIs(res.items[2], yres.items[1])
+        self.assertEqual((res.items[2].playlist_index, res.items[2].index), (3, 2))
+
     def test_all_strategies_fail_picks_most_specific(self):
         fake = FakeNet([
             ("GET", "/embed/captioned/", response("<html>no media</html>")),
@@ -141,12 +163,22 @@ class ExtractFlowTest(unittest.TestCase):
                 instagram.extract("https://www.instagram.com/p/Gone123/", True)
         self.assertEqual(ctx.exception.code, "not_found")
 
-    def test_photo_post_from_embed_image_only(self):
-        html = ('<img class="EmbeddedMediaImage" alt="x" src="https://scontent.cdninstagram.com/v/p.jpg?a=1&amp;b=2" />'
-                '<script>{"contextJSON":' + json.dumps(json.dumps({"context": {"type": "GraphImage"}, "gql_data": None})) + '}</script>')
-        media, img = instagram.parse_embed(html)
+    def test_live_photo_embed(self):
+        media, img, author = instagram.parse_embed(fixture("instagram_embed_photo.html"))
         self.assertIsNone(media)
-        self.assertEqual(img, "https://scontent.cdninstagram.com/v/p.jpg?a=1&b=2")
+        self.assertEqual(author, "world_record_egg")
+        self.assertIn("stp=dst-jpg_e35_tt6&", img)  # full size, entities decoded, not a crop
+
+    def test_photo_post_flow(self):
+        fake = FakeNet([
+            ("GET", "/embed/captioned/", response(fixture("instagram_embed_photo.html"))),
+            ("GET", "instagram.com/", home()),
+            ("POST", "/graphql/query", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
+        ])
+        with mock.patch.object(net, "request", fake), \
+                mock.patch.object(ytdlp, "resolve", side_effect=AssertionError("yt-dlp can't do photos")):
+            res = instagram.extract("https://www.instagram.com/p/BsOGulcndj-/", True)
+        self.assertEqual((res.via, res.author, [i.type for i in res.items]), ("embed-img", "world_record_egg", ["image"]))
 
     def test_non_post_links(self):
         for url, code in [("https://www.instagram.com/reels/audio/123/", "unavailable"),
