@@ -73,6 +73,11 @@ def _pairing_text(args, token: str, name: str) -> tuple[str, str, str]:
 
 
 def main(argv: list[str] | None = None) -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:  # a Windows console in a legacy code page can't print every title or the QR blocks
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     args = _parser().parse_args(argv)
     token_path = os.path.join(DATA_DIR, "token")
     if args.command == "stop":
@@ -135,12 +140,15 @@ def stop_running() -> bool:
     except OSError as e:
         print(f"Couldn't stop the server (pid {pid}): {e}")
         return False
-    for _ in range(50):
-        time.sleep(0.2)
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            break
+    if os.name == "nt":
+        time.sleep(1)  # TerminateProcess is immediate; os.kill(pid, 0) would send Ctrl+C here
+    else:
+        for _ in range(50):
+            time.sleep(0.2)
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                break
     print("SaveSama server stopped.")
     return True
 
