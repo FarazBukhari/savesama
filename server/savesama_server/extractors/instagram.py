@@ -113,11 +113,16 @@ def via_graphql(code: str) -> dict:
     return parse_graphql(resp.text(), resp.status)
 
 
-def parse_embed(html_text: str) -> tuple[dict | None, str | None]:
-    """(graph-shaped shortcode_media or None, photo URL or None) from an embed page.
+_MEDIA_TYPE_RE = re.compile(r'data-media-type="(Graph\w+)"')
+_SHARED_BY_RE = re.compile(r'alt="[^"]*?(?:@|&#064;)([A-Za-z0-9_.]+)"')
 
-    The photo URL is only returned for single-photo posts (context type GraphImage), so a
-    video can never silently degrade to its poster frame.
+
+def parse_embed(html_text: str) -> tuple[dict | None, str | None, str | None]:
+    """(graph-shaped shortcode_media or None, photo URL or None, author or None).
+
+    Photo embeds carry no contextJSON, only the <img class="EmbeddedMediaImage"> whose src is
+    the full-size picture. The photo URL is only returned when the post is a single photo
+    (GraphImage), so a video can never silently degrade to its poster frame.
     """
     m = _CONTEXT_JSON_RE.search(html_text)
     media, kind = None, None
@@ -128,22 +133,27 @@ def parse_embed(html_text: str) -> tuple[dict | None, str | None]:
             kind = (ctx.get("context") or {}).get("type")
         except (ValueError, TypeError, AttributeError):
             media = None
+    if not kind:
+        t = _MEDIA_TYPE_RE.search(html_text)
+        kind = t.group(1) if t else None
     img = _EMBED_IMG_RE.search(html_text) if kind == "GraphImage" else None
-    return media, (html_mod.unescape(img.group(1)) if img else None)
+    author = _SHARED_BY_RE.search(html_text)
+    return (media, html_mod.unescape(img.group(1)) if img else None,
+            author.group(1) if author else None)
 
 
-def via_embed(code: str) -> tuple[dict | None, str | None]:
+def via_embed(code: str) -> tuple[dict | None, str | None, str | None]:
     resp = net.request(f"https://www.instagram.com/p/{code}/embed/captioned/", ua=net.CRAWLER_UA)
     err = net.status_error(resp, "instagram")
     if err:
         raise err
     if net.is_login_url(resp.url):
         raise ApiError("login_required")
-    media, img = parse_embed(resp.text())
+    media, img, author = parse_embed(resp.text())
     if media is None and img is None:
         raise ApiError("not_found", "Instagram didn't return this post. It was deleted, or the "
                                     "account is private.")
-    return media, img
+    return media, img, author
 
 
 def resolve_share(url: str) -> str:
@@ -186,7 +196,7 @@ def extract(url: str, can_mux: bool) -> Resolved:
 
     partial = None
     try:
-        media, img = via_embed(code)
+        media, img, author = via_embed(code)
         if media:
             items = meta.items_from_graph(media, can_mux)
             res = _resolved(post_url, code, meta.meta_from_graph(media), items, "embed")
@@ -196,7 +206,8 @@ def extract(url: str, can_mux: bool) -> Resolved:
         elif img:
             item = Item(index=0, type="image", thumbnail=img,
                         variants=[Variant(img, has_audio=False, ext="jpg")])
-            partial = _resolved(post_url, code, {"id": code}, [item], "embed-img")
+            # A single photo is complete, and yt-dlp can't read photos anyway.
+            return _resolved(post_url, code, {"id": code, "author": author}, [item], "embed-img")
     except ApiError as e:
         log.info("instagram embed %s: %s", code, e)
         errors.append(e)
@@ -205,15 +216,18 @@ def extract(url: str, can_mux: bool) -> Resolved:
         res = ytdlp.resolve(post_url, "instagram", can_mux)
         res.id = res.id or code
         if partial and len(partial.items) > len(res.items):
-            # yt-dlp only sees a carousel's videos; keep the embed's full item list but take
-            # yt-dlp's renditions for the videos the embed couldn't expose.
-            vids = iter(res.items)
+            # yt-dlp only sees a carousel's videos (in post order); keep the embed's full item
+            # list and fill each video the embed couldn't expose from the matching yt-dlp video.
+            ytdlp_videos = [i for i in res.items if i.type == "video"]
+            nth = 0
             for idx, it in enumerate(partial.items):
-                if it.type == "video" and not it.variants:
-                    repl = next(vids, None)
-                    if repl:
-                        repl.index = idx
-                        partial.items[idx] = repl
+                if it.type != "video":
+                    continue
+                if not it.variants and nth < len(ytdlp_videos):
+                    repl = ytdlp_videos[nth]
+                    repl.index = idx
+                    partial.items[idx] = repl
+                nth += 1
             partial.cookies = res.cookies
             if meta.is_complete(partial.items):
                 return partial
@@ -223,8 +237,6 @@ def extract(url: str, can_mux: bool) -> Resolved:
         log.info("instagram yt-dlp %s: %s", code, e)
         errors.append(e)
 
-    if partial and partial.via == "embed-img":
-        return partial
     raise most_specific(errors)
 
 
