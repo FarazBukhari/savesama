@@ -46,6 +46,7 @@ export function ServerScreen() {
     if (r.kind === 'updated') snack(`Extractor updated to ${r.version}`);
     else if (r.kind === 'same') snack(`Already up to date (${r.version})`);
     else if (r.kind === 'timeout') setUpdateTimedOut(true);
+    else if (r.kind === 'pending') snack(`Still on ${r.version}. If a newer one is installing, the server restarts by itself.`);
     else snack('The server hit a problem');
   };
 

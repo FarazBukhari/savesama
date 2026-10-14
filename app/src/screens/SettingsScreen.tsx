@@ -145,7 +145,11 @@ export function SettingsScreen() {
         ))}
         <Row
           title="Keep a copy on the server"
-          helper="Off: the server deletes its copy once the file is on your phone."
+          helper={
+            s.keepOnServer
+              ? 'On: files stay on the server after they reach your phone.'
+              : 'Off: the server deletes its copy once the file is on your phone.'
+          }
           role="switch"
           checked={s.keepOnServer}
           onPress={() => toggle('keepOnServer')}

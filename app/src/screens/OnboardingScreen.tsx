@@ -35,9 +35,10 @@ export function OnboardingScreen() {
   const paired = serversStore.use((s) => s.servers.length > 0);
   const [step, setStep] = useState(paired ? 2 : 0);
   useEffect(() => {
-    // Pairing arrives from outside (deep link from Termux) while step 2 waits for it.
+    // Pairing can arrive from outside (deep link from Termux) on any earlier step, including a
+    // cold start where the pair link lands the user here on Welcome with the confirm sheet open.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (paired && step === 1) setStep(2);
+    if (paired && step < 2) setStep(2);
   }, [paired, step]);
   if (step === 0) return <Welcome onNext={() => setStep(paired ? 2 : 1)} />;
   if (step === 1) return <ServerStep />;

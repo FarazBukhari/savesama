@@ -178,6 +178,9 @@ const KEYS = {
   jobs: 'savesama.jobs.v1',
 };
 
+/** Hidden job ids double as delete tombstones, so keep enough to outlive a server's job list. */
+const HIDDEN_CAP = 5000;
+
 export async function hydrate(getToken: (id: string) => Promise<string | null>): Promise<void> {
   const [settings, servers, history, jobs] = await Promise.all([
     loadJson<Partial<Settings>>(KEYS.settings),
@@ -199,10 +202,10 @@ export async function hydrate(getToken: (id: string) => Promise<string | null>):
     serversStore.set({ servers: servers.servers, activeId: servers.activeId, tokens });
   }
   if (history) historyStore.set({ links: history.links ?? [], saves: history.saves ?? [] });
-  if (jobs?.hidden) jobsStore.set({ hidden: jobs.hidden.slice(-500), clearedBefore: jobs.clearedBefore ?? 0 });
+  if (jobs?.hidden) jobsStore.set({ hidden: jobs.hidden.slice(-HIDDEN_CAP), clearedBefore: jobs.clearedBefore ?? 0 });
 
   persistStore(settingsStore, KEYS.settings, (s) => s);
   persistStore(serversStore, KEYS.servers, (s) => ({ servers: s.servers, activeId: s.activeId }));
   persistStore(historyStore, KEYS.history, (s) => ({ links: s.links.slice(0, 2000), saves: s.saves.slice(0, 5000) }));
-  persistStore(jobsStore, KEYS.jobs, (s) => ({ hidden: s.hidden.slice(-500), clearedBefore: s.clearedBefore }));
+  persistStore(jobsStore, KEYS.jobs, (s) => ({ hidden: s.hidden.slice(-HIDDEN_CAP), clearedBefore: s.clearedBefore }));
 }

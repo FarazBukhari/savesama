@@ -6,7 +6,7 @@ import type { Platform } from '@/lib/links';
 import { createStore } from './createStore';
 import { deleteFromGallery, galleryAccess, listGallery, type GalleryAccess } from './gallery';
 import { forgetSaves } from './history';
-import { historyStore, type SavedFile } from './stores';
+import { historyStore, jobsStore, type SavedFile } from './stores';
 
 export interface LibraryItem {
   key: string;
@@ -100,7 +100,17 @@ export async function deleteItems(keys: string[]): Promise<void> {
   const items = libraryStore.get().items.filter((i) => keys.includes(i.key));
   const assetIds = items.map((i) => i.assetId).filter((x): x is string => !!x);
   if (assetIds.length) await deleteFromGallery(assetIds);
-  forgetSaves((s) => keys.includes(s.assetId ?? `job:${s.jobId}`));
+  const match = (s: SavedFile) => keys.includes(s.assetId ?? `job:${s.jobId}`);
+  // Tombstone the jobs: with "Keep a copy on the server" on, the next sync would otherwise see
+  // the job still done on the server and save it again.
+  const jobIds = historyStore.get().saves.filter(match).map((s) => s.jobId);
+  if (jobIds.length) {
+    jobsStore.set((s) => ({
+      hidden: [...s.hidden.filter((id) => !jobIds.includes(id)), ...jobIds],
+      jobs: s.jobs.filter((j) => !jobIds.includes(j.id)),
+    }));
+  }
+  forgetSaves(match);
   libraryStore.set((s) => ({ items: s.items.filter((i) => !keys.includes(i.key)) }));
 }
 

@@ -82,7 +82,7 @@ export async function downloadJobFile(
       if ((rest.size ?? 0) === total) {
         // The server ignored the range and sent the whole file.
         part.delete();
-        rest.move(part);
+        rest.moveSync(part);
       } else {
         append(part, rest);
         rest.delete();
@@ -107,7 +107,7 @@ export async function downloadJobFile(
   }
   const final = new File(d, safeName(job.file?.name ?? job.id, job.id));
   if (final.exists) final.delete();
-  part.move(final);
+  part.moveSync(final);
   return { uri: final.uri, size };
 }
 

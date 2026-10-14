@@ -2,8 +2,8 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 
-import { Button, Chip, Segmented } from '@/components/controls';
-import { Icon, PLATFORM_ICON } from '@/components/Icon';
+import { Button, Chip, Segmented, Thumb } from '@/components/controls';
+import { Icon } from '@/components/Icon';
 import { Sheet, useSheet } from '@/components/Sheet';
 import { T } from '@/components/Text';
 import { useTheme } from '@/components/theme';
@@ -129,7 +129,7 @@ function BatchRow({ url, st, dup }: { url: string; st: RowState; dup: boolean })
   const platform = parseLink(url)?.platform;
   const content = (
     <View style={{ minHeight: 64, paddingHorizontal: EDGE, paddingVertical: 10, flexDirection: 'row', gap: 16, alignItems: 'center' }}>
-      {platform ? <Icon name={PLATFORM_ICON[platform]} /> : null}
+      <Thumb uri={st.kind === 'ok' ? st.data.thumbnail : null} platform={platform} size={56} />
       <View style={{ flex: 1 }}>
         <T role="body" numberOfLines={1} ellipsizeMode={st.kind === 'ok' ? 'tail' : 'middle'}>
           {st.kind === 'ok' && st.data.title ? st.data.title : displayLink(url)}

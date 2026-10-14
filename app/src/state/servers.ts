@@ -123,9 +123,18 @@ export async function discoverLocal(): Promise<ServerInfo | null> {
   }
 }
 
-export type UpdateOutcome = { kind: 'updated' | 'same'; version: string } | { kind: 'timeout' } | { kind: 'error'; error: ApiError };
+const UPDATE_WAIT_MS = 60_000;
+// The restart gap is short (about 0.2 s on a desktop, a few seconds on a phone), so poll fast.
+const UPDATE_POLL_MS = 500;
 
-/** POST /maintenance/update, then poll /info every 2 s for up to 60 s. */
+export type UpdateOutcome = { kind: 'updated' | 'same'; version: string } | { kind: 'timeout' } | { kind: 'pending'; version: string } | { kind: 'error'; error: ApiError };
+
+/**
+ * POST /maintenance/update, then poll /info until extractor_version changes or 60 s pass
+ * (docs/API.md). The server keeps answering with the old version while pip runs and only then
+ * restarts, so an unchanged version is final only once the restart was seen (it went away and
+ * came back) or the 60 s are up.
+ */
 export async function updateExtractor(): Promise<UpdateOutcome> {
   const server = activeServer();
   const client = clientFor(server);
@@ -139,28 +148,34 @@ export async function updateExtractor(): Promise<UpdateOutcome> {
   setStatus(server.id, 'updating');
   const started = Date.now();
   let lastInfo: ServerInfo | null = null;
-  // The server answers 202 and then restarts; give it a moment before the first poll.
-  await new Promise((r) => setTimeout(r, 2000));
-  while (Date.now() - started < 60_000) {
+  let restarted = false;
+  let wentAway = false;
+  while (Date.now() - started < UPDATE_WAIT_MS) {
+    await new Promise((r) => setTimeout(r, UPDATE_POLL_MS));
     try {
       const info = await client.info(TIMEOUTS.probe);
       lastInfo = info;
-      if (info.extractor_version !== before) break;
-      // Same version and the server is back after a restart window: nothing newer existed.
-      if (Date.now() - started > 8000) break;
+      if (wentAway) restarted = true;
+      if (info.extractor_version !== before || restarted) break;
     } catch {
-      // restarting
+      wentAway = true;
     }
-    await new Promise((r) => setTimeout(r, 2000));
   }
-  if (!lastInfo) {
+  const changed = !!lastInfo && lastInfo.extractor_version !== before;
+  if (!lastInfo || (wentAway && !restarted)) {
     setStatus(server.id, 'offline');
     return { kind: 'timeout' };
+  }
+  if (!changed && !restarted) {
+    // Answered with the old version all along: pip may still be running (slow on a phone), or
+    // the restart was too quick to see. Either way, don't claim it's up to date.
+    setStatus(server.id, 'online');
+    return { kind: 'pending', version: lastInfo.extractor_version };
   }
   serversStore.set((s) => ({
     info: { ...s.info, [server.id]: lastInfo! },
     status: { ...s.status, [server.id]: 'online' },
     servers: s.servers.map((x) => (x.id === server.id ? { ...x, lastSeen: Date.now() } : x)),
   }));
-  return { kind: lastInfo.extractor_version !== before ? 'updated' : 'same', version: lastInfo.extractor_version };
+  return { kind: changed ? 'updated' : 'same', version: lastInfo.extractor_version };
 }

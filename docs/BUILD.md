@@ -181,7 +181,9 @@ each other.
    `%LOCALAPPDATA%\Android\Sdk\platform-tools`). Or copy the file over as in path A.
 
 `app/android/` is generated and git-ignored; `prebuild --clean` recreates it each time, so
-never edit files in it by hand.
+never edit files in it by hand. Manifest changes go through `app/app.json` or a config plugin
+in `app/plugins/` (for example `withTermuxQuery.js`, which declares the `com.termux` package
+query Android 11+ needs before "Open Termux" can launch it).
 
 ---
 
