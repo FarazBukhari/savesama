@@ -5,7 +5,7 @@ one signs the app with a different key (see [Signatures](#signatures-read-this-o
 
 | Path | Needs | Time | Best for |
 | --- | --- | --- | --- |
-| [A. GitHub Actions](#a-github-actions-recommended) | A browser | ~20 min | Everyday builds, no installs on your PC |
+| [A. GitHub Actions](#a-github-actions-recommended) | A browser | ~35 min | Everyday builds, no installs on your PC |
 | [B. EAS (expo.dev)](#b-eas-cloud-build) | Node.js + Expo account | ~15 min + queue | If GitHub builds ever break |
 | [C. Local build](#c-local-build-on-windows) | Android Studio | ~30 min first time | Offline / debugging |
 
@@ -29,7 +29,7 @@ can start it by hand. It type-checks and tests the app, then builds a release AP
 2. In the left list click **Android APK**.
 3. Click **Run workflow** (right side), choose the branch (e.g. `rebuild/server-and-app`),
    click the green **Run workflow** button.
-4. Wait for the run to turn green (about 15–25 minutes). Click into it.
+4. Wait for the run to turn green (about 35 minutes; the APK is ~75 MB). Click into it.
 
 ### Download and install the APK
 
