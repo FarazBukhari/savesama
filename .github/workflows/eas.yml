@@ -1,0 +1,64 @@
+name: EAS build
+
+# Queues a cloud build on expo.dev (needs the EXPO_TOKEN repo secret). The APK appears on
+# expo.dev under the project's Builds page; this job does not wait for it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: eas.json build profile
+        type: choice
+        default: preview
+        options: [preview, development, production]
+
+permissions:
+  contents: read
+
+jobs:
+  eas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      PROFILE: ${{ inputs.profile || 'preview' }}
+    steps:
+      - name: Check token
+        id: token
+        working-directory: .
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            msg="EXPO_TOKEN secret is not set, so no EAS build was queued. Create one at expo.dev > Account settings > Access tokens and add it under Settings > Secrets and variables > Actions (see docs/BUILD.md)."
+            echo "::warning::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.ok == 'true'
+
+      # eas-cli refuses Node 20 (oclif engines), so stay on 22.
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        if: steps.token.outputs.ok == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Queue build
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          npx --yes eas-cli@latest build -p android --profile "$PROFILE" --non-interactive --no-wait | tee "$RUNNER_TEMP/eas.log"
+          {
+            echo "### EAS build queued ($PROFILE)"
+            grep -Eo 'https://expo\.dev/[^ ]+' "$RUNNER_TEMP/eas.log" | sort -u | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
