@@ -49,16 +49,18 @@ function useRows(): Record<string, RowState> {
   return rowsStore.rows;
 }
 
-let batchMode: Mode = 'media';
-let batchQuality: Quality = 'max';
+// The footer reads the batch-wide format/quality chosen in the body.
+const batchChoice: { mode: Mode; quality: Quality } = { mode: 'media', quality: 'max' };
 
 function BatchBody({ urls }: { urls: string[] }) {
   const { close } = useSheet();
   const rows = useRows();
   const [mode, setMode] = useState<Mode>(settingsStore.get().defaultMode);
   const [quality, setQuality] = useState<Quality>('max');
-  batchMode = mode;
-  batchQuality = quality;
+  useEffect(() => {
+    batchChoice.mode = mode;
+    batchChoice.quality = quality;
+  }, [mode, quality]);
   const warn = settingsStore.use((s) => s.warnDuplicate);
 
   useEffect(() => {
@@ -168,8 +170,8 @@ function BatchFooter({ urls }: { urls: string[] }) {
         const jobs = await startJobs({
           url,
           items: e?.items ?? null,
-          mode: e?.mode ?? batchMode,
-          quality: e?.quality ?? (batchMode === 'media' ? batchQuality : 'max'),
+          mode: e?.mode ?? batchChoice.mode,
+          quality: e?.quality ?? (batchChoice.mode === 'media' ? batchChoice.quality : 'max'),
         });
         started += jobs.length;
       } catch {

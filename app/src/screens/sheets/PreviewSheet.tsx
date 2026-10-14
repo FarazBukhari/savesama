@@ -100,6 +100,8 @@ function PreviewBody({ url, batch }: { url: string; batch?: boolean }) {
     [url, platform, server],
   );
 
+  // Resolving is the external sync this effect exists for.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => load(), [load]);
 
   const name = platform ? PLATFORM_NAMES[platform] : 'Link';

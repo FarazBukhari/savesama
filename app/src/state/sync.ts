@@ -1,7 +1,7 @@
 import { AccessibilityInfo } from 'react-native';
 
 import { ApiError, type CreateJobsBody, type Job } from '@/lib/api';
-import { IDLE_TRANSFER, stageOf, transferReducer, type Transfer, type TransferEvent } from '@/lib/jobState';
+import { IDLE_TRANSFER, stageOf, transferReducer, type TransferEvent } from '@/lib/jobState';
 
 import { discardLocal, discardPartial, downloadJobFile, TransferError } from './download';
 import { galleryAccess, saveToGallery } from './gallery';

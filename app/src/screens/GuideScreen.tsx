@@ -64,7 +64,7 @@ export function GuideScreen() {
         <Step n={3} title="Start it">
           <CodeBlock code={GUIDE.start} />
           <T role="meta" color="ink2">
-            It shows a QR code and opens SaveSama to pair. Leave Termux running. If the app doesn't open, run:
+            {"It shows a QR code and opens SaveSama to pair. Leave Termux running. If the app doesn't open, run:"}
           </T>
           <CodeBlock code={GUIDE.pair} />
         </Step>

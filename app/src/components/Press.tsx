@@ -21,11 +21,11 @@ export function PressScale({
     <AnimatedPressable
       {...rest}
       onPressIn={(e) => {
-        if (!reduced) s.value = withTiming(scaleTo, { duration: 90, easing: standard });
+        if (!reduced) s.set(withTiming(scaleTo, { duration: 90, easing: standard }));
         rest.onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        s.value = withTiming(1, { duration: 160, easing: standard });
+        s.set(withTiming(1, { duration: 160, easing: standard }));
         rest.onPressOut?.(e);
       }}
       style={[style, anim]}

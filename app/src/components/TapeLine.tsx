@@ -55,7 +55,8 @@ export function TapeLine({
   useEffect(() => {
     if (lastStage.current !== tape.current && tape.current >= 0) AccessibilityInfo.announceForAccessibility(text);
     lastStage.current = tape.current;
-  }, [tape.current, text]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announce only when the stage changes
+  }, [tape.current]);
   const labelColor = (i: number): keyof Colors => {
     if (tape.cancelled) return 'ink3';
     if (tape.failed && i === tape.current) return 'err';

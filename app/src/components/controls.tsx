@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 
@@ -445,7 +445,7 @@ export function CodeBlock({ code, fill }: { code: string; fill?: keyof Colors })
   }, [copied]);
   return (
     <View style={{ backgroundColor: c[fill ?? 'sunk'], borderRadius: radius.md, paddingLeft: 16, paddingVertical: 4, flexDirection: 'row', alignItems: 'center' }}>
-      <T role="code" selectable style={{ flex: 1, paddingVertical: 10 }}>
+      <T role="code" selectable style={[{ flex: 1, paddingVertical: 10 }, breakAnywhere]}>
         {code}
       </T>
       <IconButton
@@ -524,6 +524,9 @@ export function Field({
   );
 }
 
+// Long commands and URLs must wrap inside code blocks instead of overflowing (web needs this).
+const breakAnywhere = { wordBreak: 'break-all' } as unknown as TextStyle;
+
 export const webNoOutline = { outlineStyle: 'none' } as unknown as ViewStyle;
 
 // ---------- Thumbnail (§10.21) ----------
@@ -553,6 +556,8 @@ export function Thumb({
 }) {
   const { c } = useTheme();
   const [failed, setFailed] = useState(false);
+  // A new uri gets a fresh chance to load.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setFailed(false), [uri]);
   const w = width ?? size;
   const h = height ?? size;

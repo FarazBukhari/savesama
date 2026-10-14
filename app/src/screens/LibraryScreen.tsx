@@ -1,7 +1,7 @@
 import { useFocusEffect, router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, TextInput, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, Linking, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Banner, Button, Chip, EmptyState, IconButton, MediaPill, Skeleton, Thumb, webNoOutline } from '@/components/controls';
@@ -16,7 +16,6 @@ import { allowAllMedia } from '@/state/gallery';
 import { deleteItems, libraryStore, loadLibrary, typeName, type LibraryItem } from '@/state/library';
 import { historyStore } from '@/state/stores';
 import { confirm, haptic, snack } from '@/state/ui';
-import { Linking } from 'react-native';
 
 type Filter = 'all' | 'video' | 'image' | 'audio';
 type Entry = { kind: 'header'; title: string; key: string } | { kind: 'row'; items: LibraryItem[]; key: string };
@@ -44,12 +43,15 @@ export function LibraryScreen() {
   const [query, setQuery] = useState(libraryView.query);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const selecting = selected.size > 0;
-  libraryView.filter = filter;
-  libraryView.query = query;
+  useEffect(() => {
+    // The viewer swipes through the same filtered list.
+    libraryView.filter = filter;
+    libraryView.query = query;
+  }, [filter, query]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadLibrary();
+      if (savesCount >= 0) void loadLibrary();
     }, [savesCount]),
   );
 
@@ -292,11 +294,9 @@ function Tile({
       style={{ width: size, height: size, transform: [{ scale: selected ? 0.92 : 1 }] }}
     >
       {audioNoThumb ? (
-        <View style={{ width: size, height: size, borderRadius: radius.xs, backgroundColor: c.sunk, padding: 12, justifyContent: 'space-between' }}>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Icon name="MusicNotes" size={32} color="ink2" />
-          </View>
-          <T role="caption" numberOfLines={2} style={{ fontSize: 13, lineHeight: 17 }}>
+        <View style={{ width: size, height: size, borderRadius: radius.xs, backgroundColor: c.sunk, padding: 12, paddingTop: 40, justifyContent: 'space-between' }}>
+          <Icon name="MusicNotes" size={32} color="ink2" />
+          <T role="caption" numberOfLines={2} style={{ fontSize: 13, lineHeight: 17, fontVariant: [] }}>
             {item.title}
           </T>
         </View>
