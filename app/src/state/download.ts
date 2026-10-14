@@ -17,19 +17,33 @@ const dir = () => {
   return d;
 };
 
+/**
+ * A cache file name that survives the native side. expo-file-system builds a WHATWG file:// URL
+ * (which leaves ASCII punctuation such as [ ] , ' raw) and Android parses it with
+ * java.net.URI, which rejects [ ]; the gallery then reads the extension with
+ * MimeTypeMap.getFileExtensionFromUrl, which gives up on anything but [A-Za-z0-9_.()%-]. So keep
+ * only ASCII letters, digits, space, _ . - ( ) and non-ASCII text (percent-encoded in the URL).
+ */
 export function safeName(name: string, id: string): string {
   const ext = (name.match(/\.[A-Za-z0-9]{1,5}$/)?.[0] ?? '').toLowerCase();
   const stem = name
     .slice(0, name.length - ext.length)
-    // The gallery picks its folder from Android's extension lookup on the file:// URI, which
-    // fails for any name holding a character Uri.fromFile leaves unencoded (' ! ~ *): the
-    // save is then refused. Keep apostrophes readable as a typographic one.
     .replace(/'/g, '\u2019')
-    .replace(/[\\/:*?"<>|#%{}^~`!\u0000-\u001f]+/g, ' ')
+    .replace(/[[{]/g, '(')
+    .replace(/[\]}]/g, ')')
+    .replace(/[\u0000-\u001f\u007f]|[^\w\s.()\-\u0080-\uffff]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  // Cut by code point so an emoji is never split into a lone surrogate.
-  const short = Array.from(stem).slice(0, 80).join('').trim();
+  // ext4 caps a name at 255 bytes; cut by code point (never splitting an emoji) to ~150 bytes.
+  let short = '';
+  let bytes = 0;
+  for (const ch of stem) {
+    const cp = ch.codePointAt(0)!;
+    bytes += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    if (bytes > 150) break;
+    short += ch;
+  }
+  short = short.trim();
   return `${short || 'SaveSama ' + id.slice(0, 8)}${ext}`;
 }
 
@@ -106,14 +120,24 @@ export async function downloadJobFile(
   }
 
   const size = part.size ?? 0;
+  let lastError: unknown;
   if (total && size !== total) {
     part.delete();
     throw new TransferError('transfer', `Size mismatch: ${size} of ${total}`);
   }
-  const final = new File(d, safeName(job.file?.name ?? job.id, job.id));
-  if (final.exists) final.delete();
-  part.moveSync(final);
-  return { uri: final.uri, size };
+  const name = job.file?.name ?? job.id;
+  const ext = (name.match(/\.[A-Za-z0-9]{1,5}$/)?.[0] ?? '').toLowerCase();
+  for (const candidate of [safeName(name, job.id), `SaveSama ${job.id.slice(0, 8)}${ext}`]) {
+    try {
+      const final = new File(d, candidate);
+      if (final.exists) final.delete();
+      part.moveSync(final);
+      return { uri: final.uri, size };
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw new TransferError('transfer', `Couldn't write the file: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
 export function discardLocal(uri: string): void {
