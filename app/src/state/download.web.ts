@@ -2,7 +2,7 @@ import type { Job } from '@/lib/api';
 
 export class TransferError extends Error {
   constructor(
-    public kind: 'transfer' | 'storage' | 'server',
+    public kind: 'transfer' | 'storage' | 'server' | 'gallery',
     message: string,
   ) {
     super(message);

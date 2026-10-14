@@ -4,7 +4,7 @@ import type { Job } from '@/lib/api';
 
 export class TransferError extends Error {
   constructor(
-    public kind: 'transfer' | 'storage' | 'server',
+    public kind: 'transfer' | 'storage' | 'server' | 'gallery',
     message: string,
   ) {
     super(message);
@@ -21,11 +21,16 @@ export function safeName(name: string, id: string): string {
   const ext = (name.match(/\.[A-Za-z0-9]{1,5}$/)?.[0] ?? '').toLowerCase();
   const stem = name
     .slice(0, name.length - ext.length)
-    .replace(/[\\/:*?"<>|#%{}^~`\u0000-\u001f]+/g, ' ')
+    // The gallery picks its folder from Android's extension lookup on the file:// URI, which
+    // fails for any name holding a character Uri.fromFile leaves unencoded (' ! ~ *): the
+    // save is then refused. Keep apostrophes readable as a typographic one.
+    .replace(/'/g, '\u2019')
+    .replace(/[\\/:*?"<>|#%{}^~`!\u0000-\u001f]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
-  return `${stem || 'SaveSama ' + id.slice(0, 8)}${ext}`;
+    .trim();
+  // Cut by code point so an emoji is never split into a lone surrogate.
+  const short = Array.from(stem).slice(0, 80).join('').trim();
+  return `${short || 'SaveSama ' + id.slice(0, 8)}${ext}`;
 }
 
 function classify(e: unknown): TransferError {
