@@ -24,7 +24,7 @@ try:
 except ImportError:  # pragma: no cover - very old yt-dlp
     HTTPError = TransportError = ()  # type: ignore[assignment]
 
-from ..errors import ApiError
+from ..errors import ApiError, most_specific
 from ..media import Item, Resolved, pick_rung, short_side
 from ..net import ACCEPT_LANGUAGE
 
@@ -48,6 +48,9 @@ class Cancelled(Exception):
 
 
 class _Logger:
+    def __init__(self):
+        self.warnings: list[str] = []
+
     def debug(self, msg):
         log.debug("%s", msg)
 
@@ -56,6 +59,8 @@ class _Logger:
 
     def warning(self, msg):
         log.debug("warning: %s", msg)
+        if len(self.warnings) < 50:
+            self.warnings.append(str(msg))
 
     def error(self, msg):
         log.debug("error: %s", msg)
@@ -242,6 +247,41 @@ def choose_format(formats: list[dict], mode: str, quality, can_mux: bool) -> str
 
 # ---- resolve ---------------------------------------------------------------------------
 
+def fill_progressive_dims(formats: list[dict], width, height) -> None:
+    """Give Facebook's dimensionless "hd" progressive the video's own size (capped at 720p).
+
+    Without this "hd" is guessed as 720p even for a 480x848 reel, so the item would claim a
+    720 quality and the 480 rung would miss the muxed file that really is 480p.
+    """
+    if not (width and height):
+        return
+    s = min(width, height)
+    scale = min(1.0, _FB_GUESS["hd"] / s)
+    for f in formats:
+        if str(f.get("format_id")) == "hd" and not (f.get("width") or f.get("height")):
+            f["width"], f["height"] = round(width * scale), round(height * scale)
+
+
+def _dims_at(fmt: dict, entry: dict) -> tuple[int | None, int | None]:
+    """The format's dimensions; for a dimensionless one, the entry's aspect at its rung."""
+    w, h = fmt.get("width"), fmt.get("height")
+    if w and h:
+        return w, h
+    ew, eh, s = entry.get("width"), entry.get("height"), fmt_short(fmt)
+    if ew and eh and s:
+        scale = s / min(ew, eh)
+        return round(ew * scale), round(eh * scale)
+    return None, None
+
+
+def entry_thumbnail(entry: dict) -> str | None:
+    if entry.get("thumbnail"):
+        return entry["thumbnail"]
+    # yt-dlp sorts thumbnails worst to best (the same pick it uses for "thumbnail").
+    urls = [t["url"] for t in entry.get("thumbnails") or [] if isinstance(t, dict) and t.get("url")]
+    return urls[-1] if urls else None
+
+
 def _entry_items(info: dict, can_mux: bool) -> list[Item]:
     if info.get("_type") in ("playlist", "multi_video"):
         entries = [e for e in (info.get("entries") or []) if isinstance(e, dict)]
@@ -250,16 +290,18 @@ def _entry_items(info: dict, can_mux: bool) -> list[Item]:
     items = []
     for pos, e in enumerate(entries, start=1):
         formats = e.get("formats") or ([e] if e.get("url") else [])
+        fill_progressive_dims(formats, e.get("width"), e.get("height"))
         vids = [f for f in formats if _is_video(f)]
         auds = [f for f in formats if _is_audio_only(f)]
+        thumb = entry_thumbnail(e)
         if vids:
-            top = max(vids, key=lambda f: (fmt_short(f) or 0))
-            item = Item(index=len(items), type="video", thumbnail=e.get("thumbnail"),
-                        width=top.get("width") or e.get("width"), height=top.get("height") or e.get("height"),
+            top = max(usable_videos(formats, can_mux) or vids, key=lambda f: (fmt_short(f) or 0))
+            width, height = _dims_at(top, e)
+            item = Item(index=len(items), type="video", thumbnail=thumb, width=width, height=height,
                         duration=e.get("duration"), has_audio=bool(auds) or any(_has_audio(f) for f in vids),
                         qualities=qualities(formats, can_mux))
         elif auds:
-            item = Item(index=len(items), type="audio", thumbnail=e.get("thumbnail"),
+            item = Item(index=len(items), type="audio", thumbnail=thumb,
                         duration=e.get("duration"), has_audio=True)
         else:
             continue
@@ -270,11 +312,32 @@ def _entry_items(info: dict, can_mux: bool) -> list[Item]:
     return items
 
 
+# Warnings that accompany a "no formats" result but never explain it.
+_WARNING_NOISE = ("unable to download webpage", "po token", "visitor data", "extractor failed to obtain",
+                  "no video formats found", "requested format is not available", "falling back",
+                  "retrying", "unable to download api page", "nsig", "n challenge", "javascript runtime")
+
+
+def no_formats_error(warnings: list[str], platform: str) -> ApiError:
+    """The error yt-dlp would have raised, recovered from the warnings ignore_no_formats_error
+    turned it into (e.g. YouTube's bot check, or "Video unavailable" for an unknown id)."""
+    reasons = [w for w in warnings if not any(k in w.lower() for k in _WARNING_NOISE)]
+    mapped = [map_error(ExtractorError(w, expected=True), platform) for w in reasons]
+    mapped = [e for e in mapped if e.code != "internal"]
+    if mapped:
+        return most_specific(mapped)
+    return ApiError("unavailable", "This post has no video or audio to save.")
+
+
 def resolve(url: str, platform: str, can_mux: bool) -> Resolved:
+    logger = _Logger()
     params = base_params(
         format=lambda ctx: ctx["formats"][-1:],  # any; we only want the processed formats
+        # Image entries in a carousel have no formats; without this the whole post would fail.
+        # The swallowed reason comes back through the logger (no_formats_error).
         ignore_no_formats_error=True,
         simulate=True,
+        logger=logger,
     )
     with _new_ydl(params) as ydl:
         try:
@@ -283,15 +346,15 @@ def resolve(url: str, platform: str, can_mux: bool) -> Resolved:
             raise map_error(e, platform) from e
         cookies = list(ydl.cookiejar)
     if not info:
-        raise ApiError("unavailable")
+        raise no_formats_error(logger.warnings, platform)
     items = _entry_items(info, can_mux)
     if not items:
-        raise ApiError("unavailable", "This post has no video or audio to save.")
+        raise no_formats_error(logger.warnings, platform)
     return Resolved(
         url=url, platform=platform, id=str(info.get("id") or ""),
         title=info.get("title") or info.get("description") or None,
         author=info.get("uploader") or info.get("channel") or info.get("uploader_id"),
-        thumbnail=info.get("thumbnail") or items[0].thumbnail,
+        thumbnail=entry_thumbnail(info) or items[0].thumbnail,
         duration=info.get("duration") if len(items) == 1 else None,
         items=items, cookies=cookies, via="yt-dlp",
     )
@@ -305,7 +368,10 @@ def download(resolved: Resolved, item: Item, mode: str, quality, can_mux: bool, 
     """Download one yt-dlp item into tmpdir and return the finished file's path."""
     holder: dict = {}
 
+    entry = item.entry or {}
+
     def selector(ctx):
+        fill_progressive_dims(ctx["formats"], entry.get("width"), entry.get("height"))
         spec = choose_format(ctx["formats"], mode, quality, can_mux)
         holder["spec"] = spec
         return holder["ydl"].build_format_selector(spec)(ctx)
@@ -421,6 +487,7 @@ def _is_api(exc) -> bool:
 _NOISE = [
     re.compile(r"^ERROR:\s*"),
     re.compile(r"^\[[^\]]+\]\s*[^:]{1,80}:\s*"),
+    re.compile(r"^\[[^\]]+\]\s*"),  # warnings carry "[extractor]" without an id
     re.compile(r";?\s*please report this issue.*$", re.I | re.S),
     re.compile(r"\s*Use --cookies.*$", re.I | re.S),
     re.compile(r"\s*\(caused by .*$", re.I | re.S),
@@ -436,6 +503,22 @@ def _short(exc: BaseException) -> str:
     return msg[:300]
 
 
+_RATE_LIMIT = re.compile(r"(?:error|status)\s*:?\s*429\b|too many requests|rate-limit|rate limit|"
+                         r"temporarily blocked|not a bot|captcha", re.I)
+# TikTok's statusCode 10204 is "item doesn't exist"; yt-dlp words it as an IP block.
+_TIKTOK_GONE = ("your ip address is blocked from accessing this post", "status code 10204",
+                "status code 10217")
+# TikTok's bot wall: the page came back without the post data or with a challenge we can't pass.
+_TIKTOK_WALL = ("unable to extract universal data", "unable to extract challenge data",
+                "unable to solve js challenge")
+_YT_GONE = ("video unavailable", "this video is unavailable", "this video isn't available anymore")
+
+
+def blocked_error(name: str) -> ApiError:
+    return ApiError("rate_limited", f"{name} is temporarily blocking this server. Try again later, "
+                                    "or run the server from another network.")
+
+
 def map_error(exc: BaseException, platform: str) -> ApiError:
     name = {"youtube": "YouTube", "tiktok": "TikTok"}.get(platform, platform.capitalize())
     reason = _short(exc)
@@ -446,10 +529,12 @@ def map_error(exc: BaseException, platform: str) -> ApiError:
     http = _find_cause(exc, HTTPError) if HTTPError else None
     status = getattr(getattr(http, "response", None), "status", None) or getattr(http, "status", None)
 
-    if ("not a bot" in low or "429" in low or "too many requests" in low or "rate-limit" in low
-            or "rate limit" in low or "temporarily blocked" in low or status == 429):
-        return ApiError("rate_limited", f"{name} is rate-limiting this server's network right now. "
-                                        "Try again in a few minutes.")
+    if platform == "tiktok" and any(k in low for k in _TIKTOK_GONE):
+        return ApiError("not_found", "This TikTok post doesn't exist or was deleted.")
+    if platform == "tiktok" and any(k in low for k in _TIKTOK_WALL):
+        return blocked_error(name)
+    if _RATE_LIMIT.search(low) or status == 429:
+        return blocked_error(name)
     if "unsupported url" in low:
         return ApiError("unsupported_url", f"That {name} link isn't a post, video or reel SaveSama can read.")
     if any(k in low for k in ("private video", "this account is private", "private account", "is private",
@@ -458,19 +543,21 @@ def map_error(exc: BaseException, platform: str) -> ApiError:
                               "log in", "sign in", "login", "requires authentication", "cookies")):
         return ApiError("login_required", f"This {name} post needs an account to view (private, "
                                           "age-restricted or members-only). SaveSama never signs in.")
+    if platform == "youtube" and reason.lower().rstrip(". ") in _YT_GONE:
+        # YouTube's whole answer for an id that never existed (or was purged).
+        return ApiError("not_found", f"This {name} video doesn't exist or was deleted.")
     if (status in (404, 410) or any(k in low for k in (
-            "has been removed", "been deleted", "does not exist", "no longer available", "not found",
-            "video unavailable. this video is no longer", "post isn't available", "content isn't available",
-            "this video has been removed", "account has been terminated", "status code 10204"))):
+            "has been removed", "been deleted", "does not exist", "doesn't exist", "no longer available",
+            "not found", "video unavailable. this video is no longer", "post isn't available",
+            "content isn't available", "this video has been removed", "account has been terminated"))):
         return ApiError("not_found", f"This {name} post doesn't exist or was deleted.")
     if any(k in low for k in ("live event", "is live", "live stream", "premiere", "will begin in",
                               "no video formats", "no video in this post", "drm", "requested format is not available",
                               "video unavailable", "not available")):
         return ApiError("unavailable", f"This {name} post can't be downloaded: {reason}" if reason
                         else None)
-    if status == 403:
-        return ApiError("rate_limited", f"{name} refused the download (HTTP 403). It's usually "
-                                        "temporary; try again later.")
+    if status == 403 or "http error 403" in low or "403: forbidden" in low:
+        return blocked_error(name)
     if (_find_cause(exc, TransportError) if TransportError else None) or any(
             k in low for k in ("timed out", "connection", "name resolution", "network is unreachable",
                                "temporary failure", "ssl", "urlopen error")):
