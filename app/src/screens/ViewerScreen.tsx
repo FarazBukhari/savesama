@@ -89,7 +89,7 @@ export function ViewerScreen() {
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
             renderItem={({ item: it, index: i }) => (
-              <View style={{ width, height: '100%' }}>
+              <View style={{ width, height }}>
                 {Math.abs(i - index) <= 1 ? (
                   <Page item={it} active={i === index} chrome={chrome} toggleChrome={() => setChrome((v) => !v)} setChrome={setChrome} onZoom={setZoomed} />
                 ) : null}
@@ -309,7 +309,7 @@ function VideoPage({ item, chrome, toggleChrome, setChrome }: { item: LibraryIte
           <T role="meta" color="mediaInk" numberOfLines={1}>
             {metaLine(item)}
           </T>
-          <SeekBar position={time} duration={duration} fill="#FFD12E" onSeek={(t) => (player.currentTime = t)} />
+          <SeekBar position={time} duration={duration} fill="#FFD12E" onSeek={(t) => player.seekBy(t - player.currentTime)} />
         </Animated.View>
       ) : null}
     </View>

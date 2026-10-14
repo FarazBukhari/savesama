@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -103,10 +103,8 @@ export function ScanScreen() {
 
 function PermissionAsk({ request }: { request: () => Promise<unknown> }) {
   // First open: ask once; the screen re-renders with the answer.
-  const asked = useRef(false);
-  if (!asked.current) {
-    asked.current = true;
+  useEffect(() => {
     void request();
-  }
+  }, [request]);
   return null;
 }

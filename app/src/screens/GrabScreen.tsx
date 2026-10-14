@@ -35,10 +35,11 @@ export function GrabScreen() {
   const recent = links.slice(0, 5);
 
   useEffect(() => {
-    if (fieldText != null) {
-      setText(fieldText);
-      uiStore.set({ fieldText: null });
-    }
+    if (fieldText == null) return;
+    // Text handed over by the share sheet or a finished save; consumed once.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setText(fieldText);
+    uiStore.set({ fieldText: null });
   }, [fieldText]);
 
   const parsed = useMemo(() => parseLinks(text), [text]);
@@ -218,7 +219,9 @@ function ClipboardSuggestion({ text }: { text: string }) {
   const { c } = useTheme();
   const [link, setLink] = useState<{ url: string; platform: ReturnType<typeof parseLink> } | null>(null);
   const textRef = useRef(text);
-  textRef.current = text;
+  useEffect(() => {
+    textRef.current = text;
+  }, [text]);
 
   const check = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -235,6 +238,8 @@ function ClipboardSuggestion({ text }: { text: string }) {
   }, []);
 
   useEffect(() => {
+    // Reads the clipboard once per foreground; the state update happens after an await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void check();
     const sub = AppState.addEventListener('change', (s) => s === 'active' && void check());
     return () => sub.remove();

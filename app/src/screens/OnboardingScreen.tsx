@@ -35,6 +35,8 @@ export function OnboardingScreen() {
   const paired = serversStore.use((s) => s.servers.length > 0);
   const [step, setStep] = useState(paired ? 2 : 0);
   useEffect(() => {
+    // Pairing arrives from outside (deep link from Termux) while step 2 waits for it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (paired && step === 1) setStep(2);
   }, [paired, step]);
   if (step === 0) return <Welcome onNext={() => setStep(paired ? 2 : 1)} />;
@@ -146,7 +148,7 @@ function ServerStep() {
       </ScrollView>
       <View style={{ paddingHorizontal: EDGE, paddingBottom: insets.bottom + 8, paddingTop: 12, alignItems: 'center', gap: 4 }}>
         {probe === 'found' && canOpenTermux ? <Button variant="tonal" icon="ArrowSquareOut" label="Open Termux" big full onPress={() => void openTermux()} /> : null}
-        <Button variant="text" label="Do this later" onPress={finish} />
+        <Button variant="text" label="Do this later" onPress={finish} style={{ alignSelf: 'center' }} />
       </View>
     </View>
   );
@@ -182,10 +184,10 @@ function GalleryStep() {
         ) : (
           <>
             <Button label="Allow access" big full onPress={allow} />
-            <Button variant="text" label="Continue" onPress={finish} />
+            <Button variant="text" label="Continue" onPress={finish} style={{ alignSelf: 'center' }} />
           </>
         )}
-        {denied ? <Button variant="text" label="Open settings" onPress={() => void Linking.openSettings()} /> : null}
+        {denied ? <Button variant="text" label="Open settings" onPress={() => void Linking.openSettings()} style={{ alignSelf: 'center' }} /> : null}
       </View>
     </View>
   );

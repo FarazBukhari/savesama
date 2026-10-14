@@ -38,10 +38,10 @@ export function Sheet({
 
   useEffect(() => {
     if (reduced) {
-      fade.value = withTiming(1, { duration: 120 });
+      fade.set(withTiming(1, { duration: 120 }));
     } else {
-      ty.value = withTiming(0, { duration: 400, easing: decelerate });
-      fade.value = withTiming(1, { duration: 240 });
+      ty.set(withTiming(0, { duration: 400, easing: decelerate }));
+      fade.set(withTiming(1, { duration: 240 }));
     }
   }, [reduced, ty, fade]);
 
@@ -56,24 +56,24 @@ export function Sheet({
 
   const close = useCallback(() => {
     if (reduced) {
-      fade.value = withTiming(0, { duration: 120 }, (done) => done && runOnJS(onClose)());
+      fade.set(withTiming(0, { duration: 120 }, (done) => done && runOnJS(onClose)()));
       return;
     }
-    fade.value = withTiming(0, { duration: 240 });
-    ty.value = withTiming(h + 40, { duration: 240, easing: accelerate }, (done) => done && runOnJS(onClose)());
+    fade.set(withTiming(0, { duration: 240 }));
+    ty.set(withTiming(h + 40, { duration: 240, easing: accelerate }, (done) => done && runOnJS(onClose)()));
   }, [reduced, fade, ty, h, onClose]);
 
   const pan = Gesture.Pan()
     .activeOffsetY(8)
     .onUpdate((e) => {
-      ty.value = Math.max(0, e.translationY);
+      ty.set(Math.max(0, e.translationY));
     })
     .onEnd((e) => {
       if (ty.value > h * 0.35 || e.velocityY > 900) {
-        fade.value = withTiming(0, { duration: 240 });
-        ty.value = withTiming(h + 40, { duration: 240, easing: accelerate }, (done) => done && runOnJS(onClose)());
+        fade.set(withTiming(0, { duration: 240 }));
+        ty.set(withTiming(h + 40, { duration: 240, easing: accelerate }, (done) => done && runOnJS(onClose)()));
       } else {
-        ty.value = withSpring(0, { damping: 26, stiffness: 260 });
+        ty.set(withSpring(0, { damping: 26, stiffness: 260 }));
       }
     });
 

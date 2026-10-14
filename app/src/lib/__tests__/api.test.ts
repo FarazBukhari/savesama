@@ -2,7 +2,7 @@ import { ApiError, createClient, errorFromResponse, verifyServer } from '../api'
 
 type Call = { url: string; init: RequestInit };
 
-function mockFetch(responses: Array<Response | Error>) {
+function mockFetch(responses: (Response | Error)[]) {
   const calls: Call[] = [];
   const impl = jest.fn(async (url: string, init: RequestInit) => {
     calls.push({ url, init });

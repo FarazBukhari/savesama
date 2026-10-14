@@ -38,7 +38,7 @@ export function LicencesScreen() {
           ))}
         </View>
         <T role="meta" color="ink2" style={{ paddingHorizontal: EDGE, marginTop: 16 }}>
-          Full licence texts ship with each package in the app's source.
+          {"Full licence texts ship with each package in the app's source."}
         </T>
       </ScrollView>
     </View>
