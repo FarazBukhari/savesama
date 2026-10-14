@@ -72,6 +72,11 @@ export function JobRow({
               {row.line}
             </T>
           </View>
+          {row.detail ? (
+            <T role="meta" color="ink3" numberOfLines={3} selectable>
+              {row.detail}
+            </T>
+          ) : null}
         </View>
         {cancellable && onCancel ? <IconButton name="X" label="Cancel download" onPress={onCancel} /> : null}
         {retryable && onRetry ? <IconButton name="ArrowCounterClockwise" label="Retry download" onPress={onRetry} /> : null}

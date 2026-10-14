@@ -5,6 +5,8 @@ import { Linking } from 'react-native';
 
 import type { ItemType } from '@/lib/api';
 
+import { safeName } from './download';
+
 export const ALBUM = 'SaveSama';
 
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'blocked' | 'undetermined';
@@ -112,8 +114,7 @@ export async function shareFile(uri: string, filename: string, type: ItemType): 
   const dir = new Directory(Paths.cache, 'share');
   if (dir.exists) dir.delete();
   dir.create({ idempotent: true, intermediates: true });
-  const name = filename.replace(/[\\/:*?"<>|]+/g, ' ').trim() || `SaveSama.${ext || 'bin'}`;
-  const dest = new File(dir, name);
+  const dest = new File(dir, safeName(filename || `SaveSama.${ext || 'bin'}`, 'share000'));
   await new File(uri).copy(dest, { overwrite: true });
   await Sharing.shareAsync(dest.uri, { mimeType });
 }

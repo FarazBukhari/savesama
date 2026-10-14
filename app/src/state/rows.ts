@@ -19,6 +19,8 @@ export interface JobRowModel {
   tape: Tape;
   live: boolean;
   errorCode: string | null;
+  /** The phone-side error text, shown under a failed transfer so it can be reported. */
+  detail: string | null;
   save: SavedFile | null;
   sortAt: number;
 }
@@ -53,6 +55,8 @@ export function buildRows(
       tape: tapeOf(stage, job, transfer),
       live: isLive(stage),
       errorCode: stage === 'error' ? (job.error?.code ?? 'internal') : stage === 'transferFailed' ? `transfer:${transfer?.failure}` : null,
+      detail:
+        stage === 'transferFailed' && transfer?.message && !['cancelled', 'permission'].includes(transfer.message) ? transfer.message : null,
       save,
       sortAt: save?.savedAt ?? job.created_at * 1000,
     });
@@ -87,6 +91,7 @@ export function buildRows(
       tape: tapeOf('saved', pseudo, SAVED),
       live: false,
       errorCode: null,
+      detail: null,
       save,
       sortAt: save.savedAt,
     });
