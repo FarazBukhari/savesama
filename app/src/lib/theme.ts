@@ -110,8 +110,10 @@ export const type = {
   body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 24 },
   bodyStrong: { fontFamily: fonts.medium, fontSize: 16, lineHeight: 24 },
   label: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
-  meta: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, ...tnum },
-  metaStrong: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20, ...tnum },
+  // Schibsted's tnum also widens '.' and ':', which reads as stray spaces in links and sizes,
+  // so tabular figures are kept to captions (pills, tape legend, player times).
+  meta: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  metaStrong: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20 },
   caption: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, letterSpacing: 0.2, ...tnum },
   code: { fontFamily: 'monospace', fontSize: 14, lineHeight: 20, fontWeight: '400' as const },
 } as const;

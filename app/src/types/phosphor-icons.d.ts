@@ -1,0 +1,55 @@
+// Types for the per-icon entry points (mapped in tsconfig paths): the package's .tsx sources don't
+// typecheck against this project's react-native-svg types, and importing the package root would
+// bundle all ~1500 icons.
+import type { Icon } from 'phosphor-react-native';
+
+export declare const LinkIcon: Icon;
+export declare const PulseIcon: Icon;
+export declare const ImagesIcon: Icon;
+export declare const HardDrivesIcon: Icon;
+export declare const GearIcon: Icon;
+export declare const YoutubeLogoIcon: Icon;
+export declare const InstagramLogoIcon: Icon;
+export declare const TiktokLogoIcon: Icon;
+export declare const FacebookLogoIcon: Icon;
+export declare const ThreadsLogoIcon: Icon;
+export declare const ClipboardTextIcon: Icon;
+export declare const XIcon: Icon;
+export declare const ArrowCounterClockwiseIcon: Icon;
+export declare const ArrowsClockwiseIcon: Icon;
+export declare const ShareNetworkIcon: Icon;
+export declare const TrashIcon: Icon;
+export declare const InfoIcon: Icon;
+export declare const MagnifyingGlassIcon: Icon;
+export declare const FilmStripIcon: Icon;
+export declare const ImageSquareIcon: Icon;
+export declare const MusicNotesIcon: Icon;
+export declare const ClockCounterClockwiseIcon: Icon;
+export declare const LockIcon: Icon;
+export declare const ProhibitIcon: Icon;
+export declare const LinkBreakIcon: Icon;
+export declare const HourglassMediumIcon: Icon;
+export declare const CloudSlashIcon: Icon;
+export declare const PlugsIcon: Icon;
+export declare const PlugsConnectedIcon: Icon;
+export declare const WarningCircleIcon: Icon;
+export declare const CheckCircleIcon: Icon;
+export declare const QrCodeIcon: Icon;
+export declare const KeyboardIcon: Icon;
+export declare const DeviceMobileIcon: Icon;
+export declare const DesktopIcon: Icon;
+export declare const CopyIcon: Icon;
+export declare const TerminalIcon: Icon;
+export declare const ArrowSquareOutIcon: Icon;
+export declare const ArrowLeftIcon: Icon;
+export declare const DotsThreeVerticalIcon: Icon;
+export declare const CameraIcon: Icon;
+export declare const PlayIcon: Icon;
+export declare const PauseIcon: Icon;
+export declare const VibrateIcon: Icon;
+export declare const PlusIcon: Icon;
+export declare const CheckIcon: Icon;
+export declare const CaretRightIcon: Icon;
+export declare const EyeIcon: Icon;
+export declare const EyeSlashIcon: Icon;
+export declare const PencilSimpleIcon: Icon;

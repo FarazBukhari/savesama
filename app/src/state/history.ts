@@ -2,10 +2,10 @@ import { linkKey, type Platform } from '@/lib/links';
 
 import { historyStore, type SavedFile } from './stores';
 
-export function recordLink(url: string, platform: Platform, title: string | null): void {
+export function recordLink(url: string, platform: Platform, title: string | null, author: string | null = null): void {
   const key = linkKey(url);
   historyStore.set((s) => ({
-    links: [{ key, url, platform, title, savedAt: Date.now() }, ...s.links.filter((l) => l.key !== key)],
+    links: [{ key, url, platform, title, author, savedAt: Date.now() }, ...s.links.filter((l) => l.key !== key)],
   }));
 }
 

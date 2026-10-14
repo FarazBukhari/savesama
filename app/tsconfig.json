@@ -2,8 +2,11 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "noUncheckedIndexedAccess": false,
-    "paths": { "@/*": ["./src/*"] }
+    "types": ["jest"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "phosphor-react-native/src/icons/*": ["./src/types/phosphor-icons.d.ts"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }

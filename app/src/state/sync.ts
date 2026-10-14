@@ -85,7 +85,7 @@ async function runTransfer(job: Job) {
       quality: job.quality,
       savedAt: Date.now(),
     });
-    recordLink(job.url, job.platform, job.title);
+    recordLink(job.url, job.platform, job.title, job.author);
     dispatch(job.id, { type: 'saved' });
     haptic.success();
     AccessibilityInfo.announceForAccessibility(`Saved ${job.title ?? 'file'} to the SaveSama album`);
@@ -182,7 +182,6 @@ export async function startJobs(body: CreateJobsBody): Promise<Job[]> {
   if (!client) throw new ApiError('offline', 'not paired');
   const jobs = await client.createJobs(body);
   jobsStore.set((s) => ({ jobs: [...jobs, ...s.jobs.filter((j) => !jobs.some((n) => n.id === j.id))] }));
-  if (jobs[0]) recordLink(body.url, jobs[0].platform, jobs[0].title);
   void syncJobs();
   return jobs;
 }
