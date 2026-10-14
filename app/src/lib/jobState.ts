@@ -201,7 +201,7 @@ export function statusLine(stage: Stage, job: LineJob, transfer?: Transfer | nul
     case 'writing':
       return 'Saving to gallery';
     case 'saved': {
-      const suffix = job.mode === 'audio' ? 'Audio' : job.file?.type === 'image' ? '' : qualityLabel(job.quality);
+      const suffix = job.mode === 'audio' ? 'Audio' : job.file?.type === 'image' || job.quality === 'max' ? '' : qualityLabel(job.quality);
       return ['Saved', formatSize(job.file?.size ?? transfer?.total), savedAgo, suffix].filter(Boolean).join(' · ');
     }
     case 'cancelled':

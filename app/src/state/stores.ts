@@ -80,6 +80,7 @@ export interface LinkRecord {
   url: string;
   platform: Platform;
   title: string | null;
+  author?: string | null;
   savedAt: number;
 }
 
