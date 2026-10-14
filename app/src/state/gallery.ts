@@ -1,4 +1,6 @@
+import { Directory, File, Paths } from 'expo-file-system';
 import { Album, Asset, getPermissionsAsync, MediaType, presentPermissionsPicker, Query, requestPermissionsAsync } from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { Linking } from 'react-native';
 
 import type { ItemType } from '@/lib/api';
@@ -92,3 +94,26 @@ export async function deleteFromGallery(ids: string[]): Promise<void> {
 }
 
 export const galleryAvailable = true;
+
+const MIME: Record<string, string> = {
+  mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime',
+  m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', aac: 'audio/aac', wav: 'audio/wav',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic',
+};
+
+/**
+ * Opens the share sheet for a gallery item. Gallery assets are content:// URIs, which
+ * expo-sharing rejects (file:// only), so the file is copied into the cache first.
+ */
+export async function shareFile(uri: string, filename: string, type: ItemType): Promise<void> {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const mimeType = MIME[ext] ?? `${type}/*`;
+  if (!uri.startsWith('content://')) return Sharing.shareAsync(uri, { mimeType });
+  const dir = new Directory(Paths.cache, 'share');
+  if (dir.exists) dir.delete();
+  dir.create({ idempotent: true, intermediates: true });
+  const name = filename.replace(/[\\/:*?"<>|]+/g, ' ').trim() || `SaveSama.${ext || 'bin'}`;
+  const dest = new File(dir, name);
+  await new File(uri).copy(dest, { overwrite: true });
+  await Sharing.shareAsync(dest.uri, { mimeType });
+}

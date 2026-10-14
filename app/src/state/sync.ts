@@ -34,7 +34,7 @@ function pump() {
 }
 
 function enqueue(job: Job) {
-  if (running.has(job.id) || queue.includes(job.id) || blocked.has(job.id) || isJobSaved(job.id)) return;
+  if (running.has(job.id) || queue.includes(job.id) || blocked.has(job.id) || isJobSaved(job.id) || jobsStore.get().hidden.includes(job.id)) return;
   queue.push(job.id);
   pump();
 }

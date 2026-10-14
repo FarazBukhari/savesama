@@ -33,3 +33,9 @@ export async function listGallery(): Promise<GalleryAsset[]> {
 export async function deleteFromGallery(): Promise<void> {}
 
 export const galleryAvailable = false;
+
+export async function shareFile(uri: string, filename: string): Promise<void> {
+  const nav = globalThis.navigator as Navigator | undefined;
+  if (nav?.share) return nav.share({ title: filename, url: uri });
+  throw new Error('sharing unavailable');
+}

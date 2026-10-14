@@ -46,7 +46,8 @@ export function JobRow({
   const failed = row.stage === 'error' || row.stage === 'transferFailed';
   const showTape = row.stage !== 'saved' && row.stage !== 'cancelled' && !(failed && row.tape.spans.every((s) => s === 0));
   const cancellable = row.section === 'progress';
-  const retryable = row.section === 'failed';
+  // Retrying can't help these: SaveSama never signs in, and the link won't change.
+  const retryable = row.section === 'failed' && row.errorCode !== 'login_required' && row.errorCode !== 'unsupported_url';
   const body = (
     <View style={{ paddingHorizontal: 12, paddingVertical: 14, gap: 14 }}>
       <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>

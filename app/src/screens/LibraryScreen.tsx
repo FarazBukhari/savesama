@@ -1,5 +1,4 @@
 import { useFocusEffect, router } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Linking, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +11,7 @@ import { useTheme } from '@/components/theme';
 import { dateGroup, formatDuration } from '@/lib/format';
 import { PLATFORM_NAMES } from '@/lib/links';
 import { EDGE, radius, type as typeRoles } from '@/lib/theme';
-import { allowAllMedia } from '@/state/gallery';
+import { allowAllMedia, shareFile } from '@/state/gallery';
 import { deleteItems, libraryStore, loadLibrary, typeName, type LibraryItem } from '@/state/library';
 import { historyStore } from '@/state/stores';
 import { confirm, haptic, snack } from '@/state/ui';
@@ -111,7 +110,7 @@ export function LibraryScreen() {
     const it = items.find((i) => selected.has(i.key));
     if (!it) return;
     try {
-      await Sharing.shareAsync(it.uri);
+      await shareFile(it.uri, it.filename, it.type);
     } catch {
       snack("Couldn't share this file");
     }

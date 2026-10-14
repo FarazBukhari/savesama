@@ -2,7 +2,7 @@ import { useEvent, useEventListener } from 'expo';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as Sharing from 'expo-sharing';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,6 +17,7 @@ import { T } from '@/components/Text';
 import { useTheme } from '@/components/theme';
 import { formatDuration, relativeTime } from '@/lib/format';
 import { PLATFORM_NAMES } from '@/lib/links';
+import { shareFile } from '@/state/gallery';
 import { deleteItems, libraryStore, typeName, type LibraryItem } from '@/state/library';
 import { confirm, openSheet, snack } from '@/state/ui';
 
@@ -56,6 +57,21 @@ export function ViewerScreen() {
     if (!items.length) close();
   }, [items.length]);
 
+  // The rest of the app is portrait-only (app.json); the viewer rotates freely.
+  useEffect(() => {
+    ScreenOrientation.unlockAsync().catch(() => undefined);
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => undefined);
+    };
+  }, []);
+
+  const listRef = useRef<FlatList<LibraryItem>>(null);
+  useEffect(() => {
+    listRef.current?.scrollToIndex({ index, animated: false });
+    // Only on rotation: keep the current page in view when the page width changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width]);
+
   if (!item) return <View style={{ flex: 1, backgroundColor: c.viewerBg }} />;
 
   const remove = () =>
@@ -79,6 +95,7 @@ export function ViewerScreen() {
       <GestureDetector gesture={swipeDown}>
         <Animated.View style={[{ flex: 1 }, pageStyle]}>
           <FlatList
+            ref={listRef}
             data={items}
             horizontal
             pagingEnabled
@@ -121,7 +138,7 @@ function TopChrome({ item, onBack, onDelete }: { item: LibraryItem; onBack: () =
           name="ShareNetwork"
           label="Share"
           tint="#FFFFFF"
-          onPress={() => Sharing.shareAsync(item.uri).catch(() => snack("Couldn't share this file"))}
+          onPress={() => shareFile(item.uri, item.filename, item.type).catch(() => snack("Couldn't share this file"))}
         />
         <IconButton name="Info" label="Info" tint="#FFFFFF" onPress={() => openSheet({ kind: 'info', key: item.key })} />
         <IconButton name="Trash" label="Delete" tint="#FFFFFF" onPress={onDelete} />

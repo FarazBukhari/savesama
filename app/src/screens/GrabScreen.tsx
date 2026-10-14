@@ -115,7 +115,7 @@ export function GrabScreen() {
               <Icon name={PLATFORM_ICON[l.platform]} />
               <View style={{ flex: 1 }}>
                 <T role="body" numberOfLines={1}>
-                  {[l.author, l.title].filter(Boolean).join(' · ') || displayLink(l.url)}
+                  {l.title || l.author || displayLink(l.url)}
                 </T>
                 <T role="meta" color="ink2" numberOfLines={1}>
                   {`${hostOf(l.url)} · Saved ${relativeTime(l.savedAt)}`}
