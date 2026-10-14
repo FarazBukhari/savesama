@@ -14,9 +14,11 @@ def home():
     return response(fixture("instagram_home.html"))
 
 
-class GraphqlParseTest(unittest.TestCase):
+class GraphShapeTest(unittest.TestCase):
+    """The old GraphQL shape, which the embed page's gql_data still uses."""
+
     def test_video_with_dash_ladder(self):
-        media = instagram.parse_graphql(fixture("instagram_graphql_video.json"))
+        media = fixture_json("instagram_graphql_video.json")["data"]["xdt_shortcode_media"]
         info = meta.meta_from_graph(media)
         self.assertEqual(info, {"id": "VidCode123", "title": "Sunset reel\nsecond line", "author": "someartist"})
         items = meta.items_from_graph(media, True)
@@ -29,7 +31,7 @@ class GraphqlParseTest(unittest.TestCase):
         self.assertEqual(meta.items_from_graph(media, False)[0].qualities, [1080])
 
     def test_sidecar_crops_and_silent_video(self):
-        media = instagram.parse_graphql(fixture("instagram_graphql_sidecar.json"))
+        media = fixture_json("instagram_graphql_sidecar.json")["data"]["xdt_shortcode_media"]
         items = meta.items_from_graph(media, True)
         self.assertEqual([i.type for i in items], ["image", "video"])
         img = items[0]
@@ -38,16 +40,47 @@ class GraphqlParseTest(unittest.TestCase):
         self.assertFalse(items[1].has_audio)
         self.assertIsNone(items[1].audio_url)
 
+
+class GraphqlParseTest(unittest.TestCase):
+    """Live /api/graphql answers (recorded October 2026, trimmed)."""
+
+    def test_media_id(self):
+        self.assertEqual(instagram.media_id("Deb_p3pxcjQ"), "4007076247661562064")
+        self.assertEqual(instagram.media_id("DblSWtPD9-n"), "3955648572951617447")
+
+    def test_reel_size_comes_from_the_encode(self):
+        media = instagram.parse_graphql(fixture("instagram_api_reel.json"))
+        self.assertEqual(meta.meta_from_api(media)["id"], "Chunk8-jurw")
+        [v] = meta.items_from_api(media, True)
+        # video_versions carry no sizes; the efg tag says 480 although the post is 720x1280.
+        self.assertEqual((v.type, v.width, v.height, v.qualities), ("video", 480, 853, [480]))
+        self.assertFalse(v.has_audio)  # licensed music is stripped for logged-out viewers
+        self.assertIsNotNone(v.thumbnail)
+
+    def test_carousel(self):
+        media = instagram.parse_graphql(fixture("instagram_api_sidecar.json"))
+        items = meta.items_from_api(media, True)
+        self.assertEqual([(i.index, i.type, i.qualities) for i in items],
+                         [(0, "video", [640]), (1, "video", [640]), (2, "video", [640])])
+
+    def test_photo_without_candidate_sizes(self):
+        media = instagram.parse_graphql(fixture("instagram_api_photo.json"))
+        self.assertEqual(meta.meta_from_api(media)["author"], "world_record_egg")
+        [img] = meta.items_from_api(media, True)
+        self.assertEqual((img.type, img.width, img.height), ("image", 584, 584))
+        self.assertEqual(img.variants[0].url, media["image_versions2"]["candidates"][0]["url"])
+
     def test_error_bodies(self):
         cases = [("instagram_graphql_rate_limited.json", 401, "rate_limited"),
                  ("instagram_graphql_null.json", 200, "not_found"),
+                 ("instagram_graphql_gated.json", 200, "login_required"),
                  ("instagram_graphql_doc_id_retired.json", 200, "internal")]
         for name, status, code in cases:
             with self.assertRaises(ApiError, msg=name) as ctx:
                 instagram.parse_graphql(fixture(name), status)
             self.assertEqual(ctx.exception.code, code, name)
-        with self.assertRaises(ApiError) as ctx:
-            instagram.parse_graphql("<html>login</html>", 200)
+        with self.assertRaises(ApiError) as ctx:  # the HTML app shell instead of a query result
+            instagram.parse_graphql("<!DOCTYPE html><html><head></head></html>", 200)
         self.assertEqual(ctx.exception.code, "rate_limited")
 
 
@@ -71,35 +104,36 @@ class EmbedParseTest(unittest.TestCase):
 
 class ExtractFlowTest(unittest.TestCase):
     def setUp(self):
-        instagram._csrf = None
+        instagram._lsd = None
         instagram._graphql_blocked_until = 0.0
 
     def test_graphql_recipe(self):
         fake = FakeNet([
             ("GET", "instagram.com/", home()),
-            ("POST", "/graphql/query", response(fixture("instagram_graphql_video.json"))),
+            ("POST", "/api/graphql", response(fixture("instagram_api_reel.json"))),
         ])
         with mock.patch.object(net, "request", fake):
-            res = instagram.extract("https://www.instagram.com/reel/VidCode123/?igsh=x", True)
-        self.assertEqual(res.via, "graphql")
+            res = instagram.extract("https://www.instagram.com/reel/Chunk8-jurw/?igsh=x", True)
+        self.assertEqual((res.via, res.id, res.author), ("graphql", "Chunk8-jurw", "instagram"))
         post = fake.calls[1]
-        self.assertEqual(post["headers"]["X-IG-App-ID"], instagram.IG_APP_ID)
-        self.assertEqual(post["headers"]["X-CSRFToken"], "Ab12Cd34Ef56Gh78Ij90Kl")
-        self.assertEqual(post["headers"]["Cookie"], "csrftoken=Ab12Cd34Ef56Gh78Ij90Kl")
+        self.assertEqual(post["headers"]["Sec-Fetch-Site"], "same-origin")
+        self.assertEqual(post["headers"]["X-FB-LSD"], "AVqLsdTok3n")
+        self.assertNotIn("Cookie", post["headers"])
         form = urllib.parse.parse_qs(post["data"].decode())
         self.assertEqual(form["doc_id"], [instagram.GRAPHQL_DOC_ID])
-        self.assertEqual(json.loads(form["variables"][0])["shortcode"], "VidCode123")
+        self.assertEqual(form["lsd"], ["AVqLsdTok3n"])
+        self.assertEqual(json.loads(form["variables"][0]), {"media_id": instagram.media_id("Chunk8-jurw")})
 
-    def test_csrf_from_escaped_json(self):
-        fake = FakeNet([("GET", "instagram.com/", response(fixture("instagram_home_escaped.html")))])
+    def test_lsd_from_eqmc_script(self):
+        fake = FakeNet([("GET", "instagram.com/", response(fixture("instagram_home_eqmc.html")))])
         with mock.patch.object(net, "request", fake):
-            self.assertEqual(instagram._csrf_token(), "Zz98Yy76Xx54Ww32Vv10")
+            self.assertEqual(instagram._lsd_token(), "AVqEqmcTok3n")
 
     def test_rate_limited_graphql_falls_back_to_embed(self):
         fake = FakeNet([
             ("GET", "/embed/captioned/", response(fixture("instagram_embed_sidecar.html"))),
             ("GET", "instagram.com/", home()),
-            ("POST", "/graphql/query", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
+            ("POST", "/api/graphql", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
         ])
         with mock.patch.object(net, "request", fake), \
                 mock.patch.object(ytdlp, "resolve", side_effect=AssertionError("must not be needed")):
@@ -119,7 +153,7 @@ class ExtractFlowTest(unittest.TestCase):
         fake = FakeNet([
             ("GET", "/embed/captioned/", response(fixture("instagram_embed_reel_blocked.html"))),
             ("GET", "instagram.com/", home()),
-            ("POST", "/graphql/query", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
+            ("POST", "/api/graphql", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
         ])
         yres = Resolved(url="u", platform="instagram", id="Chunk8-jurw",
                         items=[Item(index=0, type="video", source="ytdlp", variants=[], qualities=[720])],
@@ -155,7 +189,7 @@ class ExtractFlowTest(unittest.TestCase):
         fake = FakeNet([
             ("GET", "/embed/captioned/", response("<html>no media</html>")),
             ("GET", "instagram.com/", home()),
-            ("POST", "/graphql/query", response(fixture("instagram_graphql_null.json"))),
+            ("POST", "/api/graphql", response(fixture("instagram_graphql_null.json"))),
         ])
         with mock.patch.object(net, "request", fake), \
                 mock.patch.object(ytdlp, "resolve", side_effect=ApiError("rate_limited")):
@@ -173,7 +207,7 @@ class ExtractFlowTest(unittest.TestCase):
         fake = FakeNet([
             ("GET", "/embed/captioned/", response(fixture("instagram_embed_photo.html"))),
             ("GET", "instagram.com/", home()),
-            ("POST", "/graphql/query", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
+            ("POST", "/api/graphql", response(fixture("instagram_graphql_rate_limited.json"), status=401)),
         ])
         with mock.patch.object(net, "request", fake), \
                 mock.patch.object(ytdlp, "resolve", side_effect=AssertionError("yt-dlp can't do photos")):
