@@ -1,13 +1,16 @@
 """Anonymous Instagram extraction.
 
-Order: GraphQL (full media incl. video and DASH audio) -> embed page with a crawler UA
-(images and most carousel videos; music reels come back "copyright_blocked" without a
-video URL) -> yt-dlp (works for reels from many networks) -> best error.
+Order: logged-out GraphQL (full media incl. video and DASH audio) -> embed page with a crawler
+UA (images and most carousel videos; music reels come back "copyright_blocked" without a
+video URL) -> yt-dlp (reels) -> best error.
 
-If every post suddenly fails with "execution error", Meta retired GRAPHQL_DOC_ID. Get the
-current one: open a public post logged-out in a desktop browser with devtools, filter the
-Network tab for "graphql/query", and copy the doc_id form field of the
-PolarisPostActionLoadPostQueryQuery request.
+GraphQL is the query instagram.com itself runs for a logged-out post page: an `lsd` token from
+the home page, then POST /api/graphql. No cookies. If every post suddenly fails with
+"execution error", Meta retired GRAPHQL_DOC_ID. Get the current one: open a public post
+logged-out in a desktop browser with devtools, filter the Network tab for "api/graphql", and
+copy the doc_id form field of the PolarisLoggedOutDesktopWWWPostRootContentQuery request (yt-dlp's
+instagram extractor tracks it too). The older /graphql/query endpoint answers every anonymous
+request with 401 "Please wait a few minutes" since autumn 2026.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import html as html_mod
 import json
 import logging
 import re
+import string
 import threading
 import time
 import urllib.parse
@@ -26,88 +30,111 @@ from ..media import Item, Resolved, Variant
 from ..urls import instagram_shortcode, is_share_link
 from . import meta, ytdlp
 
-GRAPHQL_DOC_ID = "10015901848480474"
+GRAPHQL_DOC_ID = "27130156389949648"
+GRAPHQL_QUERY = "PolarisLoggedOutDesktopWWWPostRootContentQuery"
 IG_APP_ID = "936619743392459"
 
 log = logging.getLogger("savesama.instagram")
 
-_CSRF_RE = re.compile(r'\\?"csrf_token\\?"\s*:\s*\\?"([A-Za-z0-9_-]{8,})\\?"')
+_LSD_RE = re.compile(r'\["LSD",\[\],\{"token":"([^"]+)"')
+_EQMC_LSD_RE = re.compile(r'<script\b[^>]*\bid="__eqmc"[^>]*>\s*\{[^<]*?"l"\s*:\s*"([^"]+)"')
 _CONTEXT_JSON_RE = re.compile(r'"contextJSON"\s*:\s*("(?:[^"\\]|\\.)*")')
 _EMBED_IMG_RE = re.compile(r'<img[^>]+class="EmbeddedMediaImage"[^>]+src="([^"]+)"')
+_SHORTCODE_ALPHABET = string.ascii_uppercase + string.ascii_lowercase + string.digits + "-_"
 
-_csrf_lock = threading.Lock()
-_csrf: tuple[str, float] | None = None
-CSRF_TTL = 30 * 60
+_lsd_lock = threading.Lock()
+_lsd: tuple[str, float] | None = None
+LSD_TTL = 30 * 60
 # After Instagram rate-limits GraphQL, go straight to the fallbacks for a while instead of
 # spending two more requests per link and deepening the limit.
 GRAPHQL_COOLDOWN = 10 * 60
 _graphql_blocked_until = 0.0
 
+_RATE_LIMITED = "Instagram is limiting anonymous requests from this server. Try again in a few minutes."
 
-def _csrf_token() -> str:
-    """Anonymous CSRF token, read from the home page body (not Set-Cookie)."""
-    global _csrf
-    with _csrf_lock:
-        if _csrf and time.time() - _csrf[1] < CSRF_TTL:
-            return _csrf[0]
+
+def media_id(code: str) -> str:
+    """Shortcode -> numeric media id (base64url digits). Private posts append 28 chars."""
+    if len(code) > 28:
+        code = code[:-28]
+    pk = 0
+    for ch in code:
+        pk = pk * 64 + _SHORTCODE_ALPHABET.index(ch)
+    return str(pk)
+
+
+def _lsd_token() -> str:
+    """The anonymous request token instagram.com embeds in every page."""
+    global _lsd
+    with _lsd_lock:
+        if _lsd and time.time() - _lsd[1] < LSD_TTL:
+            return _lsd[0]
     resp = net.request("https://www.instagram.com/")
     err = net.status_error(resp, "instagram")
     if err:
         raise err
-    m = _CSRF_RE.search(resp.text())
+    page = resp.text()
+    m = _LSD_RE.search(page) or _EQMC_LSD_RE.search(page)
     if not m:
         raise ApiError("rate_limited", "Instagram didn't hand out an anonymous session. Try again later.")
-    with _csrf_lock:
-        _csrf = (m.group(1), time.time())
+    with _lsd_lock:
+        _lsd = (m.group(1), time.time())
     return m.group(1)
 
 
 def parse_graphql(body: str, status: int = 200) -> dict:
-    """Return the shortcode_media dict from a /graphql/query answer, or raise."""
+    """Return the post's media dict (private-API shape) from an /api/graphql answer, or raise."""
     try:
         data = json.loads(body)
     except ValueError:
-        if status in (401, 403, 429) or "<html" in body[:500].lower():
-            raise ApiError("rate_limited", "Instagram is limiting anonymous requests from this "
-                                           "server. Try again in a few minutes.") from None
+        # Instagram answers a query it won't serve anonymously with its HTML app shell.
+        if status in (200, 401, 403, 429) or "<html" in body[:500].lower():
+            raise ApiError("rate_limited", _RATE_LIMITED) from None
         raise ApiError("internal", "Instagram answered with something that isn't JSON.") from None
     if data.get("status") == "fail" or data.get("require_login"):
         msg = (data.get("message") or "").lower()
         if "wait" in msg or status == 429 or data.get("require_login"):
-            raise ApiError("rate_limited", "Instagram is limiting anonymous requests from this server. "
-                                           "Try again in a few minutes.")
+            raise ApiError("rate_limited", _RATE_LIMITED)
         raise ApiError("login_required")
-    if data.get("errors") and not (data.get("data") or {}).get("xdt_shortcode_media"):
+    holder = (data.get("data") or {}).get("xig_polaris_media")
+    if data.get("errors") and not holder:
         log.warning("Instagram GraphQL error %s; GRAPHQL_DOC_ID %s may be retired",
                     data["errors"][:1], GRAPHQL_DOC_ID)
         raise ApiError("internal", "Instagram changed its web API. Update the server "
                                    "(Settings > Update extractor) or check GRAPHQL_DOC_ID.")
-    media = (data.get("data") or {}).get("xdt_shortcode_media") or (data.get("data") or {}).get("shortcode_media")
-    if not media:
+    if not holder:
         raise ApiError("not_found", "Instagram didn't return this post. It was deleted, or the "
                                     "account is private.")
+    media = holder.get("if_not_gated_logged_out")
+    if not media:
+        raise ApiError("login_required", "Instagram only shows this post to logged-in viewers "
+                                         "(age-restricted or limited), and SaveSama never uses accounts.")
     return media
 
 
 def via_graphql(code: str) -> dict:
-    token = _csrf_token()
+    lsd = _lsd_token()
     form = urllib.parse.urlencode({
-        "variables": json.dumps({"shortcode": code, "fetch_tagged_user_count": None,
-                                 "hoisted_comment_id": None, "hoisted_reply_id": None},
-                                separators=(",", ":")),
+        "lsd": lsd,
+        "fb_api_caller_class": "RelayModern",
+        "fb_api_req_friendly_name": GRAPHQL_QUERY,
+        "server_timestamps": "true",
+        "variables": json.dumps({"media_id": media_id(code)}, separators=(",", ":")),
         "doc_id": GRAPHQL_DOC_ID,
     }).encode()
-    resp = net.request("https://www.instagram.com/graphql/query", method="POST", data=form, headers={
+    resp = net.request("https://www.instagram.com/api/graphql", method="POST", data=form, headers={
         "X-IG-App-ID": IG_APP_ID,
-        "X-CSRFToken": token,
-        "Cookie": f"csrftoken={token}",
+        "X-FB-LSD": lsd,
+        "X-FB-Friendly-Name": GRAPHQL_QUERY,
         "Content-Type": "application/x-www-form-urlencoded",
         "Origin": "https://www.instagram.com",
         "Referer": f"https://www.instagram.com/p/{code}/",
         "Accept": "*/*",
+        # Without it Instagram serves its HTML app shell instead of the query result.
+        "Sec-Fetch-Site": "same-origin",
     }, follow_redirects=False)
     if resp.status in (301, 302) or net.is_login_url(resp.url):
-        raise ApiError("rate_limited", "Instagram is limiting anonymous requests from this server.")
+        raise ApiError("rate_limited", _RATE_LIMITED)
     if resp.status >= 500:
         raise ApiError("network", f"Instagram returned a server error ({resp.status}).")
     return parse_graphql(resp.text(), resp.status)
@@ -186,8 +213,8 @@ def extract(url: str, can_mux: bool) -> Resolved:
     if time.time() >= _graphql_blocked_until:
         try:
             media = via_graphql(code)
-            info = meta.meta_from_graph(media)
-            return _resolved(post_url, code, info, meta.items_from_graph(media, can_mux), "graphql")
+            return _resolved(post_url, code, meta.meta_from_api(media),
+                             meta.items_from_api(media, can_mux), "graphql")
         except ApiError as e:
             log.info("instagram graphql %s: %s", code, e)
             if e.code == "rate_limited":

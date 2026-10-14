@@ -109,6 +109,9 @@ def _api_node_item(node: dict, index: int, can_mux: bool) -> Item | None:
     orig_w, orig_h = node.get("original_width"), node.get("original_height")
     cands = [(c.get("width") or 0, c.get("height") or 0, c.get("url"))
              for c in (node.get("image_versions2") or {}).get("candidates") or []]
+    if cands and not any(w and h for w, h, _ in cands):
+        # Instagram's logged-out GraphQL omits candidate sizes; the first is the full-size original.
+        cands = [(orig_w or 0, orig_h or 0, cands[0][2])]
     full = _full_frame(cands, orig_w, orig_h)
     best, thumb = _best_and_thumb(full)
     versions = node.get("video_versions") or []
@@ -119,8 +122,9 @@ def _api_node_item(node: dict, index: int, can_mux: bool) -> Item | None:
         for v in versions:
             if not v.get("url"):
                 continue
-            # video_versions often omit dimensions; the post's original size is the best guess.
-            w, h = v.get("width") or orig_w, v.get("height") or orig_h
+            # video_versions often omit dimensions; the encode's efg tag says which rung it is.
+            w, h = (v["width"], v["height"]) if v.get("width") and v.get("height") \
+                else rendition_dims(v["url"], orig_w, orig_h)
             variants.append(Variant(v["url"], w, h))
         has_audio = node.get("has_audio") is not False
         return _video_item(index, variants, node.get("video_dash_manifest"), thumb,
