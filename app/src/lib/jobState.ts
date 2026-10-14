@@ -3,7 +3,7 @@ import { formatEta, formatPercent, formatSize, formatSpeed } from './format';
 import { PLATFORM_NAMES } from './links';
 import { qualityLabel } from './quality';
 
-export type TransferFailure = 'transfer' | 'storage' | 'permission' | 'server';
+export type TransferFailure = 'transfer' | 'storage' | 'permission' | 'server' | 'gallery';
 
 export interface Transfer {
   phase: 'waiting' | 'transferring' | 'writing' | 'saved' | 'failed';
@@ -210,6 +210,7 @@ export function statusLine(stage: Stage, job: LineJob, transfer?: Transfer | nul
       if (transfer?.failure === 'storage') return 'Phone storage is full';
       if (transfer?.failure === 'permission') return 'Allow gallery access to finish saving';
       if (transfer?.failure === 'server') return 'The server changed state. Retry';
+      if (transfer?.failure === 'gallery') return "Couldn't add it to the gallery. Retry";
       return 'Transfer stopped. Retry to resume';
     case 'error':
       return jobErrorLine(job.error?.code, job.error?.message, platform);

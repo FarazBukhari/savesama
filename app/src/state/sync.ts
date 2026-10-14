@@ -66,7 +66,13 @@ async function runTransfer(job: Job) {
       controller.signal,
     );
     dispatch(job.id, { type: 'downloaded' });
-    const assetId = await saveToGallery(uri);
+    let assetId: string;
+    try {
+      assetId = await saveToGallery(uri);
+    } catch (e) {
+      discardLocal(uri); // Retry downloads it again
+      throw new TransferError('gallery', e instanceof Error ? e.message : String(e));
+    }
     if (assetId !== uri) discardLocal(uri);
     addSave({
       jobId: job.id,

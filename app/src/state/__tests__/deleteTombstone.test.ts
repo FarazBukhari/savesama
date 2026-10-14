@@ -37,12 +37,12 @@ const job = {
 
 it('a file deleted from the Library is not downloaded again when the server keeps its copy', async () => {
   settingsStore.set({ keepOnServer: true });
+  globalThis.fetch = jest.fn(async () => new Response(JSON.stringify({ jobs: [job] }), { status: 200 })) as unknown as typeof fetch;
   serversStore.set({
     servers: [{ id: 's1', name: 'T', host: '127.0.0.1', port: 8765, addedAt: 0, lastSeen: null }],
     activeId: 's1',
     tokens: { s1: 't' },
   });
-  globalThis.fetch = jest.fn(async () => new Response(JSON.stringify({ jobs: [job] }), { status: 200 })) as unknown as typeof fetch;
 
   addSave({ jobId: 'job1', assetId: 'content://media/1', uri: null, url: job.url, platform: 'tiktok', title: 'Clip', author: 'a', thumbnail: null, type: 'video', mime: 'video/mp4', name: 'a.mp4', size: 10, mode: 'media', quality: 'max', savedAt: 1 } as never);
   libraryStore.set({ items: [{ key: 'content://media/1', assetId: 'content://media/1' } as never], status: 'ready' });
@@ -53,5 +53,6 @@ it('a file deleted from the Library is not downloaded again when the server keep
 
   await syncJobs();
   await new Promise((r) => setTimeout(r, 0));
+  expect(globalThis.fetch).toHaveBeenCalled(); // the server really listed the job
   expect(downloadJobFile).not.toHaveBeenCalled();
 });
