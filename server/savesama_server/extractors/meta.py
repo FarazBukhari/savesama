@@ -9,8 +9,10 @@ Two payload shapes reach us:
 
 from __future__ import annotations
 
+import base64
 import json
 import re
+import urllib.parse
 
 from .. import dash
 from ..errors import ApiError
@@ -54,6 +56,32 @@ def _audio_and_dash_variants(manifest: str | None) -> tuple[str | None, list[Var
     return audio, [Variant(u, w, h, has_audio=False) for (w, h, _bw, u) in dash.h264_videos(manifest)]
 
 
+_RUNG_RE = re.compile(r"[._](\d{3,4})[._]")
+
+
+def rendition_dims(url: str, width, height) -> tuple:
+    """The size of the rendition at url, from Meta's efg tag, else the post's (width, height).
+
+    Progressive URLs carry efg=base64({"vencode_tag": "xpv_progressive.INSTAGRAM.CLIPS.C3.720...."}),
+    where the number is the encode's short side. The embed page serves a 640 or 720 encode
+    of a 1080x1920 reel while its "dimensions" are the original's.
+    """
+    try:
+        efg = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("efg", [""])[0]
+        tag = json.loads(base64.urlsafe_b64decode(efg + "=" * (-len(efg) % 4))).get("vencode_tag") or ""
+    except (ValueError, TypeError, AttributeError):
+        return width, height
+    m = _RUNG_RE.search(tag)
+    s = short_side(width, height)
+    if not (m and s and width and height):
+        return width, height
+    rung = int(m.group(1))
+    if 144 <= rung < s:
+        scale = rung / s
+        return round(width * scale), round(height * scale)
+    return width, height
+
+
 def _video_item(index, versions: list[Variant], manifest, thumb, width, height, duration,
                 has_audio, can_mux) -> Item:
     audio, dash_variants = _audio_and_dash_variants(manifest)
@@ -66,6 +94,10 @@ def _video_item(index, versions: list[Variant], manifest, thumb, width, height, 
             seen.add(v.url)
             uniq.append(v)
     mux_ok = can_mux and bool(audio)
+    usable = [v for v in uniq if v.short and (mux_ok or v.has_audio)]
+    if usable:  # describe the best rendition we can actually save, matching qualities[0]
+        top = max(usable, key=lambda v: v.short)
+        width, height = top.width, top.height
     return Item(index=index, type="video", thumbnail=thumb, width=width, height=height,
                 duration=duration, has_audio=has_audio, variants=uniq,
                 qualities=video_qualities(uniq, mux_ok), audio_url=audio if has_audio else None)
@@ -140,7 +172,8 @@ def _graph_node_item(node: dict, index: int, can_mux: bool) -> Item | None:
                         duration=node.get("video_duration"), has_audio=True)  # incomplete
         has_audio = node.get("has_audio") is not False
         manifest = (node.get("dash_info") or {}).get("video_dash_manifest")
-        return _video_item(index, [Variant(node["video_url"], w, h)], manifest, thumb, w, h,
+        vw, vh = rendition_dims(node["video_url"], w, h)
+        return _video_item(index, [Variant(node["video_url"], vw, vh)], manifest, thumb, w, h,
                            node.get("video_duration"), has_audio, can_mux)
     if not best:
         return None

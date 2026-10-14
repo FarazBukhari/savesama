@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import logging.handlers
 import os
@@ -11,6 +12,7 @@ import signal
 import sys
 import threading
 import time
+import urllib.request
 
 from . import __version__, pairing, update
 
@@ -86,15 +88,29 @@ def main(argv: list[str] | None = None) -> None:
         pairing.load_token(token_path, reset=True)
         print("New pairing token created. Restart the server and pair the app again.")
         return
-    name = (args.name or pairing.device_name()).strip()[:60]
     token = pairing.load_token(token_path)
     if args.command == "pair":
+        # Pair with the name the running server shows the app, which may come from its --name.
+        name = (args.name or running_name(args.port) or pairing.device_name()).strip()[:60]
         text, link, local_link = _pairing_text(args, token, name)
         print(text)
         if pairing.is_termux() and not args.no_open:
             pairing.open_on_termux(local_link)
         return
-    serve(args, token, name)
+    serve(args, token, (args.name or pairing.device_name()).strip()[:60])
+
+
+def running_name(port: int) -> str | None:
+    """The device name a SaveSama server on this machine's port reports, if one is running."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # never via a proxy
+    try:
+        with opener.open(f"http://127.0.0.1:{port}/api/v1/info", timeout=2) as resp:
+            info = json.loads(resp.read(64 * 1024).decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(info, dict) and info.get("app") == "savesama" and isinstance(info.get("name"), str):
+        return info["name"] or None
+    return None
 
 
 PID_FILE = os.path.join(DATA_DIR, "server.pid")
@@ -189,22 +205,25 @@ def serve(args, token: str, name: str) -> None:
     resolver = Resolver(can_mux=ffmpeg)
     bind = "127.0.0.1" if args.local_only else "0.0.0.0"
 
-    server = None
+    server = Server((bind, args.port), token=token, name=name, jobs=None, resolver=resolver,
+                    ffmpeg=ffmpeg, bind_and_activate=False)
     for attempt in range(20):  # after an in-place restart the old socket may linger briefly
         try:
-            server = Server((bind, args.port), token=token, name=name, jobs=None, resolver=resolver,
-                            ffmpeg=ffmpeg)
+            server.server_bind()
             break
         except OSError as e:
             if attempt == 19:
+                server.server_close()
                 log.error("can't listen on %s:%s: %s (is another SaveSama already running?)",
                           bind, args.port, e)
                 sys.exit(1)
             time.sleep(0.5)
     # Only now that the port is ours: the job manager clears temp files and starts workers,
-    # which must never happen next to another running instance.
+    # which must never happen next to another running instance. The socket starts listening
+    # after that, so no request can ever see a server without its job manager.
     jobs = JobManager(DATA_DIR, downloads, resolver, workers=max(1, min(args.workers, 8)), can_mux=ffmpeg)
     server.jobs = jobs
+    server.server_activate()
 
     text, link, local_link = _pairing_text(args, token, name)
     if sys.stdout.isatty():

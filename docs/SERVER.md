@@ -126,8 +126,8 @@ The app shows the server's message. Each kind of error means:
 | --- | --- | --- |
 | **Needs an account** (`login_required`) | The post is private, age-restricted, members-only, or the platform only shows it to signed-in users. | Nothing. SaveSama never signs in, so it can't download these. |
 | **Not found** (`not_found`) | The post was deleted, or the link is wrong. | Check that the post opens in the platform's own app. |
-| **Rate limited** (`rate_limited`) | The platform is slowing down requests from your connection. YouTube calls this "confirm you're not a bot". | Wait 10 to 30 minutes. Switching between Wi-Fi and mobile data often helps. Don't retry many times in a row. |
-| **Unavailable** (`unavailable`) | The post exists but has nothing to save: a text-only post, a live stream, a region block, or audio that needs ffmpeg. | Read the message. Live streams can be saved after they end. |
+| **Rate limited** (`rate_limited`) | The platform is temporarily blocking or slowing down requests from your connection. YouTube calls this "confirm you're not a bot" (or answers HTTP 403); TikTok shows a challenge page instead of the post. | Wait 10 to 30 minutes, or run the server from another network. Switching between Wi-Fi and mobile data often helps. Don't retry many times in a row. |
+| **Unavailable** (`unavailable`) | The post exists but has nothing to save: a text-only post, a live stream, a region block, audio that needs ffmpeg, or audio from a video that has no audio track. | Read the message. Live streams can be saved after they end. |
 | **Network** (`network`) | The server couldn't reach the platform. | Check the internet on the device running the server. |
 | **Unsupported link** (`unsupported_url`) | Not a link from the five supported platforms, or a profile page instead of a post. | Share the post or video itself. |
 | **Can't reach the server** | The app can't connect at all. | Check that the server is running and that both devices use the same Wi-Fi. Then re-pair: home Wi-Fi often gives the phone a new address, and `savesama pair` shows the new one. Guest Wi-Fi networks often block devices from seeing each other. |
@@ -198,7 +198,8 @@ If `savesama` isn't found, run `py -m savesama_server` instead.
 savesama [serve|pair|stop|reset-token] [options]
   --port 8765        port to listen on (also SAVESAMA_PORT)
   --dir PATH         where finished files wait for the app (default ~/.savesama/downloads)
-  --name NAME        device name shown in the app (default: the phone model or computer name)
+  --name NAME        device name shown in the app (default: the phone model or computer name;
+                     `pair` uses the name the running server reports)
   --workers 2        downloads running at the same time
   --local-only       accept connections from this device only (127.0.0.1)
   --no-open          on Termux, don't open the pairing link automatically

@@ -26,6 +26,7 @@ CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Disposition",
 }
+ALLOW = "GET, HEAD, POST, DELETE, OPTIONS"
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
@@ -33,14 +34,14 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, addr, *, token: str, name: str, jobs: JobManager, resolver: Resolver,
-                 ffmpeg: bool):
+    def __init__(self, addr, *, token: str, name: str, jobs: JobManager | None, resolver: Resolver,
+                 ffmpeg: bool, bind_and_activate: bool = True):
         self.token = token
         self.device_name = name
         self.jobs = jobs
         self.resolver = resolver
         self.ffmpeg = ffmpeg
-        super().__init__(addr, Handler)
+        super().__init__(addr, Handler, bind_and_activate)
 
 
 def _parse_quality(q):
@@ -80,8 +81,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _log(self, status: int):
         level = logging.DEBUG if self.command in ("GET", "HEAD", "OPTIONS") and status < 400 else logging.INFO
-        path = urllib.parse.urlsplit(self.path).path
-        log.log(level, "%s %s %s %s", self.client_address[0], self.command, path, status)
+        path = urllib.parse.urlsplit(getattr(self, "path", "") or "").path
+        log.log(level, "%s %s %s %s", self.client_address[0], self.command, path[:200], status)
 
     def _headers(self, status: int, headers: dict):
         self.send_response(status)
@@ -100,8 +101,10 @@ class Handler(BaseHTTPRequestHandler):
         if body and self.command != "HEAD":
             self.wfile.write(body)
 
-    def _error(self, err: ApiError, status: int | None = None, close: bool = False):
-        self._json(status or err.status, {"error": err.to_dict()}, {"Connection": "close"} if close else None)
+    def _error(self, err: ApiError, status: int | None = None, close: bool = False,
+               extra: dict | None = None):
+        headers = {**({"Connection": "close"} if close else {}), **(extra or {})}
+        self._json(status or err.status, {"error": err.to_dict()}, headers)
         if close:
             self.close_connection = True
 
@@ -141,6 +144,17 @@ class Handler(BaseHTTPRequestHandler):
             self.rfile.read(length)
         elif length > MAX_BODY:
             self.close_connection = True
+
+    def send_error(self, code, message=None, explain=None):
+        """The stdlib's own errors (unsupported method, malformed request line, oversized
+        headers) as our JSON shape with CORS, instead of its HTML page."""
+        self.close_connection = True  # the request may not have been read in full
+        if code == 501:  # BaseHTTPRequestHandler's answer to a method we have no do_X for
+            err = ApiError("bad_request", f"Method {str(self.command)[:20]} isn't supported.")
+            return self._error(err, 405, close=True, extra={"Allow": ALLOW})
+        text = {414: "The request URL is too long.", 431: "The request headers are too large.",
+                505: "Unsupported HTTP version."}.get(int(code), "The request was malformed.")
+        self._error(ApiError("bad_request", text), int(code), close=True)
 
     def _authorized(self) -> bool:
         header = self.headers.get("Authorization", "")

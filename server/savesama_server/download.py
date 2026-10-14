@@ -96,6 +96,16 @@ def _cdn_ok(url: str) -> bool:
     return parts.scheme == "https" and any(host == d or host.endswith("." + d) for d in CDN_DOMAINS)
 
 
+class _CdnOnlyRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a CDN redirect only while it stays on the platform/CDN hosts we download from."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        newurl = urllib.parse.urljoin(req.full_url, newurl)
+        if not _cdn_ok(newurl):
+            raise ApiError("internal", "Refusing to follow a download redirect to an unexpected host.")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch(url: str, dest: str, *, referer: str | None, progress: Progress, key: str,
           cancel: threading.Event, attempts: int = 3) -> str:
     """Download url to dest (resuming on retries). Returns the response Content-Type."""
@@ -111,7 +121,8 @@ def fetch(url: str, dest: str, *, referer: str | None, progress: Progress, key: 
             headers["Range"] = f"bytes={have}-"
         req = urllib.request.Request(url, headers=headers)
         try:
-            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=net._SSL))
+            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=net._SSL),
+                                                 _CdnOnlyRedirects())
             with opener.open(req, timeout=30) as resp:
                 ctype = resp.headers.get("Content-Type", "")
                 if have and resp.status != 206:
@@ -282,10 +293,31 @@ def download_direct(resolved: Resolved, item: Item, mode: str, quality, can_mux:
     return out
 
 
+def has_audio_stream(path: str) -> bool | None:
+    """Whether the media file has an audio stream; None when it can't be told."""
+    try:
+        if shutil.which("ffprobe"):
+            out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a",
+                                  "-show_entries", "stream=index", "-of", "csv=p=0", path],
+                                 capture_output=True, text=True, timeout=30)
+            if out.returncode == 0:
+                return bool(out.stdout.strip())
+        # `ffmpeg -i` with no output lists the streams on stderr (and exits 1).
+        out = subprocess.run(["ffmpeg", "-hide_banner", "-nostdin", "-i", path],
+                             capture_output=True, text=True, errors="replace", timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if "Stream #" not in out.stderr:
+        return None
+    return re.search(r"Stream #\S+.*?: Audio:", out.stderr) is not None
+
+
 def _ffmpeg_or_error(fn, src, out, cancel):
     try:
         fn(src, out, cancel)
     except RuntimeError as e:
+        if has_audio_stream(src) is False:  # embeds don't say whether a video is silent
+            raise ApiError("unavailable", "This video has no audio track.") from e
         raise ApiError("internal", "ffmpeg couldn't extract the audio track.") from e
 
 
