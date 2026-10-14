@@ -149,6 +149,10 @@ class Handler(BaseHTTPRequestHandler):
         """The stdlib's own errors (unsupported method, malformed request line, oversized
         headers) as our JSON shape with CORS, instead of its HTML page."""
         self.close_connection = True  # the request may not have been read in full
+        # Python 3.10 leaves an unparseable request at HTTP/0.9, which suppresses the status
+        # line and headers; the error must still be a real HTTP/1.x response.
+        if self.request_version == "HTTP/0.9":
+            self.request_version = "HTTP/1.0"
         if code == 501:  # BaseHTTPRequestHandler's answer to a method we have no do_X for
             err = ApiError("bad_request", f"Method {str(self.command)[:20]} isn't supported.")
             return self._error(err, 405, close=True, extra={"Allow": ALLOW})
