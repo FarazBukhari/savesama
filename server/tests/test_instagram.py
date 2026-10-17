@@ -76,8 +76,8 @@ class GraphqlParseTest(unittest.TestCase):
         return meta.items_from_api(media, True)
 
     def test_photo_post_soundtrack(self):
-        # Field names as Meta's private-API payload carries them; no public photo post with
-        # music was available to record, so this shape is not yet live-verified.
+        # Field names as Meta's private-API payload carries them. Instagram's logged-out answers
+        # omit music_metadata (checked on a carousel with a song), so this shape is handcrafted.
         items = self._photo_with({"music_info": {
             "music_asset_info": {"title": "Golden Hour", "display_artist": "JVKE", "duration_in_ms": 15000,
                                  "cover_artwork_uri": "https://scontent.cdninstagram.com/cover.jpg",
