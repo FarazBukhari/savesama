@@ -141,7 +141,9 @@ def sound_from_api(media: dict, index: int) -> Item | None:
 
     Meta puts it on the parent media (never on carousel children) as music_metadata: licensed
     songs under music_info.music_asset_info, a creator's own recording under
-    original_sound_info. Region-muted tracks carry no URL and get no item.
+    original_sound_info. Region-muted tracks carry no URL and get no item. Instagram's logged-out
+    answers (GraphQL, post page, embed) leave music_metadata out entirely, checked October 2026
+    on a carousel with a song, so in practice this only fires for payloads that do carry it.
     """
     mm = media.get("music_metadata") or {}
     licensed = (mm.get("music_info") or {}).get("music_asset_info") or {}
