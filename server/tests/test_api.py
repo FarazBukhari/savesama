@@ -114,7 +114,7 @@ class ApiTest(unittest.TestCase):
         r = self.jbody(payload)
         self.assertEqual(set(r), {"url", "platform", "id", "title", "author", "thumbnail", "duration", "items"})
         self.assertEqual(set(r["items"][0]), {"index", "type", "thumbnail", "width", "height", "duration",
-                                              "qualities", "has_audio"})
+                                              "qualities", "has_audio", "title"})
 
     def test_resolve_errors_map_to_status(self):
         for code, status in (("login_required", 422), ("not_found", 404), ("rate_limited", 429),

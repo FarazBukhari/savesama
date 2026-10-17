@@ -136,6 +136,39 @@ def _api_node_item(node: dict, index: int, can_mux: bool) -> Item | None:
                 variants=[Variant(best[2], best[0], best[1], has_audio=False, ext="jpg")])
 
 
+def sound_from_api(media: dict, index: int) -> Item | None:
+    """The song or original sound a photo post plays, as a standalone audio item.
+
+    Meta puts it on the parent media (never on carousel children) as music_metadata: licensed
+    songs under music_info.music_asset_info, a creator's own recording under
+    original_sound_info. Region-muted tracks carry no URL and get no item.
+    """
+    mm = media.get("music_metadata") or {}
+    licensed = (mm.get("music_info") or {}).get("music_asset_info") or {}
+    original = mm.get("original_sound_info") or {}
+    muted = (((mm.get("music_info") or {}).get("music_consumption_info") or {}).get("should_mute_audio")
+             or original.get("should_mute_audio"))
+    src = licensed if licensed.get("progressive_download_url") or licensed.get(
+        "fast_start_progressive_download_url") or licensed.get("web_30s_preview_download_url") else original
+    full = src.get("progressive_download_url") or src.get("fast_start_progressive_download_url")
+    url = full or src.get("web_30s_preview_download_url")
+    if muted or not url:
+        return None
+    if src is licensed:
+        title = " · ".join(t for t in (licensed.get("title"), licensed.get("display_artist")) if t)
+        cover = licensed.get("cover_artwork_uri") or licensed.get("cover_artwork_thumbnail_uri")
+    else:
+        title = " · ".join(t for t in (original.get("original_audio_title"),
+                                       (original.get("ig_artist") or {}).get("username")) if t)
+        cover = None
+    if not full:
+        title = f"{title or 'Song'} (30-second preview)"
+    ms = src.get("duration_in_ms")
+    ext = "mp3" if urllib.parse.urlsplit(url).path.lower().endswith(".mp3") else "m4a"
+    return Item(index=index, type="audio", thumbnail=cover, duration=ms / 1000 if ms else None,
+                has_audio=True, title=title or None, variants=[Variant(url, has_audio=True, ext=ext)])
+
+
 def items_from_api(media: dict, can_mux: bool) -> list[Item]:
     if media.get("media_type") == MEDIA_TEXT:
         raise ApiError("unavailable", "This is a text-only post; there's no photo or video to save.")
@@ -147,6 +180,11 @@ def items_from_api(media: dict, can_mux: bool) -> list[Item]:
             items.append(item)
     if not items:
         raise ApiError("unavailable", "This post has no photo or video to save.")
+    # A video's sound is already inside it; only photo posts get the soundtrack as its own item.
+    if any(i.type == "image" for i in items):
+        sound = sound_from_api(media, len(items))
+        if sound:
+            items.append(sound)
     return items
 
 

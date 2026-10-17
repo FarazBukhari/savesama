@@ -18,7 +18,7 @@ import { settingsStore, uiStore } from '@/state/stores';
 import { startJobs } from '@/state/sync';
 import { haptic, openSheet, snack } from '@/state/ui';
 
-import { postMeta } from './PreviewSheet';
+import { postMeta } from '@/lib/preview';
 
 type RowState = { kind: 'loading' } | { kind: 'ok'; data: Resolved } | { kind: 'error'; text: string };
 

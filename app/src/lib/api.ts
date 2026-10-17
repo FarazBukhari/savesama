@@ -38,6 +38,8 @@ export interface ResolveItem {
   duration: number | null;
   qualities: number[];
   has_audio: boolean;
+  /** Audio items: "Track · Artist" when known. */
+  title?: string | null;
 }
 
 export interface Resolved {
