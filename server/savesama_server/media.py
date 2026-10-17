@@ -64,6 +64,7 @@ class Item:
     duration: float | None = None
     has_audio: bool = False
     qualities: list[int] = field(default_factory=list)
+    title: str | None = None  # audio items: "Track · Artist"
     # How to fetch it: "direct" (our own extractors) or "ytdlp".
     source: str = "direct"
     variants: list[Variant] = field(default_factory=list)
@@ -81,6 +82,7 @@ class Item:
             "duration": self.duration,
             "qualities": sorted(set(self.qualities), reverse=True) if self.type == "video" else [],
             "has_audio": bool(self.has_audio),
+            "title": self.title,
         }
 
 

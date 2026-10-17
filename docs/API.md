@@ -103,10 +103,13 @@ Body: `{"url": "<link>"}`. Resolves a link without downloading. May take several
       "height": 1920,
       "duration": 31.5,
       "qualities": [1080, 720, 480, 360],
-      "has_audio": true
+      "has_audio": true,
+      "title": null
     },
     {"index": 1, "type": "image", "thumbnail": "https://...", "width": 1080, "height": 1350,
-     "duration": null, "qualities": [], "has_audio": false}
+     "duration": null, "qualities": [], "has_audio": false, "title": null},
+    {"index": 2, "type": "audio", "thumbnail": "https://.../cover.jpg", "width": null, "height": null,
+     "duration": 15.0, "qualities": [], "has_audio": true, "title": "Golden Hour · JVKE"}
   ]
 }
 ```
@@ -115,6 +118,11 @@ Body: `{"url": "<link>"}`. Resolves a link without downloading. May take several
 - `qualities`: available video resolutions as the **short side** in pixels, descending. A
   portrait 1080x1920 reel is `1080`. Empty for images/audio.
 - Single videos have one item. Carousels/albums have one item per entry, in post order.
+- A photo post that plays a song (Instagram/Threads music, TikTok photo slideshows) lists that
+  soundtrack as one more `audio` item after the pictures. Video items never get one: their sound
+  is already inside them (use `mode: audio`).
+- `title`: for `audio` items, the track as "Title · Artist" when known (a licensed song that is
+  only available as a 30-second preview says so); `null` otherwise.
 - Thumbnail URLs point at the platform CDN; some expire after hours. `null` when unknown.
 
 ### `POST /api/v1/jobs`

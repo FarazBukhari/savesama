@@ -20,6 +20,7 @@ class TikTokPhotoTest(unittest.TestCase):
         self.assertIn(".jpeg", items[0].variants[0].url)  # JPEG preferred over HEIC
         self.assertEqual(items[3].to_api()["qualities"], [])
         self.assertTrue(items[3].to_api()["has_audio"])
+        self.assertEqual(items[3].title, "original sound")
 
     def test_video_post_is_left_to_ytdlp(self):
         self.assertEqual(tiktok.photo_items(tiktok.parse_page(fixture("tiktok_video_post.html"))), [])

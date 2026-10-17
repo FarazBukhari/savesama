@@ -70,8 +70,9 @@ def photo_items(item: dict) -> list[Item]:
                           variants=[Variant(url, w, h, has_audio=False, ext="jpg")]))
     music = item.get("music") or {}
     if items and music.get("playUrl"):
+        track = " · ".join(t for t in (music.get("title"), music.get("authorName")) if t) or None
         items.append(Item(index=len(items), type="audio", thumbnail=music.get("coverMedium") or music.get("coverThumb"),
-                          duration=music.get("duration"), has_audio=True,
+                          duration=music.get("duration"), has_audio=True, title=track,
                           variants=[Variant(music["playUrl"], has_audio=True, ext="mp3")]))
     return items
 

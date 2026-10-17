@@ -3,15 +3,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { Banner, Button, Chip, Segmented, Skeleton, Thumb } from '@/components/controls';
+import { Banner, Button, Chip, ListRow, Segmented, Skeleton, SwitchMark, Thumb } from '@/components/controls';
 import { Icon, PLATFORM_ICON } from '@/components/Icon';
 import { Sheet, useSheet } from '@/components/Sheet';
 import { T } from '@/components/Text';
 import { useTheme } from '@/components/theme';
-import { ApiError, type Mode, type ResolveItem, type Resolved } from '@/lib/api';
+import { ApiError, type Mode, type Resolved } from '@/lib/api';
 import { NO_ITEMS, NOT_PAIRED, resolveErrorCopy, type ErrorCopy } from '@/lib/copy';
 import { absoluteDate, formatDuration } from '@/lib/format';
 import { displayLink, parseLink, PLATFORM_NAMES, type Platform } from '@/lib/links';
+import { ctaLabel, postKind, postMeta, splitSound } from '@/lib/preview';
 import { hostPort } from '@/lib/pairing';
 import { chooseQuality, offeredQualities, qualityLabel, type Quality } from '@/lib/quality';
 import { EDGE, radius } from '@/lib/theme';
@@ -21,36 +22,6 @@ import { activeServer, settingsStore, uiStore } from '@/state/stores';
 import { startJobs } from '@/state/sync';
 import { canOpenTermux, openTermux } from '@/state/system';
 import { closeAllSheets, haptic, openSheet, snack } from '@/state/ui';
-
-export function postKind(r: Resolved, item: ResolveItem | undefined = r.items[0]): string {
-  if (r.items.length > 1) return 'Post';
-  if (!item) return 'Post';
-  if (item.type === 'image') return 'Photo';
-  if (item.type === 'audio') return 'Audio';
-  if (r.platform === 'youtube' && /\/shorts\//.test(r.url)) return 'Short';
-  if (r.platform === 'instagram' && /\/reels?\//.test(r.url)) return 'Reel';
-  return 'Video';
-}
-
-export function postMeta(r: Resolved): string {
-  if (r.items.length > 1) {
-    const v = r.items.filter((i) => i.type === 'video').length;
-    const p = r.items.filter((i) => i.type === 'image').length;
-    const a = r.items.filter((i) => i.type === 'audio').length;
-    const parts = [v && `${v} ${v === 1 ? 'video' : 'videos'}`, p && `${p} ${p === 1 ? 'photo' : 'photos'}`, a && `${a} audio`].filter(Boolean);
-    return [`Post · ${r.items.length} items`, parts.join(', ')].filter(Boolean).join(' · ');
-  }
-  const d = r.items[0]?.duration ?? r.duration;
-  return [postKind(r), d ? formatDuration(d) : ''].filter(Boolean).join(' · ');
-}
-
-function ctaLabel(items: ResolveItem[], mode: Mode): string {
-  if (items.length === 0) return 'Select something to save';
-  if (items.length > 1) return `Save ${items.length} items`;
-  const t = items[0].type;
-  if (mode === 'audio' && t !== 'image') return 'Save audio';
-  return t === 'image' ? 'Save photo' : t === 'audio' ? 'Save audio' : 'Save video';
-}
 
 type State = { kind: 'loading' } | { kind: 'ready'; data: Resolved } | { kind: 'error'; copy: ErrorCopy };
 
@@ -215,15 +186,19 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
   const settings = settingsStore.use((s) => s);
   const edit = uiStore.use((s) => s.batchEdits[url]);
   const items = data.items;
-  const many = items.length > 1;
+  const { tiles, sound } = useMemo(() => splitSound(items), [items]);
+  const many = tiles.length > 1;
 
-  const [selected, setSelected] = useState<Set<number>>(() => new Set(edit?.items ?? items.map((i) => i.index)));
+  // The soundtrack is opt-in; every picture/video starts selected.
+  const [selected, setSelected] = useState<Set<number>>(() => new Set(edit?.items ?? tiles.map((i) => i.index)));
   const sel = useMemo(() => items.filter((i) => selected.has(i.index)), [items, selected]);
-  const hasAV = sel.some((i) => i.type !== 'image');
+  const selTiles = useMemo(() => tiles.filter((i) => selected.has(i.index)), [tiles, selected]);
+  const soundOn = !!sound && selected.has(sound.index);
   const hasVideo = sel.some((i) => i.type === 'video');
   const hasPhoto = sel.some((i) => i.type === 'image');
   const [mode, setMode] = useState<Mode>(edit?.mode ?? settings.defaultMode);
-  const effectiveMode: Mode = hasAV ? mode : 'media';
+  // Video or audio only applies to videos; photos and a soundtrack are saved as they are.
+  const effectiveMode: Mode = hasVideo ? mode : 'media';
   const offered = useMemo(() => offeredQualities(sel.filter((i) => i.type === 'video').map((i) => i.qualities)), [sel]);
   const [quality, setQuality] = useState<Quality>(() => edit?.quality ?? chooseQuality(settings.quality[data.platform], offered));
   const [starting, setStarting] = useState(false);
@@ -270,7 +245,7 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
   useEffect(() => {
     setFooter(
       <Button
-        label={batch ? 'Done' : ctaLabel(sel, effectiveMode)}
+        label={batch ? 'Done' : ctaLabel(sel, effectiveMode, sound)}
         rec={!batch}
         big
         full
@@ -280,9 +255,9 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
         onPress={save}
       />,
     );
-  }, [sel, effectiveMode, starting, save, batch, setFooter]);
+  }, [sel, effectiveMode, starting, save, batch, setFooter, sound]);
 
-  const one = items[0];
+  const one = tiles[0];
   const mediaW = Math.min(winW, 640) - 40;
   const ratio = one?.width && one?.height ? Math.min(16 / 9, Math.max(4 / 5, one.width / one.height)) : 16 / 9;
   const kind = postKind(data, one);
@@ -293,15 +268,16 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: EDGE, paddingRight: 8, marginTop: 8 }}>
             <T role="metaStrong" style={{ flex: 1 }}>
-              {`${items.length} items`}
-              {sel.length !== items.length ? ` · ${sel.length} selected` : ''}
+              {`${tiles.length} items`}
+              {selTiles.length !== tiles.length ? ` · ${selTiles.length} selected` : ''}
             </T>
             <Button
               variant="text"
-              label={sel.length === items.length ? 'Clear' : 'Select all'}
+              label={selTiles.length === tiles.length ? 'Clear' : 'Select all'}
               onPress={() => {
                 haptic.select();
-                setSelected(sel.length === items.length ? new Set() : new Set(items.map((i) => i.index)));
+                const keep = soundOn && sound ? [sound.index] : [];
+                setSelected(new Set(selTiles.length === tiles.length ? keep : [...tiles.map((i) => i.index), ...keep]));
               }}
             />
           </View>
@@ -312,7 +288,7 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
             decelerationRate="fast"
             contentContainerStyle={{ paddingHorizontal: EDGE, gap: 8, paddingVertical: 8 }}
           >
-            {items.map((it, n) => {
+            {tiles.map((it, n) => {
               const on = selected.has(it.index);
               const typeName = it.type === 'image' ? 'Photo' : it.type === 'audio' ? 'Audio' : 'Video';
               return (
@@ -321,7 +297,7 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
                   onPress={() => toggle(it.index)}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: on }}
-                  accessibilityLabel={`${typeName} ${n + 1} of ${items.length}, ${on ? 'selected' : 'not selected'}`}
+                  accessibilityLabel={`${typeName} ${n + 1} of ${tiles.length}, ${on ? 'selected' : 'not selected'}`}
                   style={{ opacity: on ? 1 : 0.55 }}
                 >
                   <Thumb uri={it.thumbnail ?? data.thumbnail} platform={data.platform} width={104} height={130} rounded={radius.sm} duration={it.type === 'video' ? it.duration : null} />
@@ -374,6 +350,29 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
         </T>
       </View>
 
+      {sound ? (
+        <View style={{ marginHorizontal: 8, marginTop: 16, borderRadius: radius.md, overflow: 'hidden' }}>
+          <ListRow
+            role="switch"
+            checked={soundOn}
+            onPress={() => toggle(sound.index)}
+            iconNode={
+              sound.thumbnail ? (
+                <Thumb uri={sound.thumbnail} platform={data.platform} size={40} rounded={radius.sm} />
+              ) : (
+                <View style={{ width: 40, height: 40, borderRadius: radius.sm, backgroundColor: c.sunk, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="MusicNotes" size={20} color="ink2" />
+                </View>
+              )
+            }
+            title="Also save the sound"
+            subtitle={[sound.title ?? 'The song playing on this post', sound.duration ? formatDuration(sound.duration) : ''].filter(Boolean).join(' · ')}
+            trailing={<SwitchMark on={soundOn} />}
+            accessibilityLabel={`Also save the sound${sound.title ? `: ${sound.title}` : ''}`}
+          />
+        </View>
+      ) : null}
+
       {dup ? (
         <Banner
           tone="warn"
@@ -384,7 +383,7 @@ function Ready({ data, url, batch }: { data: Resolved; url: string; batch?: bool
         />
       ) : null}
 
-      {hasAV ? (
+      {hasVideo ? (
         <View style={{ paddingHorizontal: EDGE, marginTop: 24, gap: 8 }}>
           <T role="metaStrong" color="ink2">
             Format

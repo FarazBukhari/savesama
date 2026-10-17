@@ -70,6 +70,42 @@ class GraphqlParseTest(unittest.TestCase):
         self.assertEqual((img.type, img.width, img.height), ("image", 584, 584))
         self.assertEqual(img.variants[0].url, media["image_versions2"]["candidates"][0]["url"])
 
+    def _photo_with(self, music_metadata):
+        media = instagram.parse_graphql(fixture("instagram_api_photo.json"))
+        media["music_metadata"] = music_metadata
+        return meta.items_from_api(media, True)
+
+    def test_photo_post_soundtrack(self):
+        # Field names as Meta's private-API payload carries them; no public photo post with
+        # music was available to record, so this shape is not yet live-verified.
+        items = self._photo_with({"music_info": {
+            "music_asset_info": {"title": "Golden Hour", "display_artist": "JVKE", "duration_in_ms": 15000,
+                                 "cover_artwork_uri": "https://scontent.cdninstagram.com/cover.jpg",
+                                 "progressive_download_url": "https://scontent.cdninstagram.com/song.mp3?x=1"},
+            "music_consumption_info": {"should_mute_audio": False}}})
+        self.assertEqual([i.type for i in items], ["image", "audio"])
+        sound = items[1]
+        self.assertEqual((sound.index, sound.title, sound.duration), (1, "Golden Hour · JVKE", 15.0))
+        self.assertEqual((sound.variants[0].ext, sound.thumbnail), ("mp3", "https://scontent.cdninstagram.com/cover.jpg"))
+        self.assertEqual(sound.to_api()["title"], "Golden Hour · JVKE")
+
+    def test_original_sound_preview_and_muted(self):
+        [_, orig] = self._photo_with({"original_sound_info": {
+            "original_audio_title": "Original audio", "ig_artist": {"username": "someone"},
+            "progressive_download_url": "https://scontent.cdninstagram.com/o1/audio.mp4?x=1"}})
+        self.assertEqual((orig.title, orig.variants[0].ext), ("Original audio · someone", "m4a"))
+        [_, preview] = self._photo_with({"music_info": {"music_asset_info": {
+            "title": "Song", "web_30s_preview_download_url": "https://scontent.cdninstagram.com/p.mp3"}}})
+        self.assertEqual(preview.title, "Song (30-second preview)")
+        muted = self._photo_with({"music_info": {"music_asset_info": {"title": "Song"},
+                                                 "music_consumption_info": {"should_mute_audio": True}}})
+        self.assertEqual([i.type for i in muted], ["image"])
+
+    def test_video_posts_get_no_separate_soundtrack(self):
+        media = instagram.parse_graphql(fixture("instagram_api_reel.json"))
+        media["music_metadata"] = {"original_sound_info": {"progressive_download_url": "https://x.cdninstagram.com/a.mp4"}}
+        self.assertEqual([i.type for i in meta.items_from_api(media, True)], ["video"])
+
     def test_error_bodies(self):
         cases = [("instagram_graphql_rate_limited.json", 401, "rate_limited"),
                  ("instagram_graphql_null.json", 200, "not_found"),
