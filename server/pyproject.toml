@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "savesama-server"
+version = "0.1.0"
+description = "SaveSama download server: resolves and downloads media for the SaveSama app."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# Pure-Python dependencies only: Termux can't install compiled (manylinux) wheels.
+dependencies = [
+    "yt-dlp>=2026.8.19",
+    "yt-dlp-ejs>=0.8.0",
+    "segno>=1.6",
+    # python.org builds on macOS ship without a CA bundle.
+    "certifi; sys_platform == 'darwin'",
+]
+
+[project.scripts]
+savesama = "savesama_server.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["savesama_server*"]

@@ -1,0 +1,56 @@
+{
+ "data": {
+  "xdt_shortcode_media": {
+   "__typename": "XDTGraphVideo",
+   "id": "3001",
+   "shortcode": "VidCode123",
+   "dimensions": {
+    "width": 1080,
+    "height": 1920
+   },
+   "display_url": "https://scontent.cdninstagram.com/v/vid_cover.jpg",
+   "display_resources": [
+    {
+     "src": "https://scontent.cdninstagram.com/v/vid_640x1138.jpg",
+     "config_width": 640,
+     "config_height": 1138
+    },
+    {
+     "src": "https://scontent.cdninstagram.com/v/vid_750x1333.jpg",
+     "config_width": 750,
+     "config_height": 1333
+    },
+    {
+     "src": "https://scontent.cdninstagram.com/v/vid_1080x1920.jpg",
+     "config_width": 1080,
+     "config_height": 1920
+    }
+   ],
+   "is_video": true,
+   "has_audio": true,
+   "video_duration": 12.5,
+   "video_url": "https://scontent.cdninstagram.com/v/progressive_720.mp4?x=1",
+   "dash_info": {
+    "is_dash_eligible": true,
+    "video_dash_manifest": "<?xml version=\"1.0\"?><MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\"><Period><AdaptationSet contentType=\"video\"><Representation id=\"1v\" bandwidth=\"400000\" codecs=\"avc1.64001f\" mimeType=\"video/mp4\" width=\"540\" height=\"960\"><BaseURL>https://scontent.cdninstagram.com/v/540.mp4?a=1&amp;b=2</BaseURL></Representation><Representation id=\"2v\" bandwidth=\"2600000\" codecs=\"vp09.00.40.08\" mimeType=\"video/mp4\" width=\"1080\" height=\"1920\"><BaseURL>https://scontent.cdninstagram.com/v/1080vp9.mp4?a=1&amp;b=2</BaseURL></Representation><Representation id=\"3v\" bandwidth=\"2000000\" codecs=\"avc1.640028\" mimeType=\"video/mp4\" width=\"1080\" height=\"1920\"><BaseURL>https://scontent.cdninstagram.com/v/1080.mp4?a=1&amp;b=2</BaseURL></Representation></AdaptationSet><AdaptationSet contentType=\"audio\"><Representation id=\"4a\" bandwidth=\"62000\" codecs=\"mp4a.40.5\" mimeType=\"audio/mp4\"><BaseURL>https://scontent.cdninstagram.com/v/audio.mp4?x=1&amp;y=2&amp;oh=sig</BaseURL></Representation></AdaptationSet></Period></MPD>",
+    "number_of_qualities": 3
+   },
+   "owner": {
+    "username": "someartist"
+   },
+   "edge_media_to_caption": {
+    "edges": [
+     {
+      "node": {
+       "text": "Sunset reel\nsecond line"
+      }
+     }
+    ]
+   }
+  }
+ },
+ "extensions": {
+  "is_final": true
+ },
+ "status": "ok"
+}

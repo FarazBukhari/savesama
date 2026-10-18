@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Grab</title><link rel="stylesheet" href="base.css">
+<style>
+  .deck { background: var(--deck); color: var(--on-deck); padding: 4px 20px 20px; flex: none; }
+  .deck-top { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .srv { background: color-mix(in srgb, var(--on-deck) 9%, transparent); color: var(--on-deck); }
+  .paste { color: var(--ink); background: var(--deck-well); border-radius: 20px; padding: 16px 16px 12px; margin-top: 8px; }
+  .paste .ph { color: var(--ink-3); font: 400 17px/24px Schibsted; min-height: 72px; }
+  .paste .bar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .clip { color: var(--ink); margin-top: 12px; display: flex; align-items: center; gap: 12px; background: var(--deck-well); border-radius: 16px; padding: 8px 4px 8px 14px; }
+  .clip .grow { flex: 1; min-width: 0; }
+  .works { display: flex; gap: 14px; align-items: center; margin-top: 16px; color: var(--on-deck-2); font: 500 13px/16px Schibsted; }
+  .works span { display: flex; gap: 10px; color: var(--on-deck); }
+  .sect { display: flex; justify-content: space-between; align-items: baseline; padding: 20px 20px 4px; }
+  .live { margin: 4px 8px 0; background: var(--surface); border-radius: 20px; padding: 14px 12px; }
+  .live .head { display: flex; gap: 12px; align-items: center; }
+  .stat { display: flex; gap: 6px; align-items: center; }
+</style></head>
+<body>
+<div class="phone" data-tab="grab" data-badge="2" data-status="deck">
+  <section class="deck">
+    <div class="deck-top">
+      <span class="t-wordmark">SaveSama</span>
+      <span class="pill srv"><i class="dot" style="background:var(--ok-on-deck)"></i>Pixel 8 (Termux)</span>
+    </div>
+    <div class="paste">
+      <div class="ph">Paste links from YouTube, Instagram, TikTok, Facebook or Threads. One per line.</div>
+      <div class="bar">
+        <span class="btn tonal" data-icon="clipboard-text" data-icon-class="s20">Paste</span>
+        <span class="btn primary" disabled>Get</span>
+      </div>
+    </div>
+    <div class="clip">
+      <span data-icon="instagram-logo"></span>
+      <div class="grow">
+        <div class="t-meta-m" style="color:var(--ink)">Link on your clipboard</div>
+        <div class="t-meta one" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">instagram.com/reel/C9xT2qLsQ0b</div>
+      </div>
+      <span class="btn primary" style="height:40px;padding:0 16px">Get it</span>
+      <span class="iconbtn" style="width:40px;height:40px;color:var(--ink-2)" data-icon="x" data-icon-class="s20"></span>
+    </div>
+  </section>
+
+  <div class="scroll">
+    <div class="sect"><span class="t-title">Now saving</span><span class="t-meta">2 jobs</span></div>
+    <div class="live">
+      <div class="head">
+        <img class="thumb" src="assets/photos/nightmarket.jpg" alt="">
+        <div class="grow" style="flex:1;min-width:0">
+          <div class="t-body-m" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Temple Street after midnight, every stall</div>
+          <div class="t-meta num stat"><i class="dot rec"></i>On server · 64% · 3.1 MB/s · 6 s left</div>
+        </div>
+      </div>
+      <div class="tape"><i><b style="width:64%"></b></i><i></i><i></i></div>
+      <div class="tape-legend"><span class="now">Server</span><span>To phone</span><span>Saved</span></div>
+    </div>
+
+    <div class="live" style="margin-top:8px">
+      <div class="head">
+        <img class="thumb" src="assets/photos/lake.jpg" alt="">
+        <div class="grow" style="flex:1;min-width:0">
+          <div class="t-body-m" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Hunza in four seasons, 4K drone cut</div>
+          <div class="t-meta num stat"><i class="dot rec"></i>To phone · 31% · 48.2 MB of 156 MB</div>
+        </div>
+      </div>
+      <div class="tape"><i><b style="width:100%"></b></i><i><b style="width:31%"></b></i><i></i></div>
+      <div class="tape-legend"><span style="color:var(--ink-2)">Server</span><span class="now">To phone</span><span>Saved</span></div>
+    </div>
+
+    <div class="sect"><span class="t-title">Recent</span><span class="btn text" style="height:auto;padding:0">Clear</span></div>
+    <div class="row" style="min-height:56px">
+      <span data-icon="youtube-logo"></span>
+      <div class="grow"><div class="t-body one">Rooftop session: the whole set in one take</div><div class="t-meta">youtube.com · Saved 18 min ago</div></div>
+    </div>
+  </div>
+  <span class="mock-note">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>

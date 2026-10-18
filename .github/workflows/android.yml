@@ -1,0 +1,134 @@
+name: Android APK
+
+# Builds an installable release APK without an Expo account.
+# Signing: if the four ANDROID_* secrets exist the APK is signed with that keystore (so every
+# build installs as an update over the previous one); otherwise it keeps the debug signature.
+
+on:
+  push:
+    paths:
+      - "app/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: app
+    env:
+      ARCHS: arm64-v8a,armeabi-v7a
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      # Full runner disks have killed past builds silently; reclaim ~30 GB first.
+      - name: Free disk space
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules \
+            /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft || true
+          sudo docker image prune --all --force > /dev/null 2>&1 || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Versions match react-native/gradle/libs.versions.toml (RN 0.86).
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/rebuild/server-and-app' }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test -- --ci
+
+      - name: Generate native project
+        run: npx expo prebuild -p android --clean --no-install
+
+      - name: Build release APK
+        working-directory: app/android
+        run: |
+          # Monotonic versionCode so each CI build installs over the last one.
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/" app/build.gradle
+          ./gradlew :app:assembleRelease --no-daemon \
+            -PreactNativeArchitectures="$ARCHS"
+
+      - name: Sign with release keystore
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$ks"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          # apksigner replaces the debug signature; the APK is already zip-aligned.
+          "$apksigner" sign --ks "$ks" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD "$apk"
+          "$apksigner" verify --print-certs "$apk" | head -3
+          rm -f "$ks"
+
+      - name: Name artifact
+        id: name
+        run: |
+          branch="${GITHUB_REF_NAME//\//-}"
+          name="savesama-${branch}-${GITHUB_SHA::7}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/$name.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.name }}
+          path: ${{ runner.temp }}/out/${{ steps.name.outputs.name }}.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        env:
+          NAME: ${{ steps.name.outputs.name }}
+        run: |
+          size=$(du -h "$RUNNER_TEMP/out/$NAME.apk" | cut -f1)
+          {
+            echo "### SaveSama APK"
+            echo ""
+            echo "- Artifact: \`$NAME\` ($size), ABIs: $ARCHS, versionCode ${{ github.run_number }}"
+            if [ "$HAS_KEYSTORE" = "true" ]; then
+              echo "- Signed with the release keystore from repo secrets: installs over earlier signed builds."
+            else
+              echo "- **Signed with the debug keystore** (no ANDROID_KEYSTORE_BASE64 secret)."
+              echo "  That is React Native's public debug key: debug-signed builds update each other, but"
+              echo "  switching to a release-signed build needs an uninstall. Add the keystore secrets (docs/BUILD.md)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

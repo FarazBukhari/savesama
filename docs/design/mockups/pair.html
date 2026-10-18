@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Add a server</title><link rel="stylesheet" href="base.css">
+<style>
+  .under { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .opt { display: flex; gap: 16px; align-items: center; min-height: 72px; padding: 8px 20px; }
+  .opt .ic { width: 48px; height: 48px; border-radius: 14px; background: var(--sunk); display: grid; place-items: center; flex: none; }
+</style></head>
+<body>
+<div class="phone" data-gesture="none">
+  <div class="under"><div class="appbar" style="margin-top:32px"><span class="t-display">Server</span></div></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 20px">
+      <span class="t-title">Add a server</span><span class="iconbtn" data-icon="x"></span>
+    </div>
+    <div class="opt"><span class="ic" data-icon="qr-code"></span><div><div class="t-body-m">Scan a QR code</div><div class="t-meta">Point the camera at the code the server prints.</div></div></div>
+    <div class="opt"><span class="ic" data-icon="keyboard"></span><div><div class="t-body-m">Enter details</div><div class="t-meta">Type the address and key by hand.</div></div></div>
+    <div class="opt"><span class="ic" data-icon="device-mobile"></span><div><div class="t-body-m">Server on this phone</div><div class="t-meta">Set it up in Termux, step by step.</div></div></div>
+    <div style="height:16px"></div>
+    <div class="gesturebar"></div>
+  </div>
+</div>
+<script src="shared.js"></script>
+</body></html>

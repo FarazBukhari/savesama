@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Preview, login required</title><link rel="stylesheet" href="base.css">
+<style>
+  .under { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .shead { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 8px 0 20px; flex: none; }
+  .strip { display: flex; gap: 8px; padding: 0 20px; overflow: hidden; }
+  .tile { position: relative; width: 104px; height: 130px; border-radius: 10px; overflow: hidden; flex: none; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile.off img { opacity: .55; }
+  .count { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px 20px; }
+  .body { padding: 16px 20px 0; }
+  .ctl { padding: 16px 20px 0; }
+</style></head>
+<body>
+<div class="phone" data-status="deck" data-gesture="none">
+  <div class="under">
+    <section class="deck" style="height:420px"><div class="deck-top" style="margin-top:32px"><span class="t-wordmark">SaveSama</span></div></section>
+  </div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="shead">
+      <span data-icon="instagram-logo" data-icon-class="s20"></span>
+      <span class="t-meta-m">Instagram</span><span class="t-meta one" style="flex:1"></span>
+      <span class="iconbtn" data-icon="x"></span>
+    </div>
+    <div style="padding:8px 20px 0">
+      <span data-icon="lock" style="color:var(--err)"></span>
+      <div class="t-headline" style="margin-top:12px">This post needs an account</div>
+      <div class="t-body ink2" style="margin-top:8px">It's private, age-restricted or only visible when signed in. SaveSama never signs in, so your accounts stay safe from flags and bans, but it can't open posts like this. Public posts save fine.</div>
+      <div class="t-meta one" style="margin-top:16px">instagram.com/stories/hira.k/3471029384</div>
+    </div>
+        <div class="footer"><span class="btn tonal big">Close</span></div>
+    <div class="gesturebar"></div>
+  </div>
+  
+</div>
+<script src="shared.js"></script>
+</body></html>

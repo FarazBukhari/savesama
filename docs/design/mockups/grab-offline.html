@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Grab, server offline</title><link rel="stylesheet" href="base.css">
+<style>
+  .paste { color: var(--ink); background: var(--deck-well); border-radius: 20px; padding: 16px 16px 12px; margin-top: 8px; position: relative; }
+  .paste .txt { font: 400 17px/24px Schibsted; padding-right: 36px; word-break: break-all; }
+  .paste .clr { position: absolute; right: 4px; top: 4px; color: var(--ink-2); }
+  .paste .bar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .parse { margin-top: 10px; color: var(--on-deck-2); font: 400 14px/20px Schibsted; padding: 0 4px; }
+  .deck .banner { background: var(--deck-well); color: var(--ink); margin-top: 12px; }
+  .deck .banner .acts { display: flex; gap: 8px; margin-top: 10px; margin-left: -12px; }
+</style></head>
+<body>
+<div class="phone" data-tab="grab" data-status="deck">
+  <section class="deck">
+    <div class="deck-top">
+      <span class="t-wordmark">SaveSama</span>
+      <span class="pill srv"><i class="dot" style="background:var(--on-deck-2)"></i>Offline</span>
+    </div>
+    <div class="paste">
+      <div class="txt">https://www.youtube.com/watch?v=Lq0b7xT2s9E<br>https://vt.tiktok.com/ZSj4mKq2r/<br><span class="ink2">see this one too lol</span></div>
+      <span class="iconbtn clr" data-icon="x" data-icon-class="s20"></span>
+      <div class="bar">
+        <span class="btn tonal" data-icon="clipboard-text" data-icon-class="s20">Paste</span>
+        <span class="btn primary">Get 2 links</span>
+      </div>
+    </div>
+    <div class="parse">2 links ready. 1 line isn't a link SaveSama can open and will be skipped.</div>
+    <div class="banner err">
+      <span data-icon="plugs" data-icon-class="s20" style="color:var(--err)"></span>
+      <div style="flex:1">
+        <div class="t-body-m">Server isn't answering</div>
+        <div class="t-meta" style="color:var(--ink)">Open Termux and run savesama, then come back. SaveSama checks again by itself.</div>
+        <div class="acts"><span class="btn text">Open Termux</span><span class="btn text">Try again</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="scroll">
+    <div class="sect"><span class="t-title">Recent</span><span class="btn text" style="height:auto;padding:0">Clear</span></div>
+    <div class="row" style="min-height:56px">
+      <span data-icon="instagram-logo"></span>
+      <div class="grow" style="min-width:0"><div class="t-body one">lahore.eats · 4 stops on Food Street, ranked</div><div class="t-meta">instagram.com · Saved 2 h ago</div></div>
+    </div>
+    <div class="row" style="min-height:56px">
+      <span data-icon="threads-logo"></span>
+      <div class="grow" style="min-width:0"><div class="t-body one">hamza.builds · new desk setup, finally</div><div class="t-meta">threads.com · Saved yesterday</div></div>
+    </div>
+  </div>
+  <span class="mock-note">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Preview, video</title><link rel="stylesheet" href="base.css">
+<style>
+  .under { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .shead { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 8px 0 20px; flex: none; }
+  .strip { display: flex; gap: 8px; padding: 0 20px; overflow: hidden; }
+  .tile { position: relative; width: 104px; height: 130px; border-radius: 10px; overflow: hidden; flex: none; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile.off img { opacity: .55; }
+  .count { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 8px 20px; }
+  .body { padding: 16px 20px 0; }
+  .ctl { padding: 16px 20px 0; }
+</style></head>
+<body>
+<div class="phone" data-status="deck" data-gesture="none">
+  <div class="under">
+    <section class="deck" style="height:420px"><div class="deck-top" style="margin-top:32px"><span class="t-wordmark">SaveSama</span></div></section>
+  </div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="shead">
+      <span data-icon="youtube-logo" data-icon-class="s20"></span>
+      <span class="t-meta-m">YouTube</span><span class="t-meta one" style="flex:1">· Northern Lines</span>
+      <span class="iconbtn" data-icon="x"></span>
+    </div>
+    <div style="padding:0 20px"><div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9"><img src="assets/photos/lake.jpg" alt="" style="width:100%;height:100%;object-fit:cover;display:block"><span class="dur num" style="left:8px;bottom:8px">14:07</span></div></div>
+    <div class="body">
+      <div class="t-title">Hunza in four seasons, 4K drone cut</div>
+      <div class="t-meta num" style="margin-top:4px">Video · 14:07</div>
+    </div>
+    <div style="padding:16px 20px 0"><div class="banner warn">
+      <span data-icon="clock-counter-clockwise" data-icon-class="s20"></span>
+      <div><div class="t-body-m">You saved this on 9 Oct at 21:04</div><div class="t-meta" style="color:var(--ink)">Saving it again makes a second copy.</div></div>
+    </div></div>
+    <div class="ctl">
+      <div class="lbl">Format</div>
+      <div class="seg"><div class="on">Video</div><div>Audio only</div></div>
+    </div>
+    <div class="ctl">
+      <div class="lbl">Quality</div>
+      <div class="chips">
+        <span class="chip">Best</span><span class="chip">2160p</span><span class="chip">1440p</span>
+        <span class="chip on" data-icon="check-bold" data-icon-class="s16">1080p</span><span class="chip">720p</span><span class="chip">480p</span>
+      </div>
+    </div>
+        <div class="footer"><span class="btn primary big"><i class="rec"></i>Save video</span></div>
+    <div class="gesturebar"></div>
+  </div>
+  <span class="mock-note" style="top:40px;bottom:auto;z-index:7;color:#fff">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>

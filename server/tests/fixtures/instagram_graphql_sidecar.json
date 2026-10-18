@@ -1,0 +1,89 @@
+{
+ "data": {
+  "xdt_shortcode_media": {
+   "__typename": "XDTGraphSidecar",
+   "id": "3000",
+   "shortcode": "SideCar99",
+   "dimensions": {
+    "width": 1080,
+    "height": 1350
+   },
+   "is_video": false,
+   "display_url": "https://scontent.cdninstagram.com/v/a_1080x1350.jpg",
+   "owner": {
+    "username": "travelpics"
+   },
+   "edge_media_to_caption": {
+    "edges": []
+   },
+   "edge_sidecar_to_children": {
+    "edges": [
+     {
+      "node": {
+       "__typename": "XDTGraphImage",
+       "id": "3002",
+       "shortcode": "ChildA",
+       "dimensions": {
+        "width": 1080,
+        "height": 1350
+       },
+       "is_video": false,
+       "display_url": "https://scontent.cdninstagram.com/v/a_1080x1350.jpg",
+       "display_resources": [
+        {
+         "src": "https://scontent.cdninstagram.com/v/a_640x800.jpg",
+         "config_width": 640,
+         "config_height": 800
+        },
+        {
+         "src": "https://scontent.cdninstagram.com/v/a_750x937.jpg",
+         "config_width": 750,
+         "config_height": 937
+        },
+        {
+         "src": "https://scontent.cdninstagram.com/v/a_1080x1350.jpg",
+         "config_width": 1080,
+         "config_height": 1350
+        },
+        {
+         "src": "https://scontent.cdninstagram.com/v/a_1080x1080.jpg",
+         "config_width": 1080,
+         "config_height": 1080
+        },
+        {
+         "src": "https://scontent.cdninstagram.com/v/a_640x640.jpg",
+         "config_width": 640,
+         "config_height": 640
+        }
+       ]
+      }
+     },
+     {
+      "node": {
+       "__typename": "XDTGraphVideo",
+       "id": "3003",
+       "shortcode": "ChildB",
+       "dimensions": {
+        "width": 720,
+        "height": 1280
+       },
+       "is_video": true,
+       "has_audio": false,
+       "display_url": "https://scontent.cdninstagram.com/v/b_cover.jpg",
+       "display_resources": [
+        {
+         "src": "https://scontent.cdninstagram.com/v/b_720x1280.jpg",
+         "config_width": 720,
+         "config_height": 1280
+        }
+       ],
+       "video_url": "https://scontent.cdninstagram.com/v/b.mp4",
+       "video_duration": 5.0
+      }
+     }
+    ]
+   }
+  }
+ },
+ "status": "ok"
+}

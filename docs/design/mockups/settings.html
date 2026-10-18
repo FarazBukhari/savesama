@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Settings</title><link rel="stylesheet" href="base.css">
+<style>
+  .gtitle:first-child { padding-top: 4px; }
+  .pad { padding: 12px; }
+  .val { display: flex; gap: 4px; align-items: center; color: var(--ink-2); font: 400 14px/20px Schibsted; }
+  .group .row { min-height: 56px; }
+</style></head>
+<body>
+<div class="phone" data-tab="settings">
+  <div class="appbar"><span class="t-display">Settings</span></div>
+  <div class="scroll">
+    <div class="gtitle">Appearance</div>
+    <div class="group pad"><div class="lbl">Theme</div><div class="seg"><div class="on">System</div><div>Light</div><div>Dark</div></div></div>
+
+    <div class="gtitle">Saving</div>
+    <div class="group">
+      <div class="pad"><div class="lbl">Default format</div><div class="seg"><div class="on">Video</div><div>Audio only</div></div></div>
+      <div class="row" style="box-shadow:0 -2px 0 var(--ground)"><div class="t-meta-m ink2 grow">Default quality</div></div>
+      <div class="row"><span data-icon="youtube-logo"></span><div class="grow t-body">YouTube</div><span class="val">1080p<span data-icon="caret-right" data-icon-class="s16"></span></span></div>
+      <div class="row"><span data-icon="instagram-logo"></span><div class="grow t-body">Instagram</div><span class="val">Best<span data-icon="caret-right" data-icon-class="s16"></span></span></div>
+      <div class="row"><span data-icon="tiktok-logo"></span><div class="grow t-body">TikTok</div><span class="val">Best<span data-icon="caret-right" data-icon-class="s16"></span></span></div>
+      <div class="row"><span data-icon="facebook-logo"></span><div class="grow t-body">Facebook</div><span class="val">720p<span data-icon="caret-right" data-icon-class="s16"></span></span></div>
+      <div class="row"><span data-icon="threads-logo"></span><div class="grow t-body">Threads</div><span class="val">Best<span data-icon="caret-right" data-icon-class="s16"></span></span></div>
+      <div class="row" style="min-height:76px"><div class="grow"><div class="t-body">Keep a copy on the server</div><div class="t-meta">Off: the server deletes its copy once the file is on your phone.</div></div><span class="switch"></span></div>
+      <div class="row"><div class="grow t-body">Warn before saving a link again</div><span class="switch on"></span></div>
+    </div>
+
+    <div class="gtitle">Feedback</div>
+    <div class="group">
+      <div class="row" style="min-height:76px"><div class="grow"><div class="t-body">Vibration</div><div class="t-meta">Short taps when you select, save and finish.</div></div><span class="switch on"></span></div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+</body></html>

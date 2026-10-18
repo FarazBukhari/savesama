@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Library</title><link rel="stylesheet" href="base.css">
+<style>
+  .search { margin: 0 20px; }
+  .filters { padding: 12px 20px 0; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .grid > div { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 4px; background: var(--sunk); }
+  .grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dh { font: 600 18px/24px Schibsted; padding: 24px 20px 8px; }
+  .aud { display: flex; flex-direction: column; justify-content: flex-end; padding: 8px; color: var(--ink); height: 100%; }
+  .aud .t-caption { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style></head>
+<body>
+<div class="phone" data-tab="library">
+  <div class="appbar"><span class="t-display">Library</span><span class="t-meta num" style="padding-bottom:4px">214 saved</span></div>
+  <div class="search input" data-icon="magnifying-glass" data-icon-class="s20" style="color:var(--ink-2)"><span style="margin-left:-0px">Search your saves</span></div>
+  <div class="filters chips">
+    <span class="chip on" data-icon="check-bold" data-icon-class="s16">All</span><span class="chip">Video</span><span class="chip">Photo</span><span class="chip">Audio</span>
+  </div>
+  <div class="scroll">
+    <div class="dh">Today</div>
+    <div class="grid">
+      <div><img src="assets/photos/nightmarket.jpg" alt=""><span class="dur">0:31</span></div>
+      <div><img src="assets/photos/rickshaw.jpg" alt=""></div>
+      <div><img src="assets/photos/cat.jpg" alt=""></div>
+      <div><img src="assets/photos/lake.jpg" alt=""><span class="dur">14:07</span></div>
+      <div><div class="aud"><span data-icon="music-notes" style="color:var(--ink-2);margin-bottom:auto"></span><span class="t-caption">Stoppage-time winner, all angles</span></div><span class="mpill" style="left:auto;right:6px">Audio</span></div>
+      <div><img src="assets/photos/skater.jpg" alt=""><span class="dur">0:48</span></div>
+    </div>
+    <div class="dh">This week</div>
+    <div class="grid">
+      <div><img src="assets/photos/boathouse.jpg" alt=""></div>
+      <div><img src="assets/photos/sunset.jpg" alt=""><span class="dur">1:02</span></div>
+      <div><img src="assets/photos/skatepark.jpg" alt=""><span class="dur">2:15</span></div>
+      <div><img src="assets/photos/concert.jpg" alt=""><span class="dur">0:12</span></div>
+      <div><img src="assets/photos/football.jpg" alt=""></div>
+      <div><img src="assets/photos/rickshaw.jpg" alt="" style="object-position:20% 50%"></div>
+    </div>
+  </div>
+  <span class="mock-note" style="color:#fff">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>

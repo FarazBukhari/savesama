@@ -1,0 +1,73 @@
+{
+ "id": "1195289147628387",
+ "title": "9.8K views · 341 reactions | When your trying to help your partner out with an arrest and #FAAFO games begin. Let the “Slapathon” commence!! 👊👋 | Beast Camp Training",
+ "uploader": "Beast Camp Training",
+ "duration": 9.579,
+ "formats": [
+  {
+   "format_id": "1418122939762069a",
+   "vcodec": "none",
+   "acodec": "mp4a.40.5",
+   "width": null,
+   "height": null,
+   "ext": "m4a",
+   "protocol": "https",
+   "tbr": 63.011,
+   "abr": 63.011,
+   "filesize": null,
+   "format_note": "DASH audio"
+  },
+  {
+   "format_id": "sd",
+   "vcodec": null,
+   "acodec": null,
+   "width": null,
+   "height": null,
+   "ext": "mp4",
+   "protocol": "https",
+   "tbr": null,
+   "abr": null,
+   "filesize": null,
+   "format_note": null
+  },
+  {
+   "format_id": "hd",
+   "vcodec": null,
+   "acodec": null,
+   "width": null,
+   "height": null,
+   "ext": "mp4",
+   "protocol": "https",
+   "tbr": null,
+   "abr": null,
+   "filesize": null,
+   "format_note": null
+  },
+  {
+   "format_id": "1417507216490308v",
+   "vcodec": "vp09.00.21.08.01.01.01.01.00",
+   "acodec": "none",
+   "width": 360,
+   "height": 636,
+   "ext": "mp4",
+   "protocol": "https",
+   "tbr": 235.498,
+   "abr": 0,
+   "filesize": null,
+   "format_note": "DASH video"
+  },
+  {
+   "format_id": "1417507223156974v",
+   "vcodec": "vp09.00.30.08.01.01.01.01.00",
+   "acodec": "none",
+   "width": 480,
+   "height": 848,
+   "ext": "mp4",
+   "protocol": "https",
+   "tbr": 522.392,
+   "abr": 0,
+   "filesize": null,
+   "format_note": "DASH video"
+  }
+ ]
+}

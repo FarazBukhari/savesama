@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Find your server</title><link rel="stylesheet" href="base.css">
+<style>
+  .ob { padding: 16px 20px 0; flex: 1; display: flex; flex-direction: column; }
+  .acts { padding: 0 20px 16px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  .tape { margin-top: 0; }
+  .tape > i { flex: 1 !important; }
+  .tape-legend > span { flex: 1 !important; }
+  .banner .code { background: var(--surface); margin-top: 12px; }
+</style></head>
+<body>
+<div class="phone">
+  <div class="ob">
+    <div class="tape" style="margin-top:8px"><i><b style="width:100%"></b></i><i><b style="width:50%"></b></i><i></i></div>
+    <div class="tape-legend"><span style="color:var(--ink-2)">Welcome</span><span class="now">Server</span><span>Gallery</span></div>
+    <h1 class="t-headline" style="margin-top:32px">SaveSama works with a server you run</h1>
+    <p class="t-body ink2" style="margin-top:12px">The server does the downloading. It runs in Termux on this phone, or on your PC. Your files never pass through anyone else.</p>
+    <div class="banner ok" style="margin-top:24px">
+      <span data-icon="plugs-connected" data-icon-class="s20"></span>
+      <div style="flex:1;min-width:0">
+        <div class="t-body-m">Found SaveSama 0.1.0 on this phone</div>
+        <div class="t-meta" style="color:var(--ink)">In Termux, stop it with Ctrl + C and start it again with the command below. It opens this app and pairs by itself.</div>
+        <div class="code"><span>savesama</span><span class="iconbtn" data-icon="copy" data-icon-class="s20"></span></div>
+      </div>
+    </div>
+    <div class="t-meta stat" style="margin-top:16px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--ink-3);border-top-color:transparent"></span>Waiting for the pairing link…</div>
+  </div>
+  <div class="acts"><span class="btn tonal big" data-icon="arrow-square-out" data-icon-class="s20">Open Termux</span><span class="btn text">Do this later</span></div>
+</div>
+<script src="shared.js"></script>
+</body></html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=412">
+<title>Activity</title><link rel="stylesheet" href="base.css">
+<style>
+  .job { padding: 12px 8px 12px 20px; display: flex; gap: 12px; align-items: flex-start; }
+  .job .grow { flex: 1; min-width: 0; padding-top: 2px; }
+  .job .iconbtn { margin-top: 4px; }
+  .job + .job { box-shadow: 0 -2px 0 var(--ground); }
+  .tape { margin-right: 12px; }
+  .tape-legend { margin-right: 12px; }
+  .group { padding: 2px 0; }
+</style></head>
+<body>
+<div class="phone" data-tab="activity" data-badge="3">
+  <div class="appbar"><span class="t-display">Activity</span><div class="acts"><span class="btn text">Clear finished</span></div></div>
+  <div class="scroll">
+    <div class="gtitle" style="padding-top:8px">In progress</div>
+    <div class="group">
+      <div class="job">
+        <img class="thumb" src="assets/photos/lake.jpg" alt="">
+        <div class="grow">
+          <div class="t-body-m one">Hunza in four seasons, 4K drone cut</div>
+          <div class="t-meta num stat"><i class="dot rec"></i>To phone · 31% · 48.2 MB of 156 MB</div>
+          <div class="tape"><i><b style="width:100%"></b></i><i><b style="width:31%"></b></i><i></i></div>
+          <div class="tape-legend"><span style="color:var(--ink-2)">Server</span><span class="now">To phone</span><span>Saved</span></div>
+        </div>
+        <span class="iconbtn" data-icon="x"></span>
+      </div>
+      <div class="job">
+        <img class="thumb" src="assets/photos/skatepark.jpg" alt="">
+        <div class="grow">
+          <div class="t-body-m one">Bowl line at Roosevelt, no cuts</div>
+          <div class="t-meta num stat"><i class="dot rec"></i>On server · Merging video and audio</div>
+          <div class="tape"><i><b style="width:100%;opacity:.6"></b></i><i></i><i></i></div>
+          <div class="tape-legend"><span class="now">Server</span><span>To phone</span><span>Saved</span></div>
+        </div>
+        <span class="iconbtn" data-icon="x"></span>
+      </div>
+      <div class="job">
+        <img class="thumb" src="assets/photos/sunset.jpg" alt="">
+        <div class="grow">
+          <div class="t-body-m one">Golden hour, no filter, I promise</div>
+          <div class="t-meta num stat"><i class="dot off"></i>Waiting on server</div>
+          <div class="tape"><i></i><i></i><i></i></div>
+          <div class="tape-legend"><span class="now">Server</span><span>To phone</span><span>Saved</span></div>
+        </div>
+        <span class="iconbtn" data-icon="x"></span>
+      </div>
+    </div>
+
+    <div class="gtitle">Failed</div>
+    <div class="group">
+      <div class="job">
+        <img class="thumb" src="assets/photos/concert.jpg" alt="">
+        <div class="grow">
+          <div class="t-body-m one">Last night's encore from the barrier</div>
+          <div class="t-meta stat" style="color:var(--err)"><span data-icon="hourglass-medium" data-icon-class="s16"></span>Instagram is throttling. Retry in a few minutes</div>
+        </div>
+        <span class="iconbtn" data-icon="arrow-counter-clockwise"></span>
+      </div>
+    </div>
+
+    <div class="gtitle">Done</div>
+    <div class="group">
+      <div class="job">
+        <img class="thumb" src="assets/photos/nightmarket.jpg" alt="">
+        <div class="grow">
+          <div class="t-body-m one">Temple Street after midnight, every stall</div>
+          <div class="t-meta num stat"><span data-icon="check-circle-fill" data-icon-class="s16" style="color:var(--ok)"></span>Saved · 13.8 MB · 2 min ago · 1080p</div>
+        </div>
+      </div>
+      <div class="job">
+        <img class="thumb" src="assets/photos/football.jpg" alt="">
+        <div class="grow">
+          <div class="t-body-m one">Stoppage-time winner, all angles</div>
+          <div class="t-meta num stat"><span data-icon="check-circle-fill" data-icon-class="s16" style="color:var(--ok)"></span>Saved · 4.1 MB · 1 h ago · Audio</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="mock-note">Synthetic content</span>
+</div>
+<script src="shared.js"></script>
+</body></html>
