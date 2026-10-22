@@ -4,5 +4,5 @@ __pycache__/
 .env
 .env.*
 !.env.example
-.claude/settings.local.json
+.claude/
 .DS_Store

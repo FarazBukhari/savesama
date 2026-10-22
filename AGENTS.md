@@ -18,7 +18,6 @@ GraphQL/CSRF, YouTube bot-check) are worth reading before writing extraction cod
   Pure Python deps only: compiled wheels (pydantic-core, curl_cffi, ...) don't install on Termux.
 - `app/`: Expo (React Native) Android app, the client. Built via EAS or GitHub Actions.
 - `docs/API.md`: the app <-> server contract. Change it first, then both sides.
-- `.claude/skills/`: design skills (impeccable, ui-ux-pro-max, taste-skill, redesign-skill).
 
 ## Working style
 - Hands-off: run commands and make changes without asking for each step.
