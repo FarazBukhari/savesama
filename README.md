@@ -1,6 +1,6 @@
 # SaveSama
 
-Save videos, photos and audio from YouTube, Instagram, TikTok, Facebook and Threads to your
+Save videos, photos and audio from YouTube, Instagram, TikTok, Facebook, Threads and Reddit to your
 phone's gallery. No accounts: nothing ever logs in to a platform, so nothing can get flagged.
 
 Two parts:

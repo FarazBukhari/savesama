@@ -36,7 +36,7 @@ export function resolveErrorCopy(err: unknown, ctx: Ctx): ErrorCopy {
         icon: 'Prohibit',
         tone: 'err',
         title: "SaveSama can't open this link",
-        body: 'It takes links from YouTube, Instagram, TikTok, Facebook and Threads.',
+        body: 'It takes links from YouTube, Instagram, TikTok, Facebook, Threads and Reddit.',
         actions: ['close'],
       };
     case 'login_required':

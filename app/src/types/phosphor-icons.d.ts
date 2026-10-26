@@ -13,6 +13,7 @@ export declare const InstagramLogoIcon: Icon;
 export declare const TiktokLogoIcon: Icon;
 export declare const FacebookLogoIcon: Icon;
 export declare const ThreadsLogoIcon: Icon;
+export declare const RedditLogoIcon: Icon;
 export declare const ClipboardTextIcon: Icon;
 export declare const XIcon: Icon;
 export declare const ArrowCounterClockwiseIcon: Icon;

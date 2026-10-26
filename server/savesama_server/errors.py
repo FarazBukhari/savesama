@@ -19,7 +19,7 @@ DEFAULT_MESSAGES = {
     "unauthorized": "Missing or wrong pairing token.",
     "bad_request": "The request was malformed.",
     "unsupported_url": "That link isn't from a supported platform "
-    "(YouTube, Instagram, TikTok, Facebook, Threads).",
+    "(YouTube, Instagram, TikTok, Facebook, Threads, Reddit).",
     "login_required": "This post needs an account to view (private, age-restricted or "
     "members-only). SaveSama never signs in, so it can't be downloaded.",
     "not_found": "This post doesn't exist or was deleted.",

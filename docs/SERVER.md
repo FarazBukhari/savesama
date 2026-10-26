@@ -8,7 +8,7 @@ the app copies the finished file into your gallery.
 - **No accounts.** The server never logs in to Instagram, YouTube or anywhere else, so none of
   your accounts can be flagged or banned. Posts that need an account (private, age-restricted)
   can't be downloaded.
-- **Supported:** YouTube, Instagram, TikTok, Facebook, Threads.
+- **Supported:** YouTube, Instagram, TikTok, Facebook, Threads, Reddit.
 - **Private to you.** Only apps that have your pairing code can use the server.
 
 ---
@@ -129,7 +129,7 @@ The app shows the server's message. Each kind of error means:
 | **Rate limited** (`rate_limited`) | The platform is temporarily blocking or slowing down requests from your connection. YouTube calls this "confirm you're not a bot" (or answers HTTP 403); TikTok shows a challenge page instead of the post. | Wait 10 to 30 minutes, or run the server from another network. Switching between Wi-Fi and mobile data often helps. Don't retry many times in a row. |
 | **Unavailable** (`unavailable`) | The post exists but has nothing to save: a text-only post, a live stream, a region block, audio that needs ffmpeg, or audio from a video that has no audio track. | Read the message. Live streams can be saved after they end. |
 | **Network** (`network`) | The server couldn't reach the platform. | Check the internet on the device running the server. |
-| **Unsupported link** (`unsupported_url`) | Not a link from the five supported platforms, or a profile page instead of a post. | Share the post or video itself. |
+| **Unsupported link** (`unsupported_url`) | Not a link from the six supported platforms, or a profile page instead of a post. | Share the post or video itself. |
 | **Can't reach the server** | The app can't connect at all. | Check that the server is running and that both devices use the same Wi-Fi. Then re-pair: home Wi-Fi often gives the phone a new address, and `savesama pair` shows the new one. Guest Wi-Fi networks often block devices from seeing each other. |
 | **Unauthorized** | The app's pairing code doesn't match (for example after `reset-token`). | Pair again. |
 | **Something went wrong** (`internal`) | A bug or an unexpected change on the platform. | Update the extractor (section 1.6). If it persists, send `~/.savesama/server.log` to the developer. |
@@ -143,6 +143,10 @@ Platform notes:
   only shown to signed-in users, and those report *Needs an account*.
 - **Facebook** videos and reels work. Photo posts work only when Facebook shows a preview
   image to link-preview bots. Many photo pages require login.
+- **Reddit** photos, galleries, GIFs and videos (with sound) work for public posts, read from
+  Reddit's public post data. Reddit blocks most cloud and VPN addresses, so run the server on
+  home Wi-Fi or mobile data. A post that only links to YouTube or another supported site saves
+  that video. Posts in private, quarantined or age-gated communities need an account.
 - **Without ffmpeg** (the installers above always add it), YouTube video, quality choices
   that need joining video and audio, and most audio conversion aren't possible. The app can
   tell, because `GET /api/v1/info` reports `"ffmpeg": false`.
@@ -217,7 +221,7 @@ How it works and security:
 - The server listens on port 8765 on your local network. Every request except
   `GET /api/v1/info` needs the pairing token. The full contract is in [API.md](API.md).
 - It only accepts links from youtube.com, youtu.be, instagram.com, tiktok.com, facebook.com,
-  fb.watch, threads.com and threads.net. It never fetches anything else a user sends.
+  fb.watch, threads.com, threads.net, reddit.com and redd.it. It never fetches anything else a user sends.
 - It never loads browser cookies or account sessions. Some platforms hand out anonymous,
   temporary session tokens while a page loads. Those stay in memory and are never saved.
 - Check that the server only contains pure-Python packages (anything else can't install on

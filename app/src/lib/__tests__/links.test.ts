@@ -16,9 +16,14 @@ describe('platformOfHost', () => {
     ['fb.watch', 'facebook'],
     ['threads.net', 'threads'],
     ['www.threads.com', 'threads'],
+    ['www.reddit.com', 'reddit'],
+    ['old.reddit.com', 'reddit'],
+    ['redd.it', 'reddit'],
+    ['v.redd.it', 'reddit'],
+    ['i.redd.it', 'reddit'],
   ])('%s → %s', (host, platform) => expect(platformOfHost(host)).toBe(platform));
 
-  it.each(['notyoutube.com', 'youtube.com.evil.io', 'l.facebook.com', 'l.instagram.com', 'example.com', ''])(
+  it.each(['notyoutube.com', 'youtube.com.evil.io', 'l.facebook.com', 'l.instagram.com', 'out.reddit.com', 'notreddit.com', 'example.com', ''])(
     'rejects %s',
     (host) => expect(platformOfHost(host)).toBeNull(),
   );
@@ -80,6 +85,13 @@ describe('linkKey', () => {
     expect(linkKey('https://www.instagram.com/reel/C9x/?igsh=123')).toBe(linkKey('https://instagram.com/reel/C9x'));
     expect(linkKey('https://www.threads.com/@a/post/X?xmt=1')).toBe(linkKey('https://threads.com/@a/post/X/'));
   });
+  it('treats reddit variants of one post as the same link', () => {
+    const k = linkKey('https://www.reddit.com/r/pics/comments/1Abcde2/some_title/?utm_source=share&utm_medium=android_app');
+    expect(k).toBe('reddit:1abcde2');
+    expect(linkKey('https://old.reddit.com/comments/1abcde2')).toBe(k);
+    expect(linkKey('https://redd.it/1abcde2')).toBe(k);
+  });
+
   it('keeps facebook ids from the query', () => {
     expect(linkKey('https://www.facebook.com/watch/?v=1')).not.toBe(linkKey('https://www.facebook.com/watch/?v=2'));
   });

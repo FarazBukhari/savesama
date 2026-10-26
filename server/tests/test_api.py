@@ -62,7 +62,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(info["app"], "savesama")
         self.assertEqual(info["api"], 1)
         self.assertEqual(info["name"], "Unit Box")
-        self.assertEqual(info["platforms"], ["youtube", "instagram", "tiktok", "facebook", "threads"])
+        self.assertEqual(info["platforms"], ["youtube", "instagram", "tiktok", "facebook", "threads", "reddit"])
         self.assertTrue(info["ffmpeg"])
         self.assertTrue(info["extractor_version"])
         self.assertEqual(resp.getheader("Access-Control-Allow-Origin"), "*")

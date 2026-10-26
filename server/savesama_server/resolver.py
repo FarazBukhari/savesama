@@ -12,7 +12,7 @@ import time
 from collections import OrderedDict
 
 from .errors import ApiError
-from .extractors import facebook, instagram, threads, tiktok, ytdlp
+from .extractors import facebook, instagram, reddit, threads, tiktok, ytdlp
 from .media import Resolved
 from .urls import clean_url
 
@@ -80,4 +80,6 @@ class Resolver:
             return facebook.extract(url, self.can_mux)
         if platform == "tiktok":
             return tiktok.extract(url, self.can_mux)
+        if platform == "reddit":
+            return reddit.extract(url, self.can_mux, follow=lambda u: self._extract(*clean_url(u)))
         return ytdlp.resolve(url, platform, self.can_mux)

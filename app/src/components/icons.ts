@@ -10,6 +10,7 @@ import { YoutubeLogoIcon } from 'phosphor-react-native/src/icons/YoutubeLogo';
 import { InstagramLogoIcon } from 'phosphor-react-native/src/icons/InstagramLogo';
 import { TiktokLogoIcon } from 'phosphor-react-native/src/icons/TiktokLogo';
 import { FacebookLogoIcon } from 'phosphor-react-native/src/icons/FacebookLogo';
+import { RedditLogoIcon } from 'phosphor-react-native/src/icons/RedditLogo';
 import { ThreadsLogoIcon } from 'phosphor-react-native/src/icons/ThreadsLogo';
 import { ClipboardTextIcon } from 'phosphor-react-native/src/icons/ClipboardText';
 import { XIcon } from 'phosphor-react-native/src/icons/X';
@@ -63,6 +64,7 @@ export const icons = {
   TiktokLogo: TiktokLogoIcon,
   FacebookLogo: FacebookLogoIcon,
   ThreadsLogo: ThreadsLogoIcon,
+  RedditLogo: RedditLogoIcon,
   ClipboardText: ClipboardTextIcon,
   X: XIcon,
   ArrowCounterClockwise: ArrowCounterClockwiseIcon,

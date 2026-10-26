@@ -20,7 +20,7 @@ Python + yt-dlp + ffmpeg) over the HTTP contract in `docs/API.md`.
 ## Users
 
 One primary user: the owner (Faraz) and, *(inferred)* the few people he hands the APK to. They
-use Instagram, YouTube, TikTok, Facebook and Threads on an Android phone and want to keep a
+use Instagram, YouTube, TikTok, Facebook, Threads and Reddit on an Android phone and want to keep a
 post, reel, short, video or song on the phone itself. The moment of use is short and
 interrupt-driven: they are scrolling another app, hit Share, pick SaveSama, choose what to keep,
 and go straight back to scrolling. A second, rarer moment is housekeeping: browsing what was
@@ -58,7 +58,7 @@ flagged or banned.
 
 ## Capabilities and Constraints
 
-- Platforms: YouTube, Instagram, TikTok, Facebook, Threads. Nothing else is accepted.
+- Platforms: YouTube, Instagram, TikTok, Facebook, Threads, Reddit. Nothing else is accepted.
 - Modes: media (video/photo as-is) or audio only (`.m4a`). Quality is a short-side pixel value or
   "max".
 - Carousels: per-item selection.

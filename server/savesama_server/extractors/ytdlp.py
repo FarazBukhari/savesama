@@ -37,6 +37,7 @@ ALLOWED_EXTRACTORS = [
     "instagram", "instagramios",
     "tiktok", "vm.tiktok",
     "facebook", "facebook:reel", "facebookpluginsvideo",
+    "reddit",
     "end",  # UnsupportedURLIE: turns anything else into "Unsupported URL"
 ]
 
@@ -533,6 +534,14 @@ def map_error(exc: BaseException, platform: str) -> ApiError:
         return ApiError("not_found", "This TikTok post doesn't exist or was deleted.")
     if platform == "tiktok" and any(k in low for k in _TIKTOK_WALL):
         return blocked_error(name)
+    # yt-dlp asks for an account when Reddit served its HTML block page instead of JSON.
+    if platform == "reddit" and "account authentication is required" in low:
+        return blocked_error(name)
+    if platform == "reddit" and ("private subreddit" in low or "quarantined subreddit" in low):
+        return ApiError("login_required", "This post is in a private or quarantined community that "
+                                          "needs an account. SaveSama never signs in.")
+    if platform == "reddit" and ("no media found" in low or "video is processing" in low):
+        return ApiError("unavailable", "Reddit has no video for this post yet (still processing, or removed).")
     if _RATE_LIMIT.search(low) or status == 429:
         return blocked_error(name)
     if "unsupported url" in low:

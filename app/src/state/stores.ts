@@ -26,7 +26,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   defaultMode: 'media',
-  quality: { youtube: 'max', instagram: 'max', tiktok: 'max', facebook: 'max', threads: 'max' },
+  quality: { youtube: 'max', instagram: 'max', tiktok: 'max', facebook: 'max', threads: 'max', reddit: 'max' },
   keepOnServer: false,
   warnDuplicate: true,
   haptics: true,

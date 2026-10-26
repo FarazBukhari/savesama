@@ -27,7 +27,7 @@ log = logging.getLogger("savesama.download")
 # Direct downloads only go to the CDNs our own extractors read URLs from.
 CDN_DOMAINS = ("cdninstagram.com", "fbcdn.net", "instagram.com", "facebook.com", "threads.com",
                "threads.net", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "tiktokv.com",
-               "tiktok.com", "ibyteimg.com", "byteimg.com", "muscdn.com")
+               "tiktok.com", "ibyteimg.com", "byteimg.com", "muscdn.com", "redd.it", "redditmedia.com")
 CHUNK = 256 * 1024
 
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "heic", "gif", "avif"}

@@ -168,7 +168,7 @@ function PasteField({ text, setText, n, onGet }: { text: string; setText: (t: st
           spellCheck={false}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
-          placeholder="Paste links from YouTube, Instagram, TikTok, Facebook or Threads. One per line."
+          placeholder="Paste links from YouTube, Instagram, TikTok, Facebook, Threads or Reddit. One per line."
           placeholderTextColor={scheme === 'light' ? c.ink3 : c.ink3}
           selectionColor={c.select}
           cursorColor={c.ink}
@@ -200,7 +200,7 @@ function ParseMessage({ text, n, skipped }: { text: string; n: number; skipped: 
           <Icon name="WarningCircle" size={16} color="onDeck" />
         </View>
         <T role="meta" color="onDeck" style={{ flex: 1 }}>
-          {"That isn't a link SaveSama can open. Try a link from YouTube, Instagram, TikTok, Facebook or Threads."}
+          {"That isn't a link SaveSama can open. Try a link from YouTube, Instagram, TikTok, Facebook, Threads or Reddit."}
         </T>
       </View>
     );

@@ -11,7 +11,7 @@ import urllib.parse
 
 from .errors import ApiError
 
-PLATFORMS = ["youtube", "instagram", "tiktok", "facebook", "threads"]
+PLATFORMS = ["youtube", "instagram", "tiktok", "facebook", "threads", "reddit"]
 
 PLATFORM_DOMAINS = {
     "youtube": ("youtube.com", "youtu.be", "youtube-nocookie.com"),
@@ -19,11 +19,12 @@ PLATFORM_DOMAINS = {
     "tiktok": ("tiktok.com",),
     "facebook": ("facebook.com", "fb.watch", "fb.com"),
     "threads": ("threads.com", "threads.net"),
+    "reddit": ("reddit.com", "redd.it"),
 }
 
 # Link shims that redirect to arbitrary third-party hosts.
 BLOCKED_HOSTS = ("l.facebook.com", "lm.facebook.com", "l.instagram.com", "l.threads.com",
-                 "l.threads.net")
+                 "l.threads.net", "out.reddit.com")
 
 _URL_IN_TEXT = re.compile(r"https?://[^\s<>\"']+", re.I)
 

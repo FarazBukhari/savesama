@@ -86,7 +86,7 @@ function PreviewBody({ url, batch }: { url: string; batch?: boolean }) {
           <T role="metaStrong">{name}</T>
           {author ? (
             <T role="meta" color="ink2" numberOfLines={1} style={{ flexShrink: 1 }}>
-              · {author.startsWith('@') || platform === 'youtube' || platform === 'facebook' ? author : `@${author}`}
+              · {author.startsWith('@') || author.startsWith('u/') || platform === 'youtube' || platform === 'facebook' ? author : `@${author}`}
             </T>
           ) : null}
         </View>

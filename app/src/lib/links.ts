@@ -1,4 +1,4 @@
-export const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'facebook', 'threads'] as const;
+export const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'facebook', 'threads', 'reddit'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 export const PLATFORM_NAMES: Record<Platform, string> = {
@@ -7,6 +7,7 @@ export const PLATFORM_NAMES: Record<Platform, string> = {
   tiktok: 'TikTok',
   facebook: 'Facebook',
   threads: 'Threads',
+  reddit: 'Reddit',
 };
 
 // Mirrors docs/API.md "Hosts" (and the server's urls.py). Subdomains are accepted.
@@ -16,10 +17,11 @@ const DOMAINS: Record<Platform, string[]> = {
   tiktok: ['tiktok.com'],
   facebook: ['facebook.com', 'fb.watch', 'fb.com'],
   threads: ['threads.com', 'threads.net'],
+  reddit: ['reddit.com', 'redd.it'],
 };
 
 // Outbound-link shims that redirect anywhere; the server refuses them too.
-const BLOCKED = ['l.facebook.com', 'lm.facebook.com', 'l.instagram.com', 'l.threads.com', 'l.threads.net'];
+const BLOCKED = ['l.facebook.com', 'lm.facebook.com', 'l.instagram.com', 'l.threads.com', 'l.threads.net', 'out.reddit.com'];
 
 export function platformOfHost(host: string): Platform | null {
   const h = host.toLowerCase().replace(/\.$/, '');
@@ -109,6 +111,11 @@ export function linkKey(url: string): string {
       if (v) return `youtube:${v}`;
       const m = path.match(/^\/(?:shorts|live|embed)\/([\w-]+)/);
       if (m) return `youtube:${m[1]}`;
+    }
+    if (p === 'reddit') {
+      // www., old., redd.it/<id> and share-tracking variants of one post.
+      const m = path.match(/\/comments\/([a-z0-9]+)/i) ?? (host === 'redd.it' ? path.match(/^\/([a-z0-9]+)$/i) : null);
+      if (m) return `reddit:${m[1].toLowerCase()}`;
     }
     if (p === 'facebook' || p === 'tiktok') {
       // Facebook keeps the id in the query on some links (watch/?v=, story.php?story_fbid=).

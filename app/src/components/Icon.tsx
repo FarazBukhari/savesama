@@ -30,4 +30,5 @@ export const PLATFORM_ICON: Record<Platform, IconName> = {
   tiktok: 'TiktokLogo',
   facebook: 'FacebookLogo',
   threads: 'ThreadsLogo',
+  reddit: 'RedditLogo',
 };

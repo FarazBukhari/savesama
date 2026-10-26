@@ -13,7 +13,7 @@ server to delete its copy.
 No accounts, ever: the server never logs in to any platform and never accepts cookies. Content
 that needs a login fails with `login_required`.
 
-Supported platforms: `youtube`, `instagram`, `tiktok`, `facebook`, `threads`.
+Supported platforms: `youtube`, `instagram`, `tiktok`, `facebook`, `threads`, `reddit`.
 
 ## Transport
 
@@ -27,7 +27,7 @@ Supported platforms: `youtube`, `instagram`, `tiktok`, `facebook`, `threads`.
   header, never a cookie; it lets the app's web build be tested against a real server.
 - Hosts: `/resolve` and `/jobs` only accept URLs whose host belongs to a supported platform
   (youtube.com, youtu.be, instagram.com, tiktok.com, facebook.com, fb.watch, threads.com,
-  threads.net and their subdomains); anything else → `unsupported_url`. The server never
+  threads.net, reddit.com, redd.it and their subdomains; never the out.reddit.com link shim); anything else → `unsupported_url`. The server never
   fetches arbitrary user-supplied hosts.
 - All errors use one shape:
   ```json
@@ -73,7 +73,7 @@ The app accepts the deep link, a scanned QR, or manual host/port/token entry. It
   "api": 1,
   "version": "0.1.0",
   "name": "Pixel 8 (Termux)",
-  "platforms": ["youtube", "instagram", "tiktok", "facebook", "threads"],
+  "platforms": ["youtube", "instagram", "tiktok", "facebook", "threads", "reddit"],
   "ffmpeg": true,
   "extractor_version": "2026.08.19"
 }
